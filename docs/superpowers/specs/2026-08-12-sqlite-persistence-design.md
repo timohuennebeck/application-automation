@@ -79,8 +79,8 @@ CREATE TABLE stages (
 CREATE TABLE companies (
   id              INTEGER PRIMARY KEY,
   name            TEXT NOT NULL UNIQUE,
-  industry        TEXT,                -- 'Branche' in the sidebar
-  employee_count  TEXT,                -- 'Mitarbeiterzahl'; free-form ('50-200')
+  sector          TEXT,                -- 'Branche' in the sidebar
+  headcount       TEXT,                -- 'Mitarbeiterzahl'; free-form ('50-200')
   website         TEXT,                -- 'Karriereseite'
   email           TEXT,                -- UNTERNEHMEN section E-Mail
   phone           TEXT,                -- UNTERNEHMEN section Telefon
@@ -99,7 +99,9 @@ CREATE TABLE applications (
   channel         TEXT,
   stage_id        TEXT NOT NULL REFERENCES stages(id),
   stage_position  INTEGER NOT NULL,    -- order within the column, reindexed on drag
-  summary         TEXT,                -- NULL → renderer falls back to generated text
+  summary         TEXT,                -- the editable description paragraph under the
+                                       -- title in the detail view (not comments/notes);
+                                       -- NULL → renderer falls back to generated text
   applied_at      TEXT,                -- 'YYYY-MM-DD'; 'Beworben am' in the sidebar
   applied_via     TEXT,                -- 'Beworben via': HOW the application was
                                        -- submitted (Karriereseite, E-Mail, LinkedIn…)
@@ -157,9 +159,9 @@ CREATE TABLE facts (                   -- label/value bag for the properties sid
 --                         company with the new name and RE-LINKS company_id — it
 --                         does not rename the shared row, so fixing a typo on one
 --                         card can't silently rename another application's company)
---   'Branche'           ↔ companies.industry      (updates the shared row)
---   'Mitarbeiterzahl'   ↔ companies.employee_count (updates the shared row)
---   'Karriereseite'     ↔ companies.website        (updates the shared row)
+--   'Branche'           ↔ companies.sector    (updates the shared row)
+--   'Mitarbeiterzahl'   ↔ companies.headcount (updates the shared row)
+--   'Karriereseite'     ↔ companies.website   (updates the shared row)
 --   'E-Mail'/'Telefon' (UNTERNEHMEN section) ↔ companies.email / companies.phone
 -- Only genuinely free-form position fields remain facts rows: 'Standort',
 -- 'Gehalt', 'Erfahrung', and any future ad-hoc labels.
@@ -321,7 +323,7 @@ values, which are messier than "German date → ISO":
 
 1. **Stages:** insert the 10 stages with the slug ids listed above.
 2. **Companies:** one row per distinct company name in `CARDS` (name only;
-   industry/size columns start NULL — there is no such sample data).
+   sector/headcount/website columns start NULL — there is no such sample data).
 3. **Applications:** from `CARDS` + `BOARD`, linked via `company_id`.
    `interest` from `CardDef[2]`;
    `followupState` (`CardDef[5]`) is **dropped** (derived now). `updated_at`: parse

@@ -54,7 +54,7 @@ export function DetailView() {
 
   return (
     <div style={{ flex: '1 1 0', minHeight: 0, display: 'flex', flexDirection: 'column', background: 'var(--c-fbfaf7)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '2px 22px 14px', flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '14px 22px 16px', flexShrink: 0 }}>
         <div className="crumb" onClick={() => set({ openCardId: null })}>Bewerbungen</div>
         <div style={{ fontSize: 12.5, color: 'var(--c-c3c0b8)' }}>›</div>
         <div style={{ fontSize: 12.5, color: 'var(--c-1b1a17)', fontWeight: 600 }}>{cardId}</div>

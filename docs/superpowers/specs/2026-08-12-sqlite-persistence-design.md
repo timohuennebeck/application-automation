@@ -101,6 +101,9 @@ CREATE TABLE applications (
   stage_position  INTEGER NOT NULL,    -- order within the column, reindexed on drag
   summary         TEXT,                -- NULL → renderer falls back to generated text
   applied_at      TEXT,                -- 'YYYY-MM-DD'; 'Beworben am' in the sidebar
+  applied_via     TEXT,                -- 'Beworben via': HOW the application was
+                                       -- submitted (Karriereseite, E-Mail, LinkedIn…)
+                                       -- distinct from channel = where it was FOUND
   last_contact_at TEXT,                -- 'YYYY-MM-DD'; 'Letzter Kontakt'
   created_at      TEXT NOT NULL,
   updated_at      TEXT NOT NULL
@@ -145,7 +148,9 @@ CREATE TABLE facts (                   -- label/value bag for the properties sid
 -- real columns. The repo routes them on write and synthesizes them on read;
 -- they are never stored as facts rows, so two write paths can't diverge:
 --   'Berufsbezeichnung' ↔ applications.role
---   'Plattform'         ↔ applications.channel
+--   'Plattform'         ↔ applications.channel     (where the listing was FOUND)
+--   'Beworben via'      ↔ applications.applied_via (how it was SUBMITTED — new
+--                         sidebar field; select options live in FACT_OPTIONS)
 --   'Beworben am'       ↔ applications.applied_at
 --   'Letzter Kontakt'   ↔ applications.last_contact_at
 --   'Firma'             ↔ the linked company's name (editing it find-or-creates a
@@ -413,6 +418,11 @@ the merge adapters become straight selectors.
 constants** (`INTEREST`, `FACT_OPTIONS`, `DATE_FIELDS`, `PERSON_COLORS`, stage
 colors, …) move to a `src/data/config.ts` the renderer keeps importing; the
 `AGENT_RUNS` stub stays imported by the agent panel until the SDK work.
+
+One small UI addition rides along: the sidebar's BEWERBUNG section gains a
+`'Beworben via'` select field (routed to `applications.applied_via`), separating
+how an application was submitted from the existing `'Plattform'` (where the
+listing was found). Seed leaves it NULL — the sample data never recorded it.
 
 A boot loading state covers the (fast, local) `db:load` call before first paint
 of the board.

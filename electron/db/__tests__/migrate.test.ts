@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { openDb } from '../open';
-import { migrate } from '../migrate';
-import { STAGES } from '../schema';
+import { openDb } from '../open.ts';
+import { migrate } from '../migrate.ts';
+import { STAGES } from '../schema.ts';
 
 const TABLES = [
   'meta', 'stages', 'companies', 'applications', 'facts', 'people',

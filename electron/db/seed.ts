@@ -7,11 +7,11 @@ import type { DatabaseSync } from 'node:sqlite';
 import {
   CARD_DEFS, DETAILS, HISTORY, INITIAL_BOARD, INITIAL_PEOPLE, INITIAL_PEOPLE_POOL,
   INITIAL_ROUNDS, SALARY,
-} from '../../src/data/sample-data';
-import { STAGES } from './schema';
+} from '../../src/data/sample-data.ts';
+import { STAGES } from './schema.ts';
 import {
   dayMonthToISO, germanDateToISO, looksLikePhone, relativeToISO, splitCompany, splitTimeRange,
-} from './seed-parse';
+} from './seed-parse.ts';
 
 const SEED_YEAR = 2026;
 const DAY = 86_400_000;

@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
-import { MIGRATIONS } from './schema';
+import { MIGRATIONS } from './schema.ts';
 
 function userVersion(db: DatabaseSync): number {
   return Number((db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version);

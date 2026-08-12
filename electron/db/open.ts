@@ -1,5 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
-import { migrate } from './migrate';
+import { migrate } from './migrate.ts';
 
 /* Opens (or creates) the database and brings it to the current schema.
    WAL only applies to real files; :memory: databases reject it. */

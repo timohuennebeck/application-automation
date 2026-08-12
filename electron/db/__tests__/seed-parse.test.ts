@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   dayMonthToISO, germanDateToISO, looksLikePhone, relativeToISO, splitCompany, splitTimeRange,
-} from '../seed-parse';
+} from '../seed-parse.ts';
 
 /* Fixed reference instant so tests are deterministic. */
 const NOW = new Date('2026-08-12T12:00:00.000Z');

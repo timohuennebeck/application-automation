@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { DatabaseSync } from 'node:sqlite';
-import { openDb } from '../open';
-import { seedIfEmpty } from '../seed';
+import { openDb } from '../open.ts';
+import { seedIfEmpty } from '../seed.ts';
 
 const NOW = new Date('2026-08-12T12:00:00.000Z');
 

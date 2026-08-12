@@ -1,0 +1,118 @@
+import { beforeAll, describe, expect, it } from 'vitest';
+import type { DatabaseSync } from 'node:sqlite';
+import { openDb } from '../open';
+import { seedIfEmpty } from '../seed';
+
+const NOW = new Date('2026-08-12T12:00:00.000Z');
+
+let db: DatabaseSync;
+beforeAll(() => {
+  db = openDb(':memory:');
+  seedIfEmpty(db, NOW);
+});
+
+const all = <T>(sql: string, ...args: unknown[]): T[] => db.prepare(sql).all(...(args as never[])) as T[];
+const one = <T>(sql: string, ...args: unknown[]): T => db.prepare(sql).get(...(args as never[])) as T;
+
+describe('seedIfEmpty', () => {
+  it('seeds once and never again', () => {
+    expect(seedIfEmpty(db, NOW)).toBe(false);
+    expect(one<{ n: number }>('SELECT COUNT(*) AS n FROM applications').n).toBe(13);
+  });
+
+  it('keeps the two Nadine Wolfs apart and merges the one Lea Brinkmann', () => {
+    const nadines = all<{ role: string }>("SELECT role FROM people WHERE name = 'Nadine Wolf' ORDER BY role");
+    expect(nadines.map((r) => r.role)).toEqual(['Geschäftsführung', 'Recruiterin']);
+    const leas = all<{ email: string | null }>("SELECT email FROM people WHERE name = 'Lea Brinkmann'");
+    expect(leas).toHaveLength(1);
+    expect(leas[0].email).toBe('l.brinkmann@helios.de');
+  });
+
+  it("routes BEW-29's phone-shaped contact value to phone", () => {
+    const ines = one<{ email: string | null; phone: string | null }>(
+      "SELECT email, phone FROM people WHERE name = 'Ines Faber' AND role = 'HR Business Partner'",
+    );
+    expect(ines.phone).toBe('+49 341 55 20 118');
+    expect(ines.email).toBe('i.faber@brandt-digital.de'); // folded from the Kontaktperson facts
+    // The pool 'HR' Ines is a separate person.
+    expect(all("SELECT id FROM people WHERE name = 'Ines Faber'")).toHaveLength(2);
+  });
+
+  it('routes BEW-33 sidebar fields to columns, not facts', () => {
+    const app = one<{ applied_at: string; last_contact_at: string; channel: string; summary: string | null }>(
+      "SELECT applied_at, last_contact_at, channel, summary FROM applications WHERE id = 'BEW-33'",
+    );
+    expect(app.applied_at).toBe('2026-07-24');
+    expect(app.last_contact_at).toBe('2026-07-31'); // now − 12d
+    expect(app.channel).toBe('StepStone');
+    const labels = all<{ label: string }>("SELECT label FROM facts WHERE application_id = 'BEW-33'").map((r) => r.label);
+    expect(labels.sort()).toEqual(['Erfahrung', 'Gehalt', 'Standort']);
+    const company = one<{ sector: string; headcount: string; website: string; email: string; phone: string }>(
+      "SELECT c.sector, c.headcount, c.website, c.email, c.phone FROM companies c JOIN applications a ON a.company_id = c.id WHERE a.id = 'BEW-33'",
+    );
+    expect(company).toEqual({
+      sector: 'Software', headcount: '201–500', website: 'vectorlabs.ch/karriere',
+      email: 'jobs@vectorlabs.ch', phone: '+41 44 512 90 30',
+    });
+    // Kontaktperson data folded into the Recruiterin Nadine.
+    const nadine = one<{ phone: string; linkedin: string }>(
+      "SELECT phone, linkedin FROM people WHERE name = 'Nadine Wolf' AND role = 'Recruiterin'",
+    );
+    expect(nadine.phone).toBe('+41 44 512 90 34');
+    expect(nadine.linkedin).toBe('linkedin.com/in/nadine-wolf');
+  });
+
+  it('gives every application rounds ending in Finales Gespräch, a slot-0 followup, a comment, 2 documents, Gehalt+Standort facts', () => {
+    for (const { id } of all<{ id: string }>('SELECT id FROM applications')) {
+      const rounds = all<{ title: string }>('SELECT title FROM rounds WHERE application_id = ? ORDER BY position', id);
+      expect(rounds.length, id).toBeGreaterThanOrEqual(3);
+      expect(rounds[rounds.length - 1].title, id).toBe('Finales Gespräch');
+      expect(one<{ n: number }>("SELECT COUNT(*) AS n FROM followups WHERE application_id = ? AND position = 0", id).n, id).toBe(1);
+      expect(one<{ n: number }>('SELECT COUNT(*) AS n FROM comments WHERE application_id = ?', id).n, id).toBeGreaterThanOrEqual(1);
+      expect(one<{ n: number }>('SELECT COUNT(*) AS n FROM documents WHERE application_id = ?', id).n, id).toBe(2);
+      const labels = all<{ label: string }>('SELECT label FROM facts WHERE application_id = ?', id).map((r) => r.label);
+      expect(labels, id).toContain('Gehalt');
+      expect(labels, id).toContain('Standort');
+    }
+  });
+
+  it('splits round time ranges', () => {
+    const r1 = one<{ scheduled_date: string; start_time: string; end_time: string; location: string }>(
+      "SELECT scheduled_date, start_time, end_time, location FROM rounds WHERE application_id = 'BEW-24' AND title = 'Runde 1'",
+    );
+    expect(r1).toEqual({ scheduled_date: '2026-08-12', start_time: '10:00', end_time: '11:00', location: 'In Person' });
+    // BEW-24's seed lacks a final round — it must be appended.
+    expect(all("SELECT title FROM rounds WHERE application_id = 'BEW-24'")).toHaveLength(4);
+  });
+
+  it('parses yearless activity dates and keeps participant order', () => {
+    const acts = all<{ text: string; created_at: string }>(
+      "SELECT text, created_at FROM activities WHERE application_id = 'BEW-33' ORDER BY id",
+    );
+    expect(acts).toHaveLength(3);
+    expect(acts[0].created_at).toBe('2026-07-24T09:00:00.000Z');
+    const finale = one<{ id: number }>("SELECT id FROM rounds WHERE application_id = 'BEW-15' AND title = 'Finales Gespräch'");
+    const people = all<{ name: string }>(
+      'SELECT p.name FROM round_people rp JOIN people p ON p.id = rp.person_id WHERE rp.round_id = ? ORDER BY rp.position', finale.id,
+    ).map((r) => r.name);
+    expect(people).toEqual(['Nadine Wolf', 'Tim Bergk', 'Jonas Reiter', 'Ines Faber']);
+  });
+
+  it('freezes followup dates from the anchor (Sep 1) and sets the counter', () => {
+    const slots = all<{ label: string; due_at: string; position: number }>(
+      "SELECT label, due_at, position FROM followups WHERE application_id = 'BEW-35' ORDER BY position",
+    );
+    expect(slots.map((s) => s.label)).toEqual(['Follow up zur Bewerbung', 'Erneutes Follow up', 'Letztes Follow up']);
+    expect(slots[0].due_at).toBe('2026-09-01');
+    expect(slots[1].due_at).toBe('2026-09-10');
+    expect(one<{ value: string }>("SELECT value FROM meta WHERE key = 'next_bew_num'").value).toBe('45');
+  });
+
+  it('shares one company row across applications at the same company', () => {
+    // All 13 sample companies are distinct; assert names have no city suffix.
+    const names = all<{ name: string }>('SELECT name FROM companies').map((r) => r.name);
+    expect(names).toContain('Vector Labs');
+    expect(names).toContain('Kessler & Roth');
+    expect(names.some((n) => n.includes(','))).toBe(false);
+  });
+});

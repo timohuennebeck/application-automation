@@ -1,0 +1,263 @@
+/* One-time transform of the design prototype's sample data into real rows.
+   Runs only on an empty database, inside a single transaction. The messy parts
+   (yearless dates, phone-in-email slots, same-name different-person contacts)
+   are speced in docs/superpowers/specs/2026-08-12-sqlite-persistence-design.md
+   and covered by __tests__/seed.test.ts. */
+import type { DatabaseSync } from 'node:sqlite';
+import {
+  CARD_DEFS, DETAILS, HISTORY, INITIAL_BOARD, INITIAL_PEOPLE, INITIAL_PEOPLE_POOL,
+  INITIAL_ROUNDS, SALARY,
+} from '../../src/data/sample-data';
+import { STAGES } from './schema';
+import {
+  dayMonthToISO, germanDateToISO, looksLikePhone, relativeToISO, splitCompany, splitTimeRange,
+} from './seed-parse';
+
+const SEED_YEAR = 2026;
+const DAY = 86_400_000;
+
+/* Labels that route to real columns and must never become facts rows. */
+const ROUTED_LABELS = new Set([
+  'Berufsbezeichnung', 'Firma', 'Plattform', 'Beworben via', 'Beworben am', 'Letzter Kontakt',
+  'Branche', 'Mitarbeiterzahl', 'Karriereseite', 'E-Mail', 'Telefon',
+  'Kontaktperson', 'Kontaktperson E-Mail', 'Kontaktperson Telefon', 'Kontaktperson LinkedIn',
+]);
+
+const DEFAULT_UPCOMING: [string, string][] = [
+  ['in 9 Tagen', 'Erneutes Follow up'],
+  ['in 25 Tagen', 'Letztes Follow up'],
+];
+
+const DEFAULT_COMMENT =
+  'Karte aus der Stellenanzeige angelegt. Anschreiben und Lebenslauf liegen im Reiter Bewerbungsunterlagen.';
+
+const CANONICAL_ROUNDS = ['Screening', 'Runde 1', 'Runde 2', 'Finales Gespräch'];
+
+const atNine = (isoDate: string) => `${isoDate}T09:00:00.000Z`;
+
+function factValue(id: string, label: string): string | undefined {
+  const f = DETAILS[id]?.facts.find((x) => x[0] === label);
+  return f?.[1];
+}
+
+/* Frozen version of schedule.ts's floating anchor: first follow-up lands on
+   Sep 1 (or today if that has passed), repeats offset from there. */
+function followupDates(now: Date, offsets: number[]): string[] {
+  const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const anchor = new Date(midnight.getFullYear(), midnight.getMonth() >= 8 ? midnight.getMonth() : 8, 1);
+  const base = anchor < midnight ? 0 : Math.round((anchor.getTime() - midnight.getTime()) / DAY);
+  return offsets.map((o) => {
+    const d = new Date(midnight.getTime() + (base + o) * DAY);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  });
+}
+
+export function seedIfEmpty(db: DatabaseSync, now = new Date()): boolean {
+  const has = db.prepare('SELECT COUNT(*) AS n FROM applications').get() as { n: number };
+  if (Number(has.n) > 0) return false;
+
+  const nowISO = now.toISOString();
+  db.exec('BEGIN');
+  try {
+    const insCompany = db.prepare(
+      'INSERT INTO companies (name, sector, headcount, website, email, phone, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)',
+    );
+    const insApp = db.prepare(
+      `INSERT INTO applications (id, role, company_id, interest, channel, stage_id, stage_position,
+        summary, applied_at, applied_via, last_contact_at, created_at, updated_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    );
+    const insFact = db.prepare(
+      'INSERT INTO facts (application_id, label, value, kind, position) VALUES (?,?,?,?,?)',
+    );
+    const insPerson = db.prepare(
+      'INSERT INTO people (name, role, initials, email, phone, linkedin, color, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)',
+    );
+    const insLink = db.prepare(
+      'INSERT INTO application_people (application_id, person_id, kind, position) VALUES (?,?,?,?)',
+    );
+    const insComment = db.prepare(
+      'INSERT INTO comments (application_id, author, text, created_at) VALUES (?,?,?,?)',
+    );
+    const insRound = db.prepare(
+      `INSERT INTO rounds (application_id, position, state, title, scheduled_date, start_time, end_time, location, link)
+       VALUES (?,?,?,?,?,?,?,?,?)`,
+    );
+    const insRoundPerson = db.prepare(
+      'INSERT INTO round_people (round_id, person_id, position) VALUES (?,?,?)',
+    );
+    const insFollowup = db.prepare(
+      'INSERT INTO followups (application_id, label, due_at, position) VALUES (?,?,?,?)',
+    );
+    const insDocument = db.prepare(
+      'INSERT INTO documents (application_id, kind, title, format, created_at, updated_at) VALUES (?,?,?,?,?,?)',
+    );
+    const insActivity = db.prepare(
+      'INSERT INTO activities (application_id, author, text, created_at) VALUES (?,?,?,?)',
+    );
+
+    /* Companies — one row per distinct name; sidebar UNTERNEHMEN fields come
+       from the owning card's DETAILS facts. */
+    const companyIds = new Map<string, number>();
+    for (const [id, card] of Object.entries(CARD_DEFS)) {
+      const { name } = splitCompany(card[1]);
+      if (companyIds.has(name)) continue;
+      const res = insCompany.run(
+        name,
+        factValue(id, 'Branche') ?? null,
+        factValue(id, 'Mitarbeiterzahl') ?? null,
+        factValue(id, 'Karriereseite') ?? null,
+        factValue(id, 'E-Mail') ?? null,
+        factValue(id, 'Telefon') ?? null,
+        nowISO, nowISO,
+      );
+      companyIds.set(name, Number(res.lastInsertRowid));
+    }
+
+    /* Applications — stage/position from the board layout. */
+    for (let col = 0; col < INITIAL_BOARD.length; col++) {
+      for (let pos = 0; pos < INITIAL_BOARD[col].length; pos++) {
+        const id = INITIAL_BOARD[col][pos];
+        const card = CARD_DEFS[id];
+        const { name } = splitCompany(card[1]);
+        const firstHistory = HISTORY[id]?.[0]?.[2];
+        const createdAt = firstHistory
+          ? atNine(dayMonthToISO(firstHistory, SEED_YEAR))
+          : new Date(now.getTime() - 21 * DAY).toISOString();
+        const lastContact = relativeToISO(factValue(id, 'Letzter Kontakt') ?? '', now);
+        insApp.run(
+          id, card[0], companyIds.get(name)!, card[2], card[3],
+          STAGES[col][0], pos,
+          DETAILS[id]?.summary ?? null,
+          germanDateToISO(factValue(id, 'Beworben am') ?? '') || null,
+          null,
+          lastContact ? lastContact.slice(0, 10) : null,
+          createdAt,
+          relativeToISO(card[4], now) || createdAt,
+        );
+      }
+    }
+
+    /* Facts — unrouted labels only; every card gets Standort + Gehalt. */
+    for (const [id, card] of Object.entries(CARD_DEFS)) {
+      let pos = 0;
+      const seen = new Set<string>();
+      for (const f of DETAILS[id]?.facts ?? []) {
+        if (ROUTED_LABELS.has(f[0])) continue;
+        insFact.run(id, f[0], f[1], f[2] === 's' ? 'select' : f[2] === 'l' ? 'link' : null, pos++);
+        seen.add(f[0]);
+      }
+      const city = splitCompany(card[1]).city;
+      if (!seen.has('Standort') && city) insFact.run(id, 'Standort', city, null, pos++);
+      if (!seen.has('Gehalt') && SALARY[id]) insFact.run(id, 'Gehalt', SALARY[id], 'select', pos++);
+    }
+
+    /* People pass 1: the initials-keyed directory. */
+    const personIdByKey = new Map<string, number>();
+    for (const [key, p] of Object.entries(INITIAL_PEOPLE)) {
+      const res = insPerson.run(
+        p.name, p.role || null, p.initials || key, p.email || null, p.phone || null,
+        p.linkedin || null, p.bg, nowISO, nowISO,
+      );
+      personIdByKey.set(key, Number(res.lastInsertRowid));
+    }
+
+    /* People pass 2: DETAILS.contacts. Merge only on exact name+role — the
+       sample data has different people sharing a name (two Nadine Wolfs). */
+    const findPerson = db.prepare('SELECT id, email, phone, linkedin FROM people WHERE name = ? AND role IS ?');
+    for (const [appId, det] of Object.entries(DETAILS)) {
+      det.contacts.forEach(([name, role, val, bg], idx) => {
+        const isPhone = looksLikePhone(val);
+        let row = findPerson.get(name, role || null) as
+          { id: number; email: string | null; phone: string | null; linkedin: string | null } | undefined;
+        if (!row) {
+          const res = insPerson.run(
+            name, role || null, name.split(/\s+/).map((w) => w[0]).join('').toUpperCase(),
+            isPhone ? null : val || null, isPhone ? val : null, null, bg, nowISO, nowISO,
+          );
+          row = { id: Number(res.lastInsertRowid), email: isPhone ? null : val, phone: isPhone ? val : null, linkedin: null };
+        }
+        /* Fold the Kontaktperson-* facts into this person's empty fields —
+           the tuple itself lacks phone/linkedin. */
+        if (factValue(appId, 'Kontaktperson') === name) {
+          const upd = db.prepare('UPDATE people SET email = COALESCE(email, ?), phone = COALESCE(phone, ?), linkedin = COALESCE(linkedin, ?) WHERE id = ?');
+          upd.run(
+            factValue(appId, 'Kontaktperson E-Mail') ?? null,
+            factValue(appId, 'Kontaktperson Telefon') ?? null,
+            factValue(appId, 'Kontaktperson LinkedIn') ?? null,
+            row.id,
+          );
+        }
+        insLink.run(appId, row.id, 'contact', idx);
+      });
+    }
+
+    /* Pools. */
+    for (const [appId, keys] of Object.entries(INITIAL_PEOPLE_POOL)) {
+      keys.forEach((key, idx) => insLink.run(appId, personIdByKey.get(key)!, 'pool', idx));
+    }
+
+    /* Comments — cards without DETAILS get the default Kepler comment the UI
+       currently fabricates at render time. */
+    for (const id of Object.keys(CARD_DEFS)) {
+      const list = DETAILS[id]?.comments;
+      if (list) {
+        for (const [author, time, text] of list) {
+          insComment.run(id, author, text, relativeToISO(time, now) || nowISO);
+        }
+      } else {
+        insComment.run(id, 'Kepler', DEFAULT_COMMENT, new Date(now.getTime() - 2 * DAY).toISOString());
+      }
+    }
+
+    /* Rounds — canonical defaults, final round guaranteed last. */
+    for (const id of Object.keys(CARD_DEFS)) {
+      const seeded = INITIAL_ROUNDS[id];
+      const rounds = seeded
+        ? seeded.some((r) => /final/i.test(r.title))
+          ? seeded
+          : [...seeded, { state: 'open' as const, title: 'Finales Gespräch', date: '', time: '', where: '', people: [] as string[], link: '' }]
+        : CANONICAL_ROUNDS.map((title) => ({ state: 'open' as const, title, date: '', time: '', where: '', people: [] as string[], link: '' }));
+      rounds.forEach((r, pos) => {
+        const [start, end] = splitTimeRange(r.time);
+        const res = insRound.run(
+          id, pos, r.state, r.title,
+          germanDateToISO(r.date) || null, start, end, r.where || null, r.link || null,
+        );
+        r.people.forEach((key, pi) => insRoundPerson.run(Number(res.lastInsertRowid), personIdByKey.get(key)!, pi));
+      });
+    }
+
+    /* Follow-ups — slot 0 is the synthesized initial follow-up; dates frozen
+       from today's anchor logic. */
+    for (const id of Object.keys(CARD_DEFS)) {
+      const upcoming = DETAILS[id]?.upcoming ?? DEFAULT_UPCOMING;
+      const offsets = [0, ...upcoming.map((u) => +(u[0].match(/\d+/) || ['0'])[0])];
+      const dates = followupDates(now, offsets);
+      const labels = ['Follow up zur Bewerbung', ...upcoming.map((u) => u[1])];
+      labels.forEach((label, pos) => insFollowup.run(id, label, dates[pos], pos));
+    }
+
+    /* Documents — the stub pair every card shows today; files come with the
+       Agent SDK work. */
+    for (const id of Object.keys(CARD_DEFS)) {
+      insDocument.run(id, 'cover-letter', 'Cover Letter', 'docx', atNine('2026-07-26'), atNine('2026-07-26'));
+      insDocument.run(id, 'lebenslauf', 'Lebenslauf', 'docx', atNine('2026-07-22'), atNine('2026-07-24'));
+    }
+
+    /* Activities — HISTORY's yearless dates, year 2026 assumed. */
+    for (const [id, rows] of Object.entries(HISTORY)) {
+      for (const [author, text, date] of rows) {
+        insActivity.run(id, author, text, atNine(dayMonthToISO(date, SEED_YEAR)));
+      }
+    }
+
+    db.prepare('INSERT INTO meta (key, value) VALUES (?,?)').run('next_bew_num', '45');
+
+    db.exec('COMMIT');
+    return true;
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+}

@@ -291,7 +291,8 @@ export function InterviewCard({ cardId, ri, round, company }: {
             )}
 
             {addingPerson ? (
-              <PopoverAnchor style={{ marginLeft: -6, width: 'fit-content' }}>
+              /* The row keeps its own -6 gutter, so the anchor must not add one. */
+              <PopoverAnchor style={{ width: 'fit-content' }}>
                 <AddRow label="Person hinzufügen" active />
                 <Popover top={27} left={0} zIndex={20} width={290}>
                   <PeoplePicker

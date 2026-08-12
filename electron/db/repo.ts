@@ -318,11 +318,12 @@ export function createRepo(
                     | "applied_at"
                     | "applied_via"
                     | "last_contact_at"
-                    | "stage_id"
                 >
             >,
         ): ApplicationRow {
             return tx(() => {
+                // stage_id is deliberately absent: stage changes go through
+                // moveCard, which keeps stage_position contiguous.
                 const allowed = [
                     "role",
                     "interest",
@@ -331,9 +332,10 @@ export function createRepo(
                     "applied_at",
                     "applied_via",
                     "last_contact_at",
-                    "stage_id",
                 ] as const;
-                const keys = allowed.filter((k) => k in patch);
+                const keys = allowed.filter(
+                    (k) => k in patch && patch[k] !== undefined,
+                );
                 if (keys.length) {
                     const setSql = keys.map((k) => `${k} = ?`).join(", ");
                     db.prepare(
@@ -423,7 +425,9 @@ export function createRepo(
                     "phone",
                     "notes",
                 ] as const;
-                const keys = allowed.filter((k) => k in patch);
+                const keys = allowed.filter(
+                    (k) => k in patch && patch[k] !== undefined,
+                );
                 if (keys.length) {
                     const setSql = keys.map((k) => `${k} = ?`).join(", ");
                     db.prepare(
@@ -454,7 +458,7 @@ export function createRepo(
                 ).p;
                 db.prepare(
                     `INSERT INTO facts (application_id, label, value, kind, position) VALUES (?,?,?,?,?)
-           ON CONFLICT (application_id, label) DO UPDATE SET value = excluded.value`,
+           ON CONFLICT (application_id, label) DO UPDATE SET value = excluded.value, kind = excluded.kind`,
                 ).run(applicationId, label, value, kind, next);
                 touchApplication(applicationId);
                 return db
@@ -537,7 +541,7 @@ export function createRepo(
                 park.run(applicationId);
 
                 const updRound = db.prepare(
-                    "UPDATE rounds SET position = ?, state = ?, title = ?, scheduled_date = ?, start_time = ?, end_time = ?, location = ?, link = ? WHERE id = ?",
+                    "UPDATE rounds SET position = ?, state = ?, title = ?, scheduled_date = ?, start_time = ?, end_time = ?, location = ?, link = ? WHERE id = ? AND application_id = ?",
                 );
                 const insRound = db.prepare(
                     `INSERT INTO rounds (application_id, position, state, title, scheduled_date, start_time, end_time, location, link)
@@ -563,6 +567,7 @@ export function createRepo(
                             r.location,
                             r.link,
                             r.id,
+                            applicationId,
                         );
                         rid = r.id;
                     } else {
@@ -681,7 +686,11 @@ export function createRepo(
                     "linkedin",
                     "initials",
                 ] as const;
-                const keys = allowed.filter((k) => k in patch);
+                // Skip undefined values: NULLing NOT NULL columns (name) would
+                // roll back the whole patch and silently drop the other edits.
+                const keys = allowed.filter(
+                    (k) => k in patch && patch[k] !== undefined,
+                );
                 if (keys.length) {
                     const setSql = keys.map((k) => `${k} = ?`).join(", ");
                     db.prepare(
@@ -714,7 +723,7 @@ export function createRepo(
                 const ins = db.prepare(
                     "INSERT INTO application_people (application_id, person_id, kind, position) VALUES (?,?,?,?)",
                 );
-                personIds.forEach((pid, i) =>
+                [...new Set(personIds)].forEach((pid, i) =>
                     ins.run(applicationId, pid, kind, i),
                 );
                 return db

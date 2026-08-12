@@ -16,6 +16,7 @@ const initialState = (): AppState => ({
   dark: false,
 
   loaded: false,
+  loadError: null,
   applications: {},
   companies: {},
   factsByApp: {},
@@ -89,14 +90,10 @@ const COMPANY_FIELD: Record<string, 'sector' | 'headcount' | 'website' | 'email'
   Telefon: 'phone',
 };
 const DATE_COLUMNS = new Set(['Beworben am', 'Letzter Kontakt']);
+/* Cleared facts that should default to the select kind. */
+const SELECT_FACTS = new Set(['Gehalt', 'Erfahrung']);
 
 const db = () => window.desktop?.db;
-
-/* Database writes are optimistic: state updates immediately, failures only
-   log — there is no server, so the only realistic failure is a bug. */
-function persist(p: Promise<unknown> | undefined) {
-  p?.catch((err) => console.error('[db]', err));
-}
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [st, setSt] = useState<AppState>(initialState);
@@ -108,6 +105,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const swapLockRef = useRef<{ col: number; dir: number; y: number } | null>(null);
   const ghostRef = useRef<HTMLElement | null>(null);
   const mailTimerRef = useRef<number | undefined>(undefined);
+  /* Serializes db:rounds.set per card so a second edit never races the first
+     response (which carries the db ids of freshly created rounds). */
+  const roundsChainRef = useRef<Record<string, Promise<void>>>({});
 
   const set = useCallback((patch: Patch) => {
     setSt((s) => {
@@ -115,6 +115,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return p ? { ...s, ...p } : s;
     });
   }, []);
+
+  /* Database writes are optimistic. On failure the optimistic state is wrong,
+     so reload the snapshot and let the view converge back on the truth. */
+  const persist = useCallback((p: Promise<unknown> | undefined) => {
+    p?.catch((err) => {
+      console.error('[db]', err);
+      db()?.load()
+        .then((snap) => set(indexSnapshot(snap)))
+        .catch((e) => console.error('[db] resync failed', e));
+    });
+  }, [set]);
 
   /* Boot: one snapshot load, then the board renders. */
   useEffect(() => {
@@ -126,7 +137,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     api.load()
       .then((snap) => set({ ...indexSnapshot(snap), loaded: true }))
-      .catch((err) => console.error('[db] load failed', err));
+      .catch((err) => {
+        console.error('[db] load failed', err);
+        set({ loadError: String(err) });
+      });
   }, [set]);
 
   const applyTheme = (dark: boolean) => {
@@ -150,20 +164,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   /* Mutates a copy of the card's rounds, shows it immediately and persists the
-     full list; new rounds get their db ids from the response. */
+     full list; new rounds get their db ids from the response. Writes are
+     chained per card: each send reads the latest state, so a queued edit
+     carries the ids the previous response just merged in — otherwise a rapid
+     second edit would look like "delete and recreate" to the repo. */
   const mutateRounds = useCallback((id: string, fn: (rounds: Round[]) => void) => {
     const cur = roundsFor(id).map((r) => ({ ...r, people: r.people.slice(), notes: (r.notes || []).slice() }));
     fn(cur);
     set((s) => ({ roundsState: { ...s.roundsState, [id]: cur } }));
-    persist(db()?.rounds.set(id, cur.map(roundInput)).then((res) => {
-      set((s) => ({
-        roundsState: {
-          ...s.roundsState,
-          [id]: (s.roundsState[id] ?? []).map((v, i) => (res.rounds[i] ? { ...v, dbId: res.rounds[i].id } : v)),
-        },
-      }));
-    }));
-  }, [roundsFor, set]);
+    const prev = roundsChainRef.current[id] ?? Promise.resolve();
+    const next = prev.then(async () => {
+      const api = db();
+      if (!api) return;
+      const latest = stRef.current.roundsState[id] ?? [];
+      const res = await api.rounds.set(id, latest.map(roundInput));
+      set((s) => {
+        const list = s.roundsState[id] ?? [];
+        if (list.length !== res.rounds.length) return {}; // superseded; the queued send re-syncs
+        return {
+          roundsState: {
+            ...s.roundsState,
+            [id]: list.map((v, i) => (res.rounds[i] ? { ...v, dbId: res.rounds[i].id } : v)),
+          },
+        };
+      });
+    });
+    // Keep the chain alive after a failure; persist handles the error itself.
+    roundsChainRef.current[id] = next.catch(() => {});
+    persist(next);
+  }, [persist, roundsFor, set]);
 
   const logAct = useCallback((id: string, text: string) => {
     const append = (row: ActivityRow) => set((s) => ({
@@ -189,6 +218,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const row = rs[ri];
       row.date = ''; row.time = ''; row.where = ''; row.link = '';
       row.people = []; row.notes = []; row.state = 'open';
+      // Dropping the id makes rounds.set replace the row, so the cascade
+      // clears its note thread too — notes aren't part of RoundInput.
+      row.dbId = undefined;
     });
     logAct(id, removable
       ? 'hat das Interview „' + r.title + '“ gelöscht'
@@ -200,17 +232,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const body = text.trim();
     if (!body) return;
     const round = roundsFor(id)[ri];
-    const appendLocal = (time: string) => set((s) => ({
+    set((s) => ({
       roundsState: {
         ...s.roundsState,
         [id]: (s.roundsState[id] ?? []).map((r, i) =>
-          (i === ri ? { ...r, notes: [...(r.notes || []), { author: 'Du', text: body, time }] } : r)),
+          (i === ri ? { ...r, notes: [...(r.notes || []), { author: 'Du', text: body, time: 'gerade eben' }] } : r)),
       },
     }));
-    appendLocal('gerade eben');
-    if (round?.dbId != null) persist(db()?.roundNotes.add(round.dbId, 'Du', body));
+    // A just-created round has no dbId until db:rounds.set responds — queue
+    // the note behind that write instead of silently dropping it.
+    const send = () => {
+      const dbId = stRef.current.roundsState[id]?.[ri]?.dbId;
+      if (dbId != null) persist(db()?.roundNotes.add(dbId, 'Du', body));
+    };
+    if (round?.dbId != null) send();
+    else (roundsChainRef.current[id] ?? Promise.resolve()).then(send);
     logAct(id, 'hat „' + (round?.title ?? 'Interview') + '“ kommentiert');
-  }, [logAct, roundsFor, set]);
+  }, [logAct, persist, roundsFor, set]);
 
   const linksOf = useCallback((id: string, kind: 'contact' | 'pool' | 'email') =>
     (stRef.current.linksByApp[id] || []).filter((l) => l.kind === kind), []);
@@ -244,23 +282,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     persist(db()?.applicationPeople.set(id, kind, personIds));
   }, [set]);
 
-  const idsOf = useCallback((list: ContactEntry[]): number[] => {
-    const s = stRef.current;
-    return list
-      .map((c) => c.personId ?? Number(Object.keys(s.people).find((k) => s.people[k].name === c.name)))
-      .filter((n): n is number => Number.isFinite(n));
-  }, []);
+  /* Every ContactEntry producer sets personId; matching by name would guess
+     wrong for the two seeded people who share one. */
+  const idsOf = useCallback((list: ContactEntry[]): number[] =>
+    list.map((c) => c.personId).filter((n): n is number => Number.isFinite(n)), []);
 
   const setContacts = useCallback((id: string, list: ContactEntry[]) => {
     saveLinks(id, 'contact', idsOf(list));
   }, [idsOf, saveLinks]);
 
-  /* The follow-up email keeps its own recipient list; with no explicit list it
-     mirrors the card contacts. */
-  const emailContactsFor = useCallback((id: string): ContactEntry[] => {
-    const links = linksOf(id, 'email');
-    return links.length ? links.map((l) => entryFor(l.person_id)) : contactsFor(id);
-  }, [contactsFor, entryFor, linksOf]);
+  /* The follow-up email keeps its own recipient list. It is always explicit
+     (the seed mirrors the card contacts into it) — a fallback to the card
+     contacts would make an intentionally emptied list impossible. */
+  const emailContactsFor = useCallback((id: string): ContactEntry[] =>
+    linksOf(id, 'email').map((l) => entryFor(l.person_id)), [entryFor, linksOf]);
 
   const setEmailContacts = useCallback((id: string, list: ContactEntry[]) => {
     saveLinks(id, 'email', idsOf(list));
@@ -280,33 +315,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return [...new Set([...base, ...onRounds])].filter((k) => s.people[k]).map(person);
   }, [linksOf, person, roundsFor]);
 
+  /* Reads from stRef and fires the IPC outside the setState updater —
+     StrictMode double-invokes updaters in dev, which would double the write. */
   const moveCard = useCallback((id: string, toCol: number, toIdx: number | null, live = false) => {
     if (!id) return;
-    set((s) => {
-      const board = s.board.map((c) => c.slice());
-      let fromCol = -1;
-      let fromIdx = -1;
-      board.forEach((c, ci) => {
-        const i = c.indexOf(id);
-        if (i >= 0) { fromCol = ci; fromIdx = i; }
-      });
-      if (fromCol < 0) return {};
-      board[fromCol].splice(fromIdx, 1);
-      let idx = toIdx == null ? board[toCol].length : toIdx;
-      if (fromCol === toCol && fromIdx < idx) idx--;
-      idx = Math.max(0, Math.min(idx, board[toCol].length));
-      if (fromCol === toCol && idx === fromIdx && !live) return {};
-      if (fromCol === toCol && idx === fromIdx) return s.overCol === toCol ? {} : { overCol: toCol };
-      board[toCol].splice(idx, 0, id);
-      if (!live) {
-        persist(db()?.applications.move(id, STAGE_IDS[toCol], idx));
-        const app = s.applications[id];
-        const applications = app ? { ...s.applications, [id]: { ...app, stage_id: STAGE_IDS[toCol] } } : s.applications;
-        return { board, applications, dragId: null, overCol: null };
-      }
-      return { board, overCol: toCol };
+    const s = stRef.current;
+    const board = s.board.map((c) => c.slice());
+    let fromCol = -1;
+    let fromIdx = -1;
+    board.forEach((c, ci) => {
+      const i = c.indexOf(id);
+      if (i >= 0) { fromCol = ci; fromIdx = i; }
     });
-  }, [set]);
+    if (fromCol < 0) return;
+    board[fromCol].splice(fromIdx, 1);
+    let idx = toIdx == null ? board[toCol].length : toIdx;
+    if (fromCol === toCol && fromIdx < idx) idx--;
+    idx = Math.max(0, Math.min(idx, board[toCol].length));
+    if (fromCol === toCol && idx === fromIdx && !live) return;
+    if (fromCol === toCol && idx === fromIdx) {
+      if (s.overCol !== toCol) set({ overCol: toCol });
+      return;
+    }
+    board[toCol].splice(idx, 0, id);
+    if (!live) {
+      persist(db()?.applications.move(id, STAGE_IDS[toCol], idx));
+      const app = s.applications[id];
+      const applications = app ? { ...s.applications, [id]: { ...app, stage_id: STAGE_IDS[toCol] } } : s.applications;
+      set({ board, applications, dragId: null, overCol: null });
+      return;
+    }
+    set({ board, overCol: toCol });
+  }, [persist, set]);
 
   /* Opening a card clears every editor bound to the previous one, so a dialog
      can never save onto the wrong application. */
@@ -442,12 +482,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     const pid = Number(e.key);
     if (Number.isFinite(pid) && s.people[e.key]) {
-      // Person exists in the DB — update it.
+      // Person exists in the DB — update it. An empty name keeps the old one:
+      // the key must stay out of the patch entirely, or the repo would write
+      // NULL into a NOT NULL column and roll back the other edits with it.
+      const keptName = name || s.people[e.key].name;
       set((s2) => ({
-        people: { ...s2.people, [e.key]: { ...s2.people[e.key], name: name || s2.people[e.key].name, ...fields, initials: initials(name || s2.people[e.key].name) } },
+        people: { ...s2.people, [e.key]: { ...s2.people[e.key], name: keptName, ...fields, initials: initials(keptName) } },
         ...clearEdit,
       }));
-      persist(db()?.people.update(pid, { name: name || undefined, ...fields }));
+      persist(db()?.people.update(pid, { ...(name ? { name } : {}), ...fields, initials: initials(keptName) }));
       attachContact(pid);
     } else if (name) {
       // Created from a contact picker — the row is only written once named.
@@ -569,7 +612,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     const existing = (s.factsByApp[id] || []).find((f) => f.label === label);
-    const kind = existing?.kind ?? (label in { Gehalt: 1, Erfahrung: 1 } ? 'select' : null);
+    const kind = existing?.kind ?? (SELECT_FACTS.has(label) ? 'select' : null);
     const stored = cleared ? '—' : value;
     persist(db()?.facts.upsert(id, label, stored, kind).then((row) => {
       set((s2) => {

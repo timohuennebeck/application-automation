@@ -34,6 +34,9 @@ export function InterviewCard({ cardId, ri, round, company }: {
   // The note draft is local: a global editing key would be cleared by the
   // document mousedown handler the moment the user clicks the send button.
   const [note, setNote] = useState('');
+  // The link draft too — committing on every keystroke would persist the
+  // whole round list once per character.
+  const [linkDraft, setLinkDraft] = useState<string | null>(null);
 
   const sy = ROUND_STATE[round.state];
   const rISO = dateToISO(round.date || '');
@@ -212,10 +215,17 @@ export function InterviewCard({ cardId, ri, round, company }: {
               {isOpen('link') && (
                 <Popover top={26} left={-7} zIndex={60} width={300} padding={8} stack={false}>
                   <input
-                    value={round.link || ''}
+                    value={linkDraft ?? round.link ?? ''}
                     autoFocus
                     placeholder={round.where === 'Microsoft Teams' ? 'https://teams.microsoft.com/l/meetup-join/…' : 'https://meet.google.com/…'}
-                    onChange={(e) => mutateRounds(cardId, (rs) => { if (rs[ri]) rs[ri].link = e.target.value; })}
+                    onChange={(e) => setLinkDraft(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                    onBlur={() => {
+                      if (linkDraft != null && linkDraft !== (round.link || '')) {
+                        mutateRounds(cardId, (rs) => { if (rs[ri]) rs[ri].link = linkDraft; });
+                      }
+                      setLinkDraft(null);
+                    }}
                     style={{
                       fontSize: 12, color: 'var(--c-1b1a17)', lineHeight: 1.5, border: 'none', borderRadius: 5,
                       padding: '6px 8px', background: 'var(--c-f6f5f1)', boxShadow: 'inset 0 0 0 1px var(--c-e6e3dc)',

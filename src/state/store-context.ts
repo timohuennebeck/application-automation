@@ -59,6 +59,8 @@ export interface AppState {
   /* Domain state, loaded from the database at boot (db:load) and kept in sync
      by the store's mutation helpers. The DB is the source of truth. */
   loaded: boolean;
+  /* Set when the boot load failed — the shell shows it instead of a blank page. */
+  loadError: string | null;
   applications: Record<string, ApplicationRow>;
   companies: Record<number, CompanyRow>;
   factsByApp: Record<string, FactRow[]>;

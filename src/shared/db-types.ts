@@ -169,6 +169,8 @@ export interface CreateApplicationResult {
     applications: ApplicationRow[];
 }
 
+/* stage_id is not patchable — stage changes go through applications.move,
+   which keeps stage_position contiguous. */
 export type ApplicationPatch = Partial<
     Pick<
         ApplicationRow,
@@ -179,7 +181,6 @@ export type ApplicationPatch = Partial<
         | "applied_at"
         | "applied_via"
         | "last_contact_at"
-        | "stage_id"
     >
 >;
 export type CompanyPatch = Partial<

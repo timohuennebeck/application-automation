@@ -532,3 +532,29 @@ date/company fields routed to real columns (`applied_at`, `last_contact_at`,
 company columns), `applied_via` added, `industry`/`employee_count` →
 `sector`/`headcount`, `documents` table added for Bewerbungsunterlagen, and
 `history` renamed to `activities`.
+
+## Implementation notes (post-review, 2026-08-12)
+
+Deviations accepted during implementation and its two review passes:
+
+- **Fact-label routing lives in the renderer**, not in `repo.upsertFact` as
+  originally sketched: `store.writeField` routes labels to their owning
+  columns (`APP_FIELD`/`COMPANY_FIELD`), and `seed.ts` keeps a matching
+  `ROUTED_LABELS` set. `db:facts.upsert` itself does no routing — a caller
+  that upserts a routed label (e.g. the future Agent SDK) would create a
+  shadowed facts row. When the SDK work lands, either move the routing into
+  the repo or export one shared label table.
+- **Re-seed guard is a `meta` marker** (`seeded=1`), not an applications row
+  count — deleting every card must not re-trigger the seed.
+- **Slot-0 follow-up due dates** are back-solved from the board subtitles
+  (`in 5 Tagen fällig`, `3 Tage überfällig`, `heute fällig`) so the seeded
+  board keeps its urgency chips; only cards without such a subtitle use the
+  frozen Sep-1 anchor.
+- **Email recipient lists are always explicit**: the seed mirrors each card's
+  contacts into `kind='email'` rows and the renderer has no fallback, so an
+  intentionally emptied list stays empty.
+- `db:facts.delete` is wired but currently unused (clearing a field stores
+  `'—'`, preserving the prototype's render); `db:documents.open` does not
+  exist yet — documents keep the placeholder download until real files land.
+- Follow-ups have **no completion state** (open design gap): due dates can be
+  moved but a follow-up can never be marked done.

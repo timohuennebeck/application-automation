@@ -35,6 +35,10 @@ const CANONICAL_ROUNDS = ['Screening', 'Runde 1', 'Runde 2', 'Finales Gespräch'
 
 const atNine = (isoDate: string) => `${isoDate}T09:00:00.000Z`;
 
+/* Local calendar date — toISOString would shift the day for users west of UTC. */
+const localDay = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
 function factValue(id: string, label: string): string | undefined {
   const f = DETAILS[id]?.facts.find((x) => x[0] === label);
   return f?.[1];
@@ -46,15 +50,27 @@ function followupDates(now: Date, offsets: number[]): string[] {
   const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const anchor = new Date(midnight.getFullYear(), midnight.getMonth() >= 8 ? midnight.getMonth() : 8, 1);
   const base = anchor < midnight ? 0 : Math.round((anchor.getTime() - midnight.getTime()) / DAY);
-  return offsets.map((o) => {
-    const d = new Date(midnight.getTime() + (base + o) * DAY);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  });
+  return offsets.map((o) => localDay(new Date(midnight.getTime() + (base + o) * DAY)));
+}
+
+/* Board subtitles like 'in 5 Tagen fällig' / '3 Tage überfällig' / 'heute
+   fällig' are the card's real first follow-up date — back-solve them so the
+   seeded board keeps its urgency chips. Returns null for non-followup text. */
+function dueDateFromSubtitle(subtitle: string, now: Date): string | null {
+  const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  let m = subtitle.match(/^in (\d+) Tagen fällig$/);
+  if (m) return localDay(new Date(midnight.getTime() + +m[1] * DAY));
+  m = subtitle.match(/^(\d+) Tage? überfällig$/);
+  if (m) return localDay(new Date(midnight.getTime() - +m[1] * DAY));
+  if (subtitle === 'heute fällig') return localDay(midnight);
+  return null;
 }
 
 export function seedIfEmpty(db: DatabaseSync, now = new Date()): boolean {
-  const has = db.prepare('SELECT COUNT(*) AS n FROM applications').get() as { n: number };
-  if (Number(has.n) > 0) return false;
+  // A meta marker, not a row count: deleting every application must not
+  // trigger a re-seed (the kept companies/people would violate UNIQUE names).
+  const seeded = db.prepare("SELECT value FROM meta WHERE key = 'seeded'").get();
+  if (seeded) return false;
 
   const nowISO = now.toISOString();
   db.exec('BEGIN');
@@ -125,15 +141,16 @@ export function seedIfEmpty(db: DatabaseSync, now = new Date()): boolean {
           ? atNine(dayMonthToISO(firstHistory, SEED_YEAR))
           : new Date(now.getTime() - 21 * DAY).toISOString();
         const lastContact = relativeToISO(factValue(id, 'Letzter Kontakt') ?? '', now);
+        const updatedAt = relativeToISO(card[4], now) || createdAt;
         insApp.run(
           id, card[0], companyIds.get(name)!, card[2], card[3],
           STAGES[col][0], pos,
           DETAILS[id]?.summary ?? null,
           germanDateToISO(factValue(id, 'Beworben am') ?? '') || null,
           null,
-          lastContact ? lastContact.slice(0, 10) : null,
+          lastContact ? localDay(new Date(lastContact)) : null,
           createdAt,
-          relativeToISO(card[4], now) || createdAt,
+          updatedAt < createdAt ? createdAt : updatedAt,
         );
       }
     }
@@ -189,6 +206,9 @@ export function seedIfEmpty(db: DatabaseSync, now = new Date()): boolean {
           );
         }
         insLink.run(appId, row.id, 'contact', idx);
+        // The follow-up email starts with the same recipients, as its own
+        // explicit list — so clearing it later actually sticks.
+        insLink.run(appId, row.id, 'email', idx);
       });
     }
 
@@ -228,12 +248,15 @@ export function seedIfEmpty(db: DatabaseSync, now = new Date()): boolean {
       });
     }
 
-    /* Follow-ups — slot 0 is the synthesized initial follow-up; dates frozen
-       from today's anchor logic. */
-    for (const id of Object.keys(CARD_DEFS)) {
+    /* Follow-ups — slot 0 is the synthesized initial follow-up. Cards whose
+       board subtitle names a due date keep it (that's the urgency chip);
+       everyone else gets the frozen Sep-1 anchor. */
+    for (const [id, card] of Object.entries(CARD_DEFS)) {
       const upcoming = DETAILS[id]?.upcoming ?? DEFAULT_UPCOMING;
       const offsets = [0, ...upcoming.map((u) => +(u[0].match(/\d+/) || ['0'])[0])];
       const dates = followupDates(now, offsets);
+      const slot0 = card[5] ? dueDateFromSubtitle(card[4], now) : null;
+      if (slot0) dates[0] = slot0;
       const labels = ['Follow up zur Bewerbung', ...upcoming.map((u) => u[1])];
       labels.forEach((label, pos) => insFollowup.run(id, label, dates[pos], pos));
     }
@@ -253,6 +276,7 @@ export function seedIfEmpty(db: DatabaseSync, now = new Date()): boolean {
     }
 
     db.prepare('INSERT INTO meta (key, value) VALUES (?,?)').run('next_bew_num', '45');
+    db.prepare('INSERT INTO meta (key, value) VALUES (?,?)').run('seeded', '1');
 
     db.exec('COMMIT');
     return true;

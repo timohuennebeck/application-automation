@@ -1,6 +1,7 @@
 /* Derived views over the domain state. The board card's subtitle, interview
    chip and salary line were pre-rendered strings in the sample data; now they
    are computed from rounds, follow-ups and facts at render time. */
+import { roundStage } from '../data/config';
 import { MON_DE3, DOW_DE, dateToISO, dayDiff, todayISO } from '../lib/date';
 import type { AppState } from './store-context';
 
@@ -59,19 +60,12 @@ export function interviewChip(st: AppState, id: string): InterviewChip | null {
     .sort((a, b) => (a.iso < b.iso ? -1 : 1))[0];
   if (!next) return null;
   const d = new Date(next.iso + 'T00:00:00');
-  const stageName = stageNameForRound(next.i, rounds.length);
   return {
     month: MON_DE3[d.getMonth()].toUpperCase(),
     day: String(d.getDate()),
     time: next.r.time,
-    meta: stageName + (next.r.where ? ' · ' + next.r.where : ''),
+    meta: roundStage(next.i, rounds.length).name + (next.r.where ? ' · ' + next.r.where : ''),
   };
-}
-
-function stageNameForRound(index: number, total: number): string {
-  // Mirrors config.roundStage without importing the color payload.
-  const names = ['Screening', 'Interview', '2. Interview', 'Finales Gespräch'];
-  return index === total - 1 ? names[3] : names[Math.min(index, 2)];
 }
 
 export interface CardSubtitle {
@@ -96,10 +90,13 @@ export function cardSubtitle(st: AppState, id: string): CardSubtitle {
     return { text: (when + ' ' + start).trim(), tone: 'muted' };
   }
 
-  const due = (st.followupsByApp[id] || [])
-    .map((f) => ({ f, diff: dayDiff(f.due_at) }))
-    .sort((a, b) => a.diff - b.diff)[0];
-  if (due && due.diff <= 7) {
+  // The next actionable follow-up: the soonest upcoming one if it is within a
+  // week, else the most recently missed one — never the oldest overdue slot.
+  const followups = (st.followupsByApp[id] || []).map((f) => ({ diff: dayDiff(f.due_at) }));
+  const upcoming = followups.filter((x) => x.diff >= 0).sort((a, b) => a.diff - b.diff)[0];
+  const overdue = followups.filter((x) => x.diff < 0).sort((a, b) => b.diff - a.diff)[0];
+  const due = upcoming && upcoming.diff <= 7 ? upcoming : overdue;
+  if (due) {
     if (due.diff < 0) return { text: -due.diff + (due.diff === -1 ? ' Tag' : ' Tage') + ' überfällig', tone: 'due' };
     if (due.diff === 0) return { text: 'heute fällig', tone: 'due' };
     return { text: 'in ' + due.diff + ' Tagen fällig', tone: 'soon' };

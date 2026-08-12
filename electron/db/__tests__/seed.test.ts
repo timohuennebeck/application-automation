@@ -20,6 +20,16 @@ describe('seedIfEmpty', () => {
     expect(one<{ n: number }>('SELECT COUNT(*) AS n FROM applications').n).toBe(13);
   });
 
+  it('does not re-seed after the user deletes every application', () => {
+    // The marker, not a row count, decides — kept companies/people would
+    // otherwise collide with the seed's UNIQUE names on the next launch.
+    const fresh = openDb(':memory:');
+    seedIfEmpty(fresh, NOW);
+    fresh.exec('DELETE FROM applications');
+    expect(seedIfEmpty(fresh, NOW)).toBe(false);
+    expect((fresh.prepare('SELECT COUNT(*) AS n FROM applications').get() as { n: number }).n).toBe(0);
+  });
+
   it('keeps the two Nadine Wolfs apart and merges the one Lea Brinkmann', () => {
     const nadines = all<{ role: string }>("SELECT role FROM people WHERE name = 'Nadine Wolf' ORDER BY role");
     expect(nadines.map((r) => r.role)).toEqual(['Geschäftsführung', 'Recruiterin']);
@@ -98,14 +108,32 @@ describe('seedIfEmpty', () => {
     expect(people).toEqual(['Nadine Wolf', 'Tim Bergk', 'Jonas Reiter', 'Ines Faber']);
   });
 
-  it('freezes followup dates from the anchor (Sep 1) and sets the counter', () => {
+  it('back-solves slot-0 due dates from the board subtitles, anchor for the rest', () => {
     const slots = all<{ label: string; due_at: string; position: number }>(
       "SELECT label, due_at, position FROM followups WHERE application_id = 'BEW-35' ORDER BY position",
     );
     expect(slots.map((s) => s.label)).toEqual(['Follow up zur Bewerbung', 'Erneutes Follow up', 'Letztes Follow up']);
-    expect(slots[0].due_at).toBe('2026-09-01');
-    expect(slots[1].due_at).toBe('2026-09-10');
+    expect(slots[0].due_at).toBe('2026-08-14'); // 'in 2 Tagen fällig'
+    expect(slots[1].due_at).toBe('2026-09-10'); // anchor (Sep 1) + 9
+    const due = (id: string) =>
+      one<{ due_at: string }>('SELECT due_at FROM followups WHERE application_id = ? AND position = 0', id).due_at;
+    expect(due('BEW-33')).toBe('2026-08-09'); // '3 Tage überfällig'
+    expect(due('BEW-29')).toBe('2026-08-12'); // 'heute fällig'
+    expect(due('BEW-24')).toBe('2026-09-01'); // no followup subtitle → anchor
     expect(one<{ value: string }>("SELECT value FROM meta WHERE key = 'next_bew_num'").value).toBe('45');
+  });
+
+  it('mirrors contacts into the explicit email recipient list and clamps updated_at', () => {
+    const kinds = all<{ kind: string; person_id: number }>(
+      "SELECT kind, person_id FROM application_people WHERE application_id = 'BEW-33' AND kind IN ('contact','email') ORDER BY kind",
+    );
+    expect(kinds.filter((k) => k.kind === 'email').map((k) => k.person_id))
+      .toEqual(kinds.filter((k) => k.kind === 'contact').map((k) => k.person_id));
+    // BEW-02: 'vor 1 Monat' would back-date updated_at before created_at.
+    const app = one<{ created_at: string; updated_at: string }>(
+      "SELECT created_at, updated_at FROM applications WHERE id = 'BEW-02'",
+    );
+    expect(app.updated_at >= app.created_at).toBe(true);
   });
 
   it('shares one company row across applications at the same company', () => {

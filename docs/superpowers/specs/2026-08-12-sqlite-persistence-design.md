@@ -266,6 +266,25 @@ CREATE TABLE followups (               -- replaces DETAILS[id].upcoming + dueOve
 -- from then on read from email_subject/email_text. This also makes the drafts
 -- durable input for the future Agent SDK generation, which won't be free to rerun.
 
+CREATE TABLE documents (               -- Bewerbungsunterlagen (Cover Letter, Lebenslauf)
+  id              INTEGER PRIMARY KEY,
+  application_id  TEXT NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
+  kind            TEXT NOT NULL,       -- 'cover-letter' | 'lebenslauf' | 'other'
+  title           TEXT NOT NULL,       -- 'Cover Letter', 'Lebenslauf'
+  format          TEXT NOT NULL,       -- 'docx' | 'pdf' | …
+  file_path       TEXT,                -- relative to userData/documents/<app-id>/;
+                                       -- NULL = not generated yet (today's stub
+                                       -- download fallback keeps working until the
+                                       -- Agent SDK writes real files)
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL
+);
+-- The FILES live on the filesystem, not in the database: the Agent SDK reads and
+-- writes real .docx files, and they must stay openable in Word/Finder. The DB row
+-- is metadata; the 'DOCX · erstellt am 26.07.2026' caption derives from
+-- format + created_at/updated_at. repo.deleteApplication removes the card's
+-- document folder along with the cascade.
+
 CREATE TABLE history (                 -- per-application activity log:
   id              INTEGER PRIMARY KEY, -- "<author> <text>", e.g. "Kepler hat die
   application_id  TEXT NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
@@ -370,9 +389,13 @@ values, which are messier than "German date → ISO":
    freezes the floating prototype dates (deliberate, noted above) and keeps
    slot-0 overrides representable. `email_subject`/`email_text` start NULL —
    drafts are generated and stored on first open, not at seed.
-9. **History:** dates are `'24.07.'` — **no year** (the app's own `dateToISO`
-   rejects them). Seed-only parser assumes 2026, `DD.MM.` → `2026-MM-DD`.
-10. **Counter:** `meta.next_bew_num = 45`. (Agent runs are not seeded — the agent
+9. **Documents:** two rows per card (`Cover Letter` / `Lebenslauf`, format
+   `docx`, `file_path` NULL, dates from the stub captions) — matching the
+   hardcoded `DOCS` pair that `DocumentsSection` currently renders identically
+   for every card. Real files arrive with the Agent SDK work.
+10. **History:** dates are `'24.07.'` — **no year** (the app's own `dateToISO`
+    rejects them). Seed-only parser assumes 2026, `DD.MM.` → `2026-MM-DD`.
+11. **Counter:** `meta.next_bew_num = 45`. (Agent runs are not seeded — the agent
     panel keeps rendering the static `AGENT_RUNS` stub until the SDK work.)
 
 ## IPC Surface
@@ -387,9 +410,11 @@ Exposed as `window.desktop.db`, typed in `src/desktop.d.ts`:
   label`; routed labels update the application/company row instead),
   `db:facts.delete`, `db:comments.add` / `.update` / `.delete`, `db:rounds.*`,
   `db:roundNotes.*`, `db:people.*`, `db:applicationPeople.set` (kind-scoped list
-  replace), `db:followups.setDue`, `db:followups.saveEmail`, `db:history.add`.
-  Each writes and returns the affected row(s); the renderer sets state from the
-  response.
+  replace), `db:followups.setDue`, `db:followups.saveEmail`, `db:history.add`,
+  `db:documents.open` (reveals/opens the file when `file_path` is set; falls back
+  to the stub download otherwise — richer document mutations come with the SDK
+  work). Each writes and returns the affected row(s); the renderer sets state
+  from the response.
 
 The renderer never constructs SQL and never receives a database handle.
 
@@ -400,8 +425,9 @@ The renderer never constructs SQL and never receives a database handle.
 - **Domain state** — normalized entities from `db:load`:
   `applications: Record<id, Application>`, `companies`, `factsByApp`,
   `commentsByApp`, `roundsByApp`, `people`, `followupsByApp`, `historyByApp`,
-  plus `board` derived from `(stage_id, stage_position)`. Mutation helpers call
-  the IPC channel, then set state from the returned row.
+  `documentsByApp`, plus `board` derived from `(stage_id, stage_position)`.
+  Mutation helpers call the IPC channel, then set state from the returned row.
+  `DocumentsSection` drops its hardcoded `DOCS` pair and renders from state.
 - **UI state** — `dragId`, `dropdown`, drafts, edit buffers, collapsed sections,
   theme: unchanged (theme/sections stay in `localStorage`). The create-modal
   skill toggles (`selected`) also stay transient — a deliberate exclusion.

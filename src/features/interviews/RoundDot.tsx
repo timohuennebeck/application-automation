@@ -1,4 +1,4 @@
-import { roundStage } from '../../data/sample-data';
+import { roundStage } from '../../data/config';
 import { StatusDot } from '../../ui/icons';
 
 /* Interview state ring. It takes accent and fill from the pipeline stage the

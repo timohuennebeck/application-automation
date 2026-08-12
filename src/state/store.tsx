@@ -1,31 +1,35 @@
-/* Central app state. Mirrors the interaction model of the design prototype.
-   All data is still local sample data — the Claude Agent SDK backend will
-   replace the data layer later. */
+/* Central app state. Domain data is loaded from SQLite at boot (db:load) and
+   every mutation is written through window.desktop.db; this provider keeps the
+   in-memory view in sync and owns all transient UI state. */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import {
-  DETAILS, INITIAL_BOARD, INITIAL_PEOPLE, INITIAL_PEOPLE_POOL,
-  INITIAL_ROUNDS, PERSON_COLORS, SKILLS,
-  type CardDef, type Round,
-} from '../data/sample-data';
-import { isoToDate, todayISO } from '../lib/date';
+import { SKILLS, STAGE_IDS } from '../data/config';
+import type { ActivityRow, FollowupRow } from '../shared/db-types';
+import { indexSnapshot, roundInput, personView } from './db-view';
+import type { RoundView } from './db-view';
+import { dateToISO } from '../lib/date';
 import { cap, initials } from '../lib/text';
 import { Ctx } from './store-context';
-import type { AppState, AppStore, ContactEntry, Patch } from './store-context';
+import type { AppState, AppStore, ContactEntry, Patch, Round } from './store-context';
 
 const initialState = (): AppState => ({
   dark: false,
-  board: INITIAL_BOARD.map((c) => c.slice()),
+
+  loaded: false,
+  applications: {},
+  companies: {},
+  factsByApp: {},
+  people: {},
+  linksByApp: {},
+  commentsByApp: {},
+  roundsState: {},
+  followupsByApp: {},
+  documentsByApp: {},
+  activitiesByApp: {},
+  board: STAGE_IDS.map(() => []),
+
   colOpen: [true, true, true, true, true, true, false, false, false, false],
-  extraCards: {},
-  priority: {},
-  factOverrides: {},
-  summaryOverrides: {},
-  addedComments: {},
-  history: {},
   secOpen: {},
-  commentEdits: {},
-  commentDeletes: {},
   commentMenu: null,
   commentEditing: null,
   commentEditDraft: '',
@@ -40,7 +44,6 @@ const initialState = (): AppState => ({
   dropdown: null,
   editing: null,
   editDraft: '',
-  roundsState: {},
   roundEdit: null,
   roundDraft: null,
   roundPop: null,
@@ -54,11 +57,8 @@ const initialState = (): AppState => ({
   personFieldDraft: '',
   roundExpanded: {},
   roundSel: {},
-  contactOverrides: {},
-  emailContactOverrides: {},
   contactEdit: null,
   contactDraft: '',
-  dueOverrides: {},
   dragId: null,
   overCol: null,
   emailLoading: false,
@@ -66,29 +66,36 @@ const initialState = (): AppState => ({
   followupSel: 0,
   searchOpen: false,
   searchQ: '',
-  people: { ...INITIAL_PEOPLE },
-  peoplePool: Object.fromEntries(Object.entries(INITIAL_PEOPLE_POOL).map(([k, v]) => [k, v.slice()])),
 });
 
-const emptyRound = (title: string): Round =>
-  ({ state: 'open', title, date: '', time: '', when: 'Termin offen', where: '', people: [] });
+const CANONICAL_TITLES = new Set(['Screening', 'Runde 1', 'Runde 2', 'Finales Gespräch']);
 
-/* Cards with no seeded interviews still get the four canonical rounds. */
-const seedRounds = (id: string): Round[] => {
-  const seeded = INITIAL_ROUNDS[id];
-  if (seeded) {
-    // Every process ends in a final conversation; seed one if the card lacks it.
-    return seeded.some((r) => /final/i.test(r.title))
-      ? seeded.map((r) => ({ ...r, people: r.people.slice() }))
-      : [...seeded.map((r) => ({ ...r, people: r.people.slice() })), emptyRound('Finales Gespräch')];
-  }
-  return [emptyRound('Screening'), emptyRound('Runde 1'), emptyRound('Runde 2'), emptyRound('Finales Gespräch')];
+const emptyRound = (title: string): RoundView =>
+  ({ state: 'open', title, date: '', time: '', where: '', people: [], notes: [] });
+
+/* Sidebar labels that live on the applications row. */
+const APP_FIELD: Record<string, 'channel' | 'applied_via' | 'applied_at' | 'last_contact_at'> = {
+  Plattform: 'channel',
+  'Beworben via': 'applied_via',
+  'Beworben am': 'applied_at',
+  'Letzter Kontakt': 'last_contact_at',
 };
+/* Sidebar labels that live on the shared companies row. */
+const COMPANY_FIELD: Record<string, 'sector' | 'headcount' | 'website' | 'email' | 'phone'> = {
+  Branche: 'sector',
+  Mitarbeiterzahl: 'headcount',
+  Karriereseite: 'website',
+  'E-Mail': 'email',
+  Telefon: 'phone',
+};
+const DATE_COLUMNS = new Set(['Beworben am', 'Letzter Kontakt']);
 
-/* Recomputes the display string and state after a date or time change. */
-function syncRoundSchedule(r: Round) {
-  r.when = r.date ? r.date + (r.time ? ', ' + r.time : '') : 'Termin offen';
-  if (r.state !== 'done') r.state = r.date ? 'next' : 'open';
+const db = () => window.desktop?.db;
+
+/* Database writes are optimistic: state updates immediately, failures only
+   log — there is no server, so the only realistic failure is a bug. */
+function persist(p: Promise<unknown> | undefined) {
+  p?.catch((err) => console.error('[db]', err));
 }
 
 export function AppProvider({ children }: { children: ReactNode }) {
@@ -100,7 +107,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const dragPosRef = useRef<{ col: number; y: number } | null>(null);
   const swapLockRef = useRef<{ col: number; dir: number; y: number } | null>(null);
   const ghostRef = useRef<HTMLElement | null>(null);
-  const nextNumRef = useRef(45);
   const mailTimerRef = useRef<number | undefined>(undefined);
 
   const set = useCallback((patch: Patch) => {
@@ -109,6 +115,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return p ? { ...s, ...p } : s;
     });
   }, []);
+
+  /* Boot: one snapshot load, then the board renders. */
+  useEffect(() => {
+    const api = db();
+    if (!api) {
+      console.warn('[db] window.desktop.db missing — running without persistence');
+      set({ loaded: true });
+      return;
+    }
+    api.load()
+      .then((snap) => set({ ...indexSnapshot(snap), loaded: true }))
+      .catch((err) => console.error('[db] load failed', err));
+  }, [set]);
 
   const applyTheme = (dark: boolean) => {
     const el = document.documentElement;
@@ -126,31 +145,42 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  /* Seeded rounds are only a default view; once the card has been touched its
-     stored list is authoritative, so renaming the final round cannot make a
-     synthetic replacement reappear. */
   const roundsFor = useCallback((id: string): Round[] => {
-    return stRef.current.roundsState[id] ?? seedRounds(id);
+    return stRef.current.roundsState[id] ?? [];
   }, []);
 
+  /* Mutates a copy of the card's rounds, shows it immediately and persists the
+     full list; new rounds get their db ids from the response. */
   const mutateRounds = useCallback((id: string, fn: (rounds: Round[]) => void) => {
-    const cur = roundsFor(id).map((r) => ({ ...r, people: r.people.slice() }));
+    const cur = roundsFor(id).map((r) => ({ ...r, people: r.people.slice(), notes: (r.notes || []).slice() }));
     fn(cur);
     set((s) => ({ roundsState: { ...s.roundsState, [id]: cur } }));
+    persist(db()?.rounds.set(id, cur.map(roundInput)).then((res) => {
+      set((s) => ({
+        roundsState: {
+          ...s.roundsState,
+          [id]: (s.roundsState[id] ?? []).map((v, i) => (res.rounds[i] ? { ...v, dbId: res.rounds[i].id } : v)),
+        },
+      }));
+    }));
   }, [roundsFor, set]);
 
   const logAct = useCallback((id: string, text: string) => {
-    set((s) => ({ history: { ...s.history, [id]: [...(s.history[id] || []), ['Du', text, 'gerade eben'] as [string, string, string]] } }));
+    const append = (row: ActivityRow) => set((s) => ({
+      activitiesByApp: { ...s.activitiesByApp, [id]: [...(s.activitiesByApp[id] || []), row] },
+    }));
+    const p = db()?.activities.add(id, 'Du', text);
+    if (p) persist(p.then(append));
+    else append({ id: -Date.now(), application_id: id, author: 'Du', text, created_at: new Date().toISOString() });
   }, [set]);
 
-  /* Clearing an interview blanks a seeded round but removes one the user added,
-     so an accidentally created interview can actually be got rid of. */
+  /* Clearing an interview blanks a canonical round but removes one the user
+     added, so an accidentally created interview can actually be got rid of. */
   const resetRound = useCallback((id: string, ri: number) => {
     const rounds = roundsFor(id);
     const r = rounds[ri];
     if (!r) return;
-    const seededTitles = new Set(seedRounds(id).map((s) => s.title));
-    const removable = !seededTitles.has(r.title);
+    const removable = !CANONICAL_TITLES.has(r.title);
     mutateRounds(id, (rs) => {
       if (removable) {
         rs.splice(ri, 1);
@@ -159,7 +189,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const row = rs[ri];
       row.date = ''; row.time = ''; row.where = ''; row.link = '';
       row.people = []; row.notes = []; row.state = 'open';
-      syncRoundSchedule(row);
     });
     logAct(id, removable
       ? 'hat das Interview „' + r.title + '“ gelöscht'
@@ -167,38 +196,89 @@ export function AppProvider({ children }: { children: ReactNode }) {
     set((s) => ({ dropdown: null, roundEdit: null, roundDraft: null, roundSel: { ...s.roundSel, [id]: Math.max(0, ri - (removable ? 1 : 0)) } }));
   }, [logAct, mutateRounds, roundsFor, set]);
 
-  const contactsFor = useCallback((id: string): ContactEntry[] => {
+  const addRoundNote = useCallback((id: string, ri: number, text: string) => {
+    const body = text.trim();
+    if (!body) return;
+    const round = roundsFor(id)[ri];
+    const appendLocal = (time: string) => set((s) => ({
+      roundsState: {
+        ...s.roundsState,
+        [id]: (s.roundsState[id] ?? []).map((r, i) =>
+          (i === ri ? { ...r, notes: [...(r.notes || []), { author: 'Du', text: body, time }] } : r)),
+      },
+    }));
+    appendLocal('gerade eben');
+    if (round?.dbId != null) persist(db()?.roundNotes.add(round.dbId, 'Du', body));
+    logAct(id, 'hat „' + (round?.title ?? 'Interview') + '“ kommentiert');
+  }, [logAct, roundsFor, set]);
+
+  const linksOf = useCallback((id: string, kind: 'contact' | 'pool' | 'email') =>
+    (stRef.current.linksByApp[id] || []).filter((l) => l.kind === kind), []);
+
+  const entryFor = useCallback((personId: number): ContactEntry => {
+    const p = stRef.current.people[String(personId)];
+    return {
+      personId,
+      name: p?.name || 'Unbekannt',
+      role: p?.role || '',
+      email: p?.email || '',
+      phone: p?.phone || '',
+      linkedin: p?.linkedin || '',
+      bg: p?.bg,
+    };
+  }, []);
+
+  const contactsFor = useCallback((id: string): ContactEntry[] =>
+    linksOf(id, 'contact').map((l) => entryFor(l.person_id)), [entryFor, linksOf]);
+
+  const saveLinks = useCallback((id: string, kind: 'contact' | 'pool' | 'email', personIds: number[]) => {
+    set((s) => ({
+      linksByApp: {
+        ...s.linksByApp,
+        [id]: [
+          ...(s.linksByApp[id] || []).filter((l) => l.kind !== kind),
+          ...personIds.map((pid, i) => ({ application_id: id, person_id: pid, kind, position: i })),
+        ],
+      },
+    }));
+    persist(db()?.applicationPeople.set(id, kind, personIds));
+  }, [set]);
+
+  const idsOf = useCallback((list: ContactEntry[]): number[] => {
     const s = stRef.current;
-    if (Object.prototype.hasOwnProperty.call(s.contactOverrides, id)) return s.contactOverrides[id];
-    return (DETAILS[id]?.contacts || []).map(([name, role, val, bg]) => ({ name, role, email: val, bg }));
+    return list
+      .map((c) => c.personId ?? Number(Object.keys(s.people).find((k) => s.people[k].name === c.name)))
+      .filter((n): n is number => Number.isFinite(n));
   }, []);
 
   const setContacts = useCallback((id: string, list: ContactEntry[]) => {
-    set((s) => ({ contactOverrides: { ...s.contactOverrides, [id]: list } }));
-  }, [set]);
+    saveLinks(id, 'contact', idsOf(list));
+  }, [idsOf, saveLinks]);
 
+  /* The follow-up email keeps its own recipient list; with no explicit list it
+     mirrors the card contacts. */
   const emailContactsFor = useCallback((id: string): ContactEntry[] => {
-    const s = stRef.current;
-    if (Object.prototype.hasOwnProperty.call(s.emailContactOverrides, id)) return s.emailContactOverrides[id];
-    return contactsFor(id);
-  }, [contactsFor]);
+    const links = linksOf(id, 'email');
+    return links.length ? links.map((l) => entryFor(l.person_id)) : contactsFor(id);
+  }, [contactsFor, entryFor, linksOf]);
 
   const setEmailContacts = useCallback((id: string, list: ContactEntry[]) => {
-    set((s) => ({ emailContactOverrides: { ...s.emailContactOverrides, [id]: list } }));
-  }, [set]);
+    saveLinks(id, 'email', idsOf(list));
+  }, [idsOf, saveLinks]);
 
   const person = useCallback((key: string) => {
     const p = stRef.current.people[key] || { name: 'Unbekannt', role: '', bg: 'var(--c-b3b0a8)' };
-    return { key, ...p, initials: p.initials || key };
+    return { key, ...p, initials: p.initials || initials(p.name) || '?' };
   }, []);
 
   const peopleForCard = useCallback((id: string) => {
     const s = stRef.current;
-    const pool = s.peoplePool[id] || Object.keys(s.people);
+    const pool = linksOf(id, 'pool').map((l) => String(l.person_id));
+    const base = pool.length ? pool : Object.keys(s.people);
     const onRounds = roundsFor(id).flatMap((r) => r.people);
     // Dedupe, drop keys whose person has been deleted, keep pool order.
-    return [...new Set([...pool, ...onRounds])].filter((k) => s.people[k]).map(person);
-  }, [person, roundsFor]);
+    return [...new Set([...base, ...onRounds])].filter((k) => s.people[k]).map(person);
+  }, [linksOf, person, roundsFor]);
 
   const moveCard = useCallback((id: string, toCol: number, toIdx: number | null, live = false) => {
     if (!id) return;
@@ -218,7 +298,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (fromCol === toCol && idx === fromIdx && !live) return {};
       if (fromCol === toCol && idx === fromIdx) return s.overCol === toCol ? {} : { overCol: toCol };
       board[toCol].splice(idx, 0, id);
-      return live ? { board, overCol: toCol } : { board, dragId: null, overCol: null };
+      if (!live) {
+        persist(db()?.applications.move(id, STAGE_IDS[toCol], idx));
+        const app = s.applications[id];
+        const applications = app ? { ...s.applications, [id]: { ...app, stage_id: STAGE_IDS[toCol] } } : s.applications;
+        return { board, applications, dragId: null, overCol: null };
+      }
+      return { board, overCol: toCol };
     });
   }, [set]);
 
@@ -247,17 +333,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const slug = (u.pathname.split('/').filter(Boolean).pop() || '').replace(/[-_]?\d+$/, '');
       if (slug) role = slug.split(/[-_]/).filter(Boolean).map(cap).join(' ');
     } catch { /* keep the generic defaults */ }
-    const id = 'BEW-' + nextNumRef.current++;
-    set((s2) => ({
-      extraCards: { ...s2.extraCards, [id]: [role, company, 'none', 'Karriereseite', 'gerade angelegt', null] as CardDef },
-      board: s2.board.map((c, i) => (i === 0 ? [id, ...c] : c)),
-      modalOpen: s2.multiple,
+    set((s2) => ({ modalOpen: s2.multiple }));
+    persist(db()?.applications.create({ role, company, channel: 'Karriereseite' }).then((res) => {
+      set((s2) => ({
+        applications: {
+          ...s2.applications,
+          ...Object.fromEntries(res.applications.map((a) => [a.id, a])),
+          [res.application.id]: res.application,
+        },
+        companies: { ...s2.companies, [res.company.id]: res.company },
+        board: s2.board.map((c, i) => (i === 0 ? [res.application.id, ...c] : c)),
+        roundsState: {
+          ...s2.roundsState,
+          [res.application.id]: res.rounds.map((r) => ({
+            dbId: r.id, state: r.state, title: r.title, date: '', time: '', where: '', link: '', people: [], notes: [],
+          })),
+        },
+        followupsByApp: { ...s2.followupsByApp, [res.application.id]: res.followups },
+        documentsByApp: { ...s2.documentsByApp, [res.application.id]: res.documents },
+        commentsByApp: { ...s2.commentsByApp, [res.application.id]: res.comments ?? [] },
+        factsByApp: { ...s2.factsByApp, [res.application.id]: [] },
+        activitiesByApp: { ...s2.activitiesByApp, [res.application.id]: [] },
+      }));
     }));
   }, [set]);
 
   /* Drops the application from the board and discards everything stored under
-     its id, so no editor can outlive the card it was bound to. */
+     its id; the DB cascade removes the rows. */
   const deleteCard = useCallback((id: string) => {
+    persist(db()?.applications.delete(id));
     set((s) => {
       const drop = <T,>(m: Record<string, T>): Record<string, T> => {
         if (!Object.prototype.hasOwnProperty.call(m, id)) return m;
@@ -267,21 +371,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       };
       return {
         board: s.board.map((c) => c.filter((x) => x !== id)),
-        extraCards: drop(s.extraCards),
-        priority: drop(s.priority),
-        factOverrides: drop(s.factOverrides),
-        summaryOverrides: drop(s.summaryOverrides),
-        addedComments: drop(s.addedComments),
-        history: drop(s.history),
-        commentEdits: drop(s.commentEdits),
-        commentDeletes: drop(s.commentDeletes),
+        applications: drop(s.applications),
+        factsByApp: drop(s.factsByApp),
+        linksByApp: drop(s.linksByApp),
+        commentsByApp: drop(s.commentsByApp),
         roundsState: drop(s.roundsState),
+        followupsByApp: drop(s.followupsByApp),
+        documentsByApp: drop(s.documentsByApp),
+        activitiesByApp: drop(s.activitiesByApp),
         roundExpanded: drop(s.roundExpanded),
         roundSel: drop(s.roundSel),
-        contactOverrides: drop(s.contactOverrides),
-        emailContactOverrides: drop(s.emailContactOverrides),
-        dueOverrides: drop(s.dueOverrides),
-        peoplePool: drop(s.peoplePool),
         cardMenu: null,
         openCardId: s.openCardId === id ? null : s.openCardId,
         dragId: null, overCol: null,
@@ -300,116 +399,107 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Fold any field still being typed into the draft before committing.
     const draft = { ...s.personDraft };
     if (s.personField) draft[s.personField] = (s.personFieldDraft || '').trim();
-
     const name = (draft.name || '').trim();
-    const people = { ...s.people };
-    const peoplePool = { ...s.peoplePool };
-    const patch: Partial<AppState> = {};
+    const fields = {
+      role: (draft.role || '').trim(),
+      email: (draft.email || '').trim(),
+      phone: (draft.phone || '').trim(),
+      linkedin: (draft.linkedin || '').trim(),
+    };
+    const clearEdit = { personEdit: null, personDraft: null, personField: null, personFieldDraft: '', contactEdit: e.forContact ? null : s.contactEdit } as Partial<AppState>;
+
+    const attachContact = (personId: number) => {
+      if (!e.forContact) return;
+      const isEmail = e.contactStore === 'email';
+      const cur = isEmail ? emailContactsFor(e.id) : contactsFor(e.id);
+      const ids = [...new Set([...cur.map((c) => c.personId).filter((n): n is number => n != null), personId])];
+      saveLinks(e.id, isEmail ? 'email' : 'contact', ids);
+      // A contact belongs in the card's suggestion pool as well, like today.
+      const pool = linksOf(e.id, 'pool').map((l) => l.person_id);
+      if (pool.length && !pool.includes(personId)) saveLinks(e.id, 'pool', [...pool, personId]);
+    };
 
     if (e.isNew && !name) {
-      // Discarded before naming — undo everything createPerson set up.
+      // Discarded before naming — undo everything the create started.
       if (e.ri >= 0) {
-        const cur = roundsFor(e.id).map((r) => ({ ...r, people: r.people.filter((k) => k !== e.key) }));
-        patch.roundsState = { ...s.roundsState, [e.id]: cur };
+        mutateRounds(e.id, (rs) => { if (rs[e.ri]) rs[e.ri].people = rs[e.ri].people.filter((k) => k !== e.key); });
       }
-      delete people[e.key];
-      Object.keys(peoplePool).forEach((k) => { peoplePool[k] = peoplePool[k].filter((x) => x !== e.key); });
+      const pid = Number(e.key);
+      if (Number.isFinite(pid) && s.people[e.key]) {
+        persist(db()?.people.delete(pid));
+        set((s2) => {
+          const people = { ...s2.people };
+          delete people[e.key];
+          return { people, ...clearEdit };
+        });
+        return;
+      }
+      set(clearEdit);
+      return;
+    }
+
+    if (e.isNew && name) logAct(e.id, 'hat ' + name + ' als neue Person angelegt');
+
+    const pid = Number(e.key);
+    if (Number.isFinite(pid) && s.people[e.key]) {
+      // Person exists in the DB — update it.
+      set((s2) => ({
+        people: { ...s2.people, [e.key]: { ...s2.people[e.key], name: name || s2.people[e.key].name, ...fields, initials: initials(name || s2.people[e.key].name) } },
+        ...clearEdit,
+      }));
+      persist(db()?.people.update(pid, { name: name || undefined, ...fields }));
+      attachContact(pid);
+    } else if (name) {
+      // Created from a contact picker — the row is only written once named.
+      set(clearEdit);
+      persist(db()?.people.create({ name, ...fields }).then((row) => {
+        set((s2) => ({ people: { ...s2.people, [String(row.id)]: personView(row) } }));
+        attachContact(row.id);
+      }));
     } else {
-      const p = people[e.key] || { name: '', role: '', bg: 'var(--c-7a5aa8)' };
-      people[e.key] = {
-        ...p,
-        name: name || p.name,
-        role: (draft.role || '').trim(),
-        email: (draft.email || '').trim(),
-        phone: (draft.phone || '').trim(),
-        linkedin: (draft.linkedin || '').trim(),
-        initials: initials(name || p.name),
-        createdAt: p.createdAt || (e.isNew ? isoToDate(todayISO()) : '24.07.2026'),
-        updatedAt: e.isNew ? '' : isoToDate(todayISO()),
-      };
+      set(clearEdit);
     }
-
-    if (e.isNew && name) {
-      patch.history = { ...s.history, [e.id]: [...(s.history[e.id] || []), ['Du', 'hat ' + name + ' als neue Person angelegt', 'gerade eben'] as [string, string, string]] };
-    }
-
-    if (e.forContact) {
-      if (name) {
-        if (peoplePool[e.id] && peoplePool[e.id].indexOf(e.key) < 0) peoplePool[e.id] = [...peoplePool[e.id], e.key];
-        const entry: ContactEntry = {
-          name,
-          role: (draft.role || '').trim(),
-          email: (draft.email || '').trim(),
-          phone: (draft.phone || '').trim(),
-          linkedin: (draft.linkedin || '').trim(),
-          bg: people[e.key]?.bg,
-        };
-        const isEmail = e.contactStore === 'email';
-        const cur = isEmail ? emailContactsFor(e.id) : contactsFor(e.id);
-        const upd = cur.filter((c) => c.name !== name).concat([entry]);
-        if (isEmail) patch.emailContactOverrides = { ...s.emailContactOverrides, [e.id]: upd };
-        else patch.contactOverrides = { ...s.contactOverrides, [e.id]: upd };
-      }
-      patch.contactEdit = null;
-    }
-
-    set({ ...patch, people, peoplePool, personEdit: null, personDraft: null, personField: null, personFieldDraft: '' });
-  }, [contactsFor, emailContactsFor, roundsFor, set]);
+  }, [contactsFor, emailContactsFor, linksOf, logAct, mutateRounds, saveLinks, set]);
 
   /* Removes a person everywhere they are referenced: the directory, every
-     card's pool and rounds, and both contact stores. */
+     card's links and rounds. The DB cascade does the same on its side. */
   const deletePerson = useCallback((id: string, key: string, isNew: boolean) => {
     const s = stRef.current;
     const name = person(key).name;
+    const pid = Number(key);
+    if (Number.isFinite(pid) && s.people[key]) persist(db()?.people.delete(pid));
 
-    const roundsState: Record<string, Round[]> = {};
+    const roundsState: Record<string, RoundView[]> = {};
     Object.keys(s.roundsState).forEach((k) => {
       roundsState[k] = s.roundsState[k].map((r) => ({ ...r, people: r.people.filter((pk) => pk !== key) }));
     });
-
-    const stripContacts = (store: Record<string, ContactEntry[]>) =>
-      Object.fromEntries(Object.entries(store).map(([k, list]) => [k, list.filter((c) => c.name !== name)]));
-
     const people = { ...s.people };
     delete people[key];
 
-    const patch: Partial<AppState> = {
+    set({
       roundsState,
       people,
-      peoplePool: Object.fromEntries(Object.entries(s.peoplePool).map(([k, v]) => [k, v.filter((x) => x !== key)])),
-      contactOverrides: stripContacts(s.contactOverrides),
-      emailContactOverrides: stripContacts(s.emailContactOverrides),
+      linksByApp: Object.fromEntries(Object.entries(s.linksByApp).map(([k, v]) => [k, v.filter((l) => String(l.person_id) !== key)])),
       personEdit: null, personDraft: null, personField: null, personFieldDraft: '',
-    };
-    if (!isNew) {
-      patch.history = { ...s.history, [id]: [...(s.history[id] || []), ['Du', 'hat Person ' + name + ' gelöscht', 'gerade eben'] as [string, string, string]] };
-    }
-    set(patch);
-  }, [person, set]);
+    });
+    if (!isNew) logAct(id, 'hat Person ' + name + ' gelöscht');
+  }, [logAct, person, set]);
 
   const createPersonForRound = useCallback((id: string, ri: number, name: string) => {
-    const s = stRef.current;
-    const ini = initials(name || '') || 'NP';
-    let key = ini;
-    let i = 2;
-    while (s.people[key]) { key = ini + i; i++; }
-    const people = {
-      ...s.people,
-      [key]: { name, role: '', bg: PERSON_COLORS[Object.keys(s.people).length % PERSON_COLORS.length], initials: ini },
-    };
-    const peoplePool = { ...s.peoplePool };
-    if (peoplePool[id]) peoplePool[id] = [...peoplePool[id], key];
-    const cur = roundsFor(id).map((r) => ({ ...r, people: r.people.slice() }));
-    if (cur[ri] && cur[ri].people.indexOf(key) < 0) cur[ri].people.push(key);
-    set((s2) => ({
-      people, peoplePool,
-      roundsState: { ...s2.roundsState, [id]: cur },
-      editing: null, editDraft: '',
-      personEdit: { id, ri, key, isNew: true },
-      personDraft: { name, role: '', email: '', phone: '', linkedin: '' },
-      personField: 'name', personFieldDraft: name,
+    persist(db()?.people.create({ name }).then((row) => {
+      const key = String(row.id);
+      set((s) => ({ people: { ...s.people, [key]: personView(row) } }));
+      const pool = linksOf(id, 'pool').map((l) => l.person_id);
+      if (pool.length) saveLinks(id, 'pool', [...pool, row.id]);
+      mutateRounds(id, (rs) => { if (rs[ri] && rs[ri].people.indexOf(key) < 0) rs[ri].people.push(key); });
+      set({
+        editing: null, editDraft: '',
+        personEdit: { id, ri, key, isNew: true },
+        personDraft: { name, role: '', email: '', phone: '', linkedin: '' },
+        personField: 'name', personFieldDraft: name,
+      });
     }));
-  }, [roundsFor, set]);
+  }, [linksOf, mutateRounds, saveLinks, set]);
 
   const saveRound = useCallback(() => {
     const s = stRef.current;
@@ -428,7 +518,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       r.where = d.where;
       r.people = d.people.slice();
       r.link = d.where === 'Google Meet' || d.where === 'Microsoft Teams' ? d.link : '';
-      syncRoundSchedule(r);
+      if (r.state !== 'done') r.state = d.date ? 'next' : 'open';
     });
     logAct(e.id, wasNew
       ? 'hat das Interview „' + d.title + '“' + (d.people.length ? ' mit ' + d.people.map((k) => stRef.current.people[k]?.name ?? k).join(', ') : '') + ' hinzugefügt'
@@ -436,23 +526,136 @@ export function AppProvider({ children }: { children: ReactNode }) {
     set({ roundEdit: null, roundDraft: null, roundPop: null });
   }, [logAct, mutateRounds, set]);
 
-  const regenerateEmail = useCallback(() => {
-    window.clearTimeout(mailTimerRef.current);
-    set({ emailLoading: true });
-    mailTimerRef.current = window.setTimeout(() => set({ emailLoading: false }), 2400);
+  /* Sidebar field write. Routed labels update their owning row; only the
+     free-form POSITION fields become facts rows. */
+  const writeField = useCallback((id: string, label: string, value: string) => {
+    const s = stRef.current;
+    const app = s.applications[id];
+    if (!app) return;
+    const cleared = !value || value === '—';
+
+    if (label === 'Berufsbezeichnung') {
+      if (cleared) return;
+      set((s2) => ({ applications: { ...s2.applications, [id]: { ...s2.applications[id], role: value } } }));
+      persist(db()?.applications.update(id, { role: value }));
+      return;
+    }
+    if (label === 'Firma') {
+      if (cleared) return;
+      persist(db()?.applications.relinkCompany(id, value).then(({ application, company }) => {
+        set((s2) => ({
+          applications: { ...s2.applications, [id]: application },
+          companies: { ...s2.companies, [company.id]: company },
+        }));
+      }));
+      return;
+    }
+    if (label in APP_FIELD) {
+      const field = APP_FIELD[label];
+      const stored = cleared ? null : DATE_COLUMNS.has(label) ? (dateToISO(value) || null) : value;
+      set((s2) => ({ applications: { ...s2.applications, [id]: { ...s2.applications[id], [field]: stored } } }));
+      persist(db()?.applications.update(id, { [field]: stored }));
+      return;
+    }
+    if (label in COMPANY_FIELD) {
+      const field = COMPANY_FIELD[label];
+      const stored = cleared ? null : value;
+      set((s2) => {
+        const company = s2.companies[app.company_id];
+        return company ? { companies: { ...s2.companies, [company.id]: { ...company, [field]: stored } } } : {};
+      });
+      persist(db()?.companies.update(app.company_id, { [field]: stored }));
+      return;
+    }
+
+    const existing = (s.factsByApp[id] || []).find((f) => f.label === label);
+    const kind = existing?.kind ?? (label in { Gehalt: 1, Erfahrung: 1 } ? 'select' : null);
+    const stored = cleared ? '—' : value;
+    persist(db()?.facts.upsert(id, label, stored, kind).then((row) => {
+      set((s2) => {
+        const list = s2.factsByApp[id] || [];
+        const next = list.some((f) => f.label === label)
+          ? list.map((f) => (f.label === label ? row : f))
+          : [...list, row];
+        return { factsByApp: { ...s2.factsByApp, [id]: next } };
+      });
+    }));
+  }, [set]);
+
+  const setInterest = useCallback((id: string, interest: string) => {
+    set((s) => ({ applications: { ...s.applications, [id]: { ...s.applications[id], interest } } }));
+    persist(db()?.applications.update(id, { interest }));
+  }, [set]);
+
+  const saveSummary = useCallback((id: string, text: string) => {
+    set((s) => ({ applications: { ...s.applications, [id]: { ...s.applications[id], summary: text } } }));
+    persist(db()?.applications.update(id, { summary: text }));
   }, [set]);
 
   const addComment = useCallback((id: string, text: string) => {
     const body = text.trim();
     if (!body) return;
-    set((s) => ({
-      addedComments: {
-        ...s.addedComments,
-        [id]: [...(s.addedComments[id] || []), ['Du', 'gerade eben', body, 'var(--c-5b7a5e)'] as [string, string, string, string]],
-      },
-      commentDraft: '',
+    set({ commentDraft: '' });
+    persist(db()?.comments.add(id, 'Du', body).then((row) => {
+      set((s) => ({ commentsByApp: { ...s.commentsByApp, [id]: [...(s.commentsByApp[id] || []), row] } }));
     }));
   }, [set]);
+
+  const updateComment = useCallback((id: string, commentId: number, text: string) => {
+    set((s) => ({
+      commentsByApp: {
+        ...s.commentsByApp,
+        [id]: (s.commentsByApp[id] || []).map((c) => (c.id === commentId ? { ...c, text } : c)),
+      },
+      commentEditing: null,
+    }));
+    persist(db()?.comments.update(commentId, text));
+  }, [set]);
+
+  const deleteComment = useCallback((id: string, commentId: number) => {
+    set((s) => ({
+      commentsByApp: { ...s.commentsByApp, [id]: (s.commentsByApp[id] || []).filter((c) => c.id !== commentId) },
+      commentMenu: null,
+    }));
+    persist(db()?.comments.delete(commentId));
+  }, [set]);
+
+  const patchFollowup = useCallback((id: string, row: FollowupRow) => {
+    set((s) => ({
+      followupsByApp: {
+        ...s.followupsByApp,
+        [id]: (s.followupsByApp[id] || []).map((f) => (f.id === row.id ? row : f)),
+      },
+    }));
+  }, [set]);
+
+  const setFollowupDue = useCallback((id: string, followupId: number, dueISO: string) => {
+    set((s) => ({
+      followupsByApp: {
+        ...s.followupsByApp,
+        [id]: (s.followupsByApp[id] || []).map((f) => (f.id === followupId ? { ...f, due_at: dueISO } : f)),
+      },
+    }));
+    persist(db()?.followups.setDue(followupId, dueISO));
+  }, [set]);
+
+  /* Drafts are generated once, stored, and then read from the DB — see the
+     design spec's followups section. */
+  const saveEmailDraft = useCallback((id: string, followupId: number, subject: string, body: string) => {
+    const p = db()?.followups.saveEmail(followupId, subject, body);
+    if (p) persist(p.then((row) => patchFollowup(id, row)));
+    else patchFollowup(id, {
+      ...(stRef.current.followupsByApp[id] || []).find((f) => f.id === followupId)!,
+      email_subject: subject, email_text: body, generated_at: new Date().toISOString(),
+    });
+  }, [patchFollowup]);
+
+  const regenerateEmail = useCallback((id: string, followupId: number, subject: string, body: string) => {
+    window.clearTimeout(mailTimerRef.current);
+    set({ emailLoading: true });
+    saveEmailDraft(id, followupId, subject, body);
+    mailTimerRef.current = window.setTimeout(() => set({ emailLoading: false }), 2400);
+  }, [saveEmailDraft, set]);
 
   // Restore the persisted theme and section collapse state.
   useEffect(() => {
@@ -530,14 +733,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [createCard, savePerson, saveRound, set, toggleTheme]);
 
   const store = useMemo<AppStore>(() => ({
-    st, set, toggleTheme, roundsFor, mutateRounds, resetRound, logAct,
+    st, set, toggleTheme, roundsFor, mutateRounds, resetRound, addRoundNote, logAct,
     contactsFor, setContacts, emailContactsFor, setEmailContacts,
     person, peopleForCard, moveCard, openCard, createCard, deleteCard, savePerson, deletePerson,
-    createPersonForRound, saveRound, regenerateEmail, addComment,
+    createPersonForRound, saveRound, writeField, setInterest, saveSummary,
+    addComment, updateComment, deleteComment, setFollowupDue, saveEmailDraft, regenerateEmail,
     cancelEditRef, dragPosRef, swapLockRef, ghostRef,
-  }), [st, set, toggleTheme, roundsFor, mutateRounds, resetRound, logAct, contactsFor, setContacts,
-    emailContactsFor, setEmailContacts, person, peopleForCard, moveCard, openCard, createCard,
-    deleteCard, savePerson, deletePerson, createPersonForRound, saveRound, regenerateEmail, addComment]);
+  }), [st, set, toggleTheme, roundsFor, mutateRounds, resetRound, addRoundNote, logAct, contactsFor,
+    setContacts, emailContactsFor, setEmailContacts, person, peopleForCard, moveCard, openCard,
+    createCard, deleteCard, savePerson, deletePerson, createPersonForRound, saveRound, writeField,
+    setInterest, saveSummary, addComment, updateComment, deleteComment, setFollowupDue,
+    saveEmailDraft, regenerateEmail]);
 
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
 }

@@ -1,4 +1,4 @@
-import type { ColumnDef } from '../../data/sample-data';
+import type { ColumnDef } from '../../data/config';
 import { useApp } from '../../state/store-context';
 import { CollapseGlyph, ColumnIcon } from '../../ui/icons';
 import { ApplicationCard } from './ApplicationCard';

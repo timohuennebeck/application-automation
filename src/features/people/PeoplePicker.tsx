@@ -1,8 +1,8 @@
 import { MenuItem, MenuLabel } from '../../ui/MenuItem';
 import { Avatar, SearchGlyph } from '../../ui/icons';
-import type { PersonDef } from '../../data/sample-data';
+import type { PersonView } from '../../state/db-view';
 
-export type Suggestion = PersonDef & { key: string; initials: string };
+export type Suggestion = PersonView & { key: string; initials: string };
 
 /* Search field + "known at <company>" suggestions + a create row.
    Shared by the interview participant picker and both contact pickers. */

@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { isoToDate, shiftISO, shiftYM, todayISO } from '../../lib/date';
 import { useApp } from '../../state/store-context';
 import { CalendarPopover } from '../../ui/Calendar';
@@ -31,7 +32,9 @@ function LoadingSkeleton() {
   );
 }
 
-/* Kepler's drafted follow-up: due date, addressee, subject and collapsible body. */
+/* Kepler's drafted follow-up: due date, addressee, subject and collapsible body.
+   The draft is generated exactly once, stored on the followups row, and read
+   from there on every later open; only the regenerate button replaces it. */
 export function FollowUpEmailCard({ cardId, role, company, slots, sel }: {
   cardId: string;
   role: string;
@@ -39,7 +42,7 @@ export function FollowUpEmailCard({ cardId, role, company, slots, sel }: {
   slots: FollowUpSlot[];
   sel: number;
 }) {
-  const { st, set, emailContactsFor, setEmailContacts, regenerateEmail } = useApp();
+  const { st, set, emailContactsFor, setEmailContacts, setFollowupDue, saveEmailDraft, regenerateEmail } = useApp();
 
   const slot = slots[sel];
   const dueKey = 'due:' + cardId + ':' + sel;
@@ -52,7 +55,15 @@ export function FollowUpEmailCard({ cardId, role, company, slots, sel }: {
   const outOfRange = (iso: string) => !(iso >= min && (!max || iso <= max));
 
   const contacts = emailContactsFor(cardId);
-  const { subject, body } = draftEmail(slots, sel, role, company, contacts[0]?.name || '');
+  const stored = slot.emailText != null;
+  const { subject, body } = stored
+    ? { subject: slot.emailSubject || '', body: slot.emailText || '' }
+    : draftEmail(slots, sel, role, company, contacts[0]?.name || '');
+
+  // First open of this follow-up: persist the generated draft silently.
+  useEffect(() => {
+    if (!stored) saveEmailDraft(cardId, slot.id, subject, body);
+  }, [stored, cardId, slot.id, subject, body, saveEmailDraft]);
 
   const rel = slot.diff === 0 ? '· heute'
     : slot.diff === 1 ? '· morgen'
@@ -95,7 +106,8 @@ export function FollowUpEmailCard({ cardId, role, company, slots, sel }: {
                   isDisabled={outOfRange}
                   onPick={(iso) => {
                     if (outOfRange(iso)) return;
-                    set((s) => ({ dueOverrides: { ...s.dueOverrides, [cardId + ':' + sel]: iso }, dropdown: null }));
+                    setFollowupDue(cardId, slot.id, iso);
+                    set({ dropdown: null });
                   }}
                 />
               )}
@@ -150,7 +162,14 @@ export function FollowUpEmailCard({ cardId, role, company, slots, sel }: {
             <div className="icon-btn" title="Kopieren" onClick={() => navigator.clipboard?.writeText(subject + '\n\n' + body)}>
               <CopyGlyph />
             </div>
-            <div className="icon-btn" title="Neu erstellen" onClick={regenerateEmail}>
+            <div
+              className="icon-btn"
+              title="Neu erstellen"
+              onClick={() => {
+                const d = draftEmail(slots, sel, role, company, contacts[0]?.name || '');
+                regenerateEmail(cardId, slot.id, d.subject, d.body);
+              }}
+            >
               <RegenGlyph />
             </div>
           </div>

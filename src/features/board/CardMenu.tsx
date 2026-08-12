@@ -1,4 +1,4 @@
-import { cardDefFor, useApp } from '../../state/store-context';
+import { useApp } from '../../state/store-context';
 import { MenuItem, MenuLabel } from '../../ui/MenuItem';
 import { Popover } from '../../ui/Popover';
 
@@ -14,14 +14,14 @@ export function CardMenu() {
   const menu = st.cardMenu;
   if (!menu) return null;
 
-  const def = cardDefFor(st, menu.id);
+  const role = st.applications[menu.id]?.role;
   const left = Math.max(EDGE, Math.min(menu.x, window.innerWidth - WIDTH - EDGE));
   const top = Math.max(EDGE, Math.min(menu.y, window.innerHeight - HEIGHT - EDGE));
 
   return (
     <div data-dd="1">
       <Popover top={top} left={left} width={WIDTH} zIndex={60} style={{ position: 'fixed' }}>
-        <MenuLabel>{def ? def[0] : menu.id}</MenuLabel>
+        <MenuLabel>{role || menu.id}</MenuLabel>
         <MenuItem danger style={{ whiteSpace: 'nowrap' }} onClick={() => deleteCard(menu.id)}>
           Bewerbung löschen
         </MenuItem>

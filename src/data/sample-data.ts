@@ -1,25 +1,8 @@
-// Sample data ported from the design prototype. Will be replaced by real data
-// from the Claude Agent SDK backend later.
-
-export type InterestKey = 'urgent' | 'high' | 'medium' | 'low' | 'none';
-
-export const INTEREST: Record<InterestKey, [string, number]> = {
-  urgent: ['Traumjob', 4],
-  high: ['Hohes Interesse', 3],
-  medium: ['Interessant', 2],
-  low: ['Zur Sicherheit', 1],
-  none: ['Noch offen', 0],
-};
-export const INTEREST_ORDER: InterestKey[] = ['urgent', 'high', 'medium', 'low', 'none'];
-
-export const CHANNEL_BG: Record<string, string> = {
-  LinkedIn: 'var(--c-3f6ea8)',
-  Karriereseite: 'var(--c-5b7a5e)',
-  Empfehlung: 'var(--c-a4762f)',
-  StepStone: 'var(--c-7a5aa8)',
-  Recruiter: 'var(--c-a8523f)',
-  Xing: 'var(--c-2f7a72)',
-};
+/* Seed input for the SQLite database (electron/db/seed.ts) plus the agent-run
+   stubs the AgentRunPanel still renders. Presentation constants live in
+   config.ts; live domain data comes from the database. The '.ts' extensions
+   matter: the electron tree compiles this file under nodenext. */
+import type { InterestKey, RoundStateKey } from './config.ts';
 
 export const SALARY: Record<string, string> = {
   'BEW-41': '78–92k €', 'BEW-44': '85–100k €', 'BEW-38': '70–84k €',
@@ -87,24 +70,6 @@ export const AGENT_RUNS: Record<string, AgentRun> = {
   },
 };
 
-export const INTERVIEWS: Record<string, { month: string; day: string; time: string; meta: string }> = {
-  'BEW-24': { month: 'AUG', day: '12', time: '10:00 – 11:00', meta: 'Interview · In Person' },
-  'BEW-19': { month: 'AUG', day: '13', time: '14:30 – 15:30', meta: '2. Interview · Google Meet' },
-  'BEW-15': { month: 'AUG', day: '14', time: '09:00 – 10:30', meta: 'Finales Gespräch · In Person' },
-};
-
-export type RoundStateKey = 'done' | 'next' | 'open';
-export const ROUND_STATE: Record<RoundStateKey, {
-  dotFill: string; dotStroke: string; dotDash: string; dotPie: string;
-  titleColor: string; metaColor: string; metaWeight: number; muted: boolean;
-}> = {
-  done: { dotFill: 'var(--c-c9c5bb)', dotStroke: 'var(--c-c9c5bb)', dotDash: '0', dotPie: '', titleColor: 'var(--c-8b8880)', metaColor: 'var(--c-a5a29a)', metaWeight: 400, muted: true },
-  next: { dotFill: 'none', dotStroke: 'var(--c-4f8f6a)', dotDash: '0', dotPie: 'M7 7 L7 1.5 A5.5 5.5 0 0 1 11.5 9.9 Z', titleColor: 'var(--c-1b1a17)', metaColor: 'var(--c-3d6b60)', metaWeight: 600, muted: false },
-  open: { dotFill: 'none', dotStroke: 'var(--c-c9c5bb)', dotDash: '2.2 2.2', dotPie: '', titleColor: 'var(--c-1b1a17)', metaColor: 'var(--c-a5a29a)', metaWeight: 400, muted: false },
-};
-
-export const PERSON_COLORS = ['var(--c-5b9083)', 'var(--c-a4762f)', 'var(--c-7a5aa8)', 'var(--c-3f6ea8)', 'var(--c-a8523f)', 'var(--c-4f8f6a)'];
-
 export interface PersonDef {
   name: string;
   role: string;
@@ -133,8 +98,6 @@ export const INITIAL_PEOPLE_POOL: Record<string, string[]> = {
   'BEW-19': ['SK', 'TB', 'JR', 'NW', 'IF', 'TW'],
   'BEW-15': ['LB', 'TB', 'SK', 'NW', 'JR', 'IF'],
 };
-
-export const WHERE_OPTIONS = ['In Person', 'Google Meet', 'Microsoft Teams', 'Telefon'];
 
 export interface Round {
   state: RoundStateKey;
@@ -168,48 +131,6 @@ export const INITIAL_ROUNDS: Record<string, Round[]> = {
   ],
 };
 
-export const FACT_OPTIONS: Record<string, string[]> = {
-  Erfahrung: ['0–2', '2–5', '5–8', '8+'],
-  Plattform: ['LinkedIn', 'Xing', 'StepStone', 'Karriereseite', 'Empfehlung', 'Recruiter'],
-  Branche: ['Software', 'Energie', 'Agentur', 'Gesundheit', 'Handel', 'Finanzen', 'Industrie'],
-  Mitarbeiterzahl: ['1–50', '51–200', '201–500', '501–1.000', '1.001–5.000', '5.000+'],
-};
-
-export type ColumnKind = 'dashed' | 'pie' | 'cancel' | 'muted';
-export interface ColumnDef {
-  name: string;
-  kind: ColumnKind;
-  frac?: number;
-  tint: string;
-  colTint: string;
-  accent: string;
-  open: boolean;
-}
-export const COLUMNS: ColumnDef[] = [
-  { name: 'Interessiert', kind: 'dashed', tint: 'var(--c-f4f2ed)', colTint: 'var(--colt-1)', accent: 'var(--c-b3b0a8)', open: true },
-  { name: 'In Bearbeitung', kind: 'pie', frac: 0.15, tint: 'var(--c-fdf7ea)', colTint: 'var(--colt-2)', accent: 'var(--c-d9a437)', open: true },
-  { name: 'Bewerbung eingereicht', kind: 'pie', frac: 0.3, tint: 'var(--c-f2f5fa)', colTint: 'var(--colt-3)', accent: 'var(--c-6d8cc0)', open: true },
-  { name: 'Screening', kind: 'pie', frac: 0.45, tint: 'var(--c-f6f3fa)', colTint: 'var(--colt-4)', accent: 'var(--c-9078b8)', open: true },
-  { name: 'Interview', kind: 'pie', frac: 0.55, tint: 'var(--c-f0f6f4)', colTint: 'var(--colt-5)', accent: 'var(--c-5b9083)', open: true },
-  { name: '2. Interview', kind: 'pie', frac: 0.7, tint: 'var(--c-eff6f2)', colTint: 'var(--colt-6)', accent: 'var(--c-4f8f6a)', open: true },
-  { name: 'Finales Gespräch', kind: 'pie', frac: 0.85, tint: 'var(--c-f1f3f9)', colTint: 'var(--colt-7)', accent: 'var(--c-5f6fae)', open: false },
-  { name: 'Gehaltsverhandlungen begonnen', kind: 'pie', frac: 0.95, tint: 'var(--c-eef7f0)', colTint: 'var(--colt-8)', accent: 'var(--c-3f8f5a)', open: false },
-  { name: 'Korb erhalten', kind: 'cancel', tint: 'var(--c-fbf1f0)', colTint: 'var(--colt-9)', accent: 'var(--c-c2564c)', open: false },
-  { name: 'Bewerbung zurückgezogen', kind: 'muted', tint: 'var(--c-f3f2f0)', colTint: 'var(--colt-10)', accent: 'var(--c-a5a29a)', open: false },
-];
-
-/* Interview rounds mirror the interview stages of the pipeline, so a round is
-   drawn with its stage's accent and progress instead of a neutral ring. The
-   last round is always the final conversation (seedRounds guarantees one);
-   any extra rounds in between stay on "2. Interview". */
-const ROUND_STAGES = [3, 4, 5, 6]; // indices into COLUMNS
-export function roundStage(index: number, total: number): ColumnDef {
-  const stage = index === total - 1
-    ? ROUND_STAGES[ROUND_STAGES.length - 1]
-    : ROUND_STAGES[Math.min(index, ROUND_STAGES.length - 2)];
-  return COLUMNS[stage];
-}
-
 // [role, company, interest, channel, updated, followupState]
 export type CardDef = [string, string, InterestKey, string, string, 'soon' | 'due' | null];
 export const CARD_DEFS: Record<string, CardDef> = {
@@ -231,11 +152,6 @@ export const CARD_DEFS: Record<string, CardDef> = {
 export const INITIAL_BOARD: string[][] = [
   ['BEW-41', 'BEW-44'], ['BEW-38'], ['BEW-33', 'BEW-35'], ['BEW-29'],
   ['BEW-24'], ['BEW-19'], ['BEW-15'], ['BEW-11'], ['BEW-07', 'BEW-04'], ['BEW-02'],
-];
-
-export const SKILLS: [string, boolean][] = [
-  ['User Research', false], ['Figma', true], ['Interaction Design', false],
-  ['Frontend (HTML/CSS)', true], ['Deutsch C1', false],
 ];
 
 // [label, value, kind?] — kind: 's' select, 'l' link
@@ -287,16 +203,3 @@ export const HISTORY: Record<string, [string, string, string][]> = {
   'BEW-19': [['Kepler', 'hat die Karte angelegt', '15.07.'], ['Du', 'hat „Runde 1“ abgeschlossen', '05.08.'], ['Du', 'hat „Runde 2“ auf den 13.08. terminiert', '06.08.']],
   'BEW-15': [['Kepler', 'hat die Karte angelegt', '10.07.'], ['Du', 'hat „Runde 2“ abgeschlossen', '06.08.'], ['Du', 'hat das finale Gespräch auf den 14.08. terminiert', '06.08.']],
 };
-
-export const SECTIONS: [string, string[]][] = [
-  ['Bewerbung', ['Plattform', 'Beworben am', 'Letzter Kontakt']],
-  ['Position', ['Berufsbezeichnung', 'Standort', 'Gehalt', 'Erfahrung']],
-  ['Unternehmen', ['Firma', 'Branche', 'Mitarbeiterzahl', 'Karriereseite', 'E-Mail', 'Telefon']],
-];
-export const SHORT_LABELS: Record<string, string> = {
-  Kontaktperson: 'Name',
-  'Kontaktperson E-Mail': 'E-Mail',
-  'Kontaktperson Telefon': 'Telefon',
-  'Kontaktperson LinkedIn': 'LinkedIn',
-};
-export const DATE_FIELDS: Record<string, boolean> = { 'Beworben am': true, 'Letzter Kontakt': true };

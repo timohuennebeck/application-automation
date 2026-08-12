@@ -1,7 +1,9 @@
+import { AGENT_RUNS } from '../../../data/sample-data';
 import {
-  AGENT_RUNS, COLUMNS, DATE_FIELDS, DETAILS, FACT_OPTIONS, INTEREST, INTEREST_ORDER, SECTIONS,
-} from '../../../data/sample-data';
-import type { Fact, InterestKey } from '../../../data/sample-data';
+  COLUMNS, DATE_FIELDS, FACT_OPTIONS, INTEREST, INTEREST_ORDER, SECTIONS,
+} from '../../../data/config';
+import type { InterestKey } from '../../../data/config';
+import { isoToDate } from '../../../lib/date';
 import { useApp } from '../../../state/store-context';
 import { FieldChip } from '../../../ui/FieldChip';
 import { FieldRow } from '../../../ui/FieldRow';
@@ -9,7 +11,7 @@ import { MenuItem } from '../../../ui/MenuItem';
 import { Popover, PopoverAnchor } from '../../../ui/Popover';
 import { Chevron, ColumnIcon, PriorityBars } from '../../../ui/icons';
 import { ContactPicker } from '../../people/ContactPicker';
-import { FactField, type FactRow } from './FactField';
+import { FactField, type FactView } from './FactField';
 
 const GroupTitle = ({ children }: { children: string }) => (
   <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--c-a8a49b)', paddingBottom: 5 }}>
@@ -21,47 +23,55 @@ export interface PropertiesSidebarProps {
   cardId: string;
   role: string;
   company: string;
-  city: string;
-  channel: string;
   columnIndex: number;
-  updated: string;
 }
 
-/* Status, interest, contact and every recorded fact about the application. */
-export function PropertiesSidebar({ cardId, role, company, city, channel, columnIndex, updated }: PropertiesSidebarProps) {
-  const { st, set, contactsFor, setContacts, moveCard, logAct } = useApp();
+/* Status, interest, contact and every recorded field of the application.
+   Most labels are windows onto real DB columns (see the fact-label routing in
+   the design spec); only the free-form POSITION fields live in facts rows. */
+export function PropertiesSidebar({ cardId, role, company, columnIndex }: PropertiesSidebarProps) {
+  const { st, set, contactsFor, setContacts, moveCard, logAct, setInterest } = useApp();
   const locked = !!AGENT_RUNS[cardId];
-  const overrides = st.factOverrides[cardId] || {};
 
-  const baseFacts: Fact[] = DETAILS[cardId]?.facts || [
-    ['Standort', city || '—'], ['Gehalt', 'nicht angegeben'], ['Erfahrung', 'nicht angegeben', 's'],
-    ['Plattform', channel || '—', 's'], ['Branche', 'nicht angegeben', 's'], ['Mitarbeiterzahl', 'nicht angegeben', 's'],
-    ['Karriereseite', '—', 'l'], ['Telefon', '—'], ['E-Mail', '—', 'l'],
-    ['Beworben am', '—'], ['Letzter Kontakt', updated],
-  ];
+  const app = st.applications[cardId];
+  const comp = app ? st.companies[app.company_id] : undefined;
+  const facts = st.factsByApp[cardId] || [];
 
-  // Contact details live in the contact picker above, not among the facts.
-  const facts: FactRow[] = ([['Berufsbezeichnung', role], ['Firma', company]] as Fact[])
-    .concat(baseFacts)
-    .filter(([label]) => !label.startsWith('Kontaktperson'))
-    .map(([label, value, kind]) => ({
+  /* The catalog value for each routed label; facts fill in the rest. */
+  const routed: Record<string, { value: string; link?: boolean }> = {
+    Berufsbezeichnung: { value: role },
+    Firma: { value: company },
+    Plattform: { value: app?.channel || '—' },
+    'Beworben via': { value: app?.applied_via || '—' },
+    'Beworben am': { value: app?.applied_at ? isoToDate(app.applied_at) : '—' },
+    'Letzter Kontakt': { value: app?.last_contact_at ? isoToDate(app.last_contact_at) : '—' },
+    Branche: { value: comp?.sector || 'nicht angegeben' },
+    Mitarbeiterzahl: { value: comp?.headcount || 'nicht angegeben' },
+    Karriereseite: { value: comp?.website || '—', link: true },
+    'E-Mail': { value: comp?.email || '—', link: true },
+    Telefon: { value: comp?.phone || '—' },
+  };
+  const factDefaults: Record<string, string> = { Gehalt: 'nicht angegeben', Erfahrung: 'nicht angegeben' };
+
+  const view = (label: string): FactView => {
+    const r = routed[label];
+    const fact = facts.find((f) => f.label === label);
+    return {
       label,
-      value: overrides[label] ?? value,
-      kind,
-      isSelect: kind === 's' && !!FACT_OPTIONS[label],
+      value: r?.value ?? fact?.value ?? factDefaults[label] ?? '—',
+      link: r?.link || fact?.kind === 'link',
+      isSelect: !!FACT_OPTIONS[label],
       isDate: !!DATE_FIELDS[label],
-    }));
+    };
+  };
 
-  const byLabel = Object.fromEntries(facts.map((f) => [f.label, f]));
-  const pick = (labels: string[]) => labels.map((l) => byLabel[l]).filter(Boolean);
-
-  const groups = SECTIONS.slice(1).map(([title, labels]) => ({ title, items: pick(labels) }));
-  const grouped = new Set(SECTIONS.flatMap(([, labels]) => labels));
-  const rest = facts.filter((f) => !grouped.has(f.label));
+  const catalog = new Set(SECTIONS.flatMap(([, labels]) => labels));
+  const groups = SECTIONS.slice(1).map(([title, labels]) => ({ title, items: labels.map(view) }));
+  const rest = facts.filter((f) => !catalog.has(f.label)).map((f) => view(f.label));
   if (rest.length) groups.push({ title: 'Weitere Angaben', items: rest });
 
   const col = COLUMNS[columnIndex];
-  const interest = (st.priority[cardId] as InterestKey) || 'none';
+  const interest = (app?.interest as InterestKey) || 'none';
   const open = st.secOpen.props !== false;
 
   const toggleSection = () => set((s) => {
@@ -137,7 +147,7 @@ export function PropertiesSidebar({ cardId, role, company, city, channel, column
                     <MenuItem
                       key={k}
                       selected={k === interest}
-                      onClick={() => set((s) => ({ priority: { ...s.priority, [cardId]: k }, dropdown: null }))}
+                      onClick={() => { setInterest(cardId, k); set({ dropdown: null }); }}
                     >
                       <PriorityBars level={INTEREST[k][1]} />
                       <span style={{ flex: '1 1 auto', whiteSpace: 'nowrap' }}>{INTEREST[k][0]}</span>
@@ -164,7 +174,7 @@ export function PropertiesSidebar({ cardId, role, company, city, channel, column
             </div>
           </PopoverAnchor>
 
-          {pick(SECTIONS[0][1]).map((f) => (
+          {SECTIONS[0][1].map(view).map((f) => (
             <FieldRow key={f.label} label={f.label} labelWidth={104} minHeight={24}>
               <FactField fact={f} cardId={cardId} locked={locked} />
             </FieldRow>

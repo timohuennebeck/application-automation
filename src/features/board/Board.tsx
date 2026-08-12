@@ -1,4 +1,4 @@
-import { COLUMNS } from '../../data/sample-data';
+import { COLUMNS } from '../../data/config';
 import { BoardColumn } from './BoardColumn';
 
 export function Board() {

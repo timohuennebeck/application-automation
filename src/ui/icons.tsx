@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react';
-import type { ColumnDef } from '../data/sample-data';
+import type { ColumnDef } from '../data/config';
 
 /* Pie-slice path for a progress ring at `frac` completion. */
 function piePath(frac: number): string {

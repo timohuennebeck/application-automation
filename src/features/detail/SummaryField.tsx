@@ -2,7 +2,7 @@ import { useApp } from '../../state/store-context';
 
 /* Click-to-edit role summary. Locked while Kepler owns the record. */
 export function SummaryField({ cardId, summary, locked }: { cardId: string; summary: string; locked: boolean }) {
-  const { st, set, cancelEditRef } = useApp();
+  const { st, set, saveSummary, cancelEditRef } = useApp();
 
   if (st.editing === 'summary') {
     return (
@@ -16,7 +16,8 @@ export function SummaryField({ cardId, summary, locked }: { cardId: string; summ
         }}
         onBlur={() => {
           if (cancelEditRef.current) { cancelEditRef.current = false; set({ editing: null }); return; }
-          set((s) => ({ summaryOverrides: { ...s.summaryOverrides, [cardId]: s.editDraft.trim() || summary }, editing: null }));
+          saveSummary(cardId, st.editDraft.trim() || summary);
+          set({ editing: null });
         }}
         style={{
           display: 'block', fontSize: 12.5, color: 'var(--c-3d3a34)', lineHeight: 1.6, background: 'var(--c-fff)',

@@ -9,6 +9,9 @@ import { useApp } from '../state/store-context';
 
 function Shell() {
   const { st } = useApp();
+  // One snapshot load at boot; rendering the board before it lands would
+  // flash an empty pipeline.
+  if (!st.loaded) return <div style={{ height: '100vh', background: 'var(--c-fbfaf7)' }} />;
   return (
     <div style={{
       height: '100vh', display: 'flex', flexDirection: 'column', position: 'relative',

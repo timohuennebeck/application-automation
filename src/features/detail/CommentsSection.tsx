@@ -1,6 +1,6 @@
-import { DETAILS } from '../../data/sample-data';
 import { KEPLER_ENTRY } from '../../lib/mentions';
 import { initials } from '../../lib/text';
+import { relTime } from '../../state/db-view';
 import { useApp } from '../../state/store-context';
 import { MentionComposer } from '../../ui/MentionComposer';
 import { MentionText } from '../../ui/MentionText';
@@ -9,46 +9,33 @@ import { Popover, PopoverAnchor } from '../../ui/Popover';
 import { Section } from '../../ui/Section';
 import { Avatar, DotsGlyph } from '../../ui/icons';
 
-type Comment = [author: string, time: string, text: string, bg: string];
-
 export function CommentsSection({ cardId }: { cardId: string }) {
-  const { st, set, addComment, peopleForCard } = useApp();
+  const { st, set, addComment, updateComment, deleteComment, peopleForCard } = useApp();
 
   // Kepler is always mentionable; everyone attached to this card as well.
   const mentionable = [KEPLER_ENTRY, ...peopleForCard(cardId)];
   const names = mentionable.map((p) => p.name);
 
-  const base: Comment[] = DETAILS[cardId]?.comments
-    || [['Kepler', 'vor 2 Tagen', 'Karte aus der Stellenanzeige angelegt. Anschreiben und Lebenslauf liegen im Reiter Bewerbungsunterlagen.', 'var(--c-1b1a17)']];
-  const comments = base
-    .concat(st.addedComments[cardId] || [])
-    .map((c, i) => ({ c, i }))
-    .filter(({ i }) => !(st.commentDeletes[cardId] || {})[i]);
+  const comments = st.commentsByApp[cardId] || [];
 
   return (
     <Section sectionKey="comments" title="Kommentare" count={comments.length} gap={14}>
-      {comments.map(({ c, i }) => {
-        const [author, time, text, bg] = c;
-        const edits = st.commentEdits[cardId] || {};
-        const body = edits[i] ?? text;
-        const ck = cardId + ':' + i;
+      {comments.map((c) => {
+        const ck = cardId + ':' + c.id;
         const editing = st.commentEditing === ck;
         const menuOpen = st.commentMenu === ck;
-        const saveEdit = () => set((s) => ({
-          commentEdits: { ...s.commentEdits, [cardId]: { ...s.commentEdits[cardId], [i]: s.commentEditDraft } },
-          commentEditing: null,
-        }));
+        const saveEdit = () => updateComment(cardId, c.id, st.commentEditDraft);
 
         return (
-          <div key={i} style={{ display: 'flex', gap: 9 }}>
-            <Avatar bg={bg} size={22} fontSize={9} style={{ marginTop: 1 }}>
-              {author === 'Kepler' ? 'K' : author === 'Du' ? 'Du' : initials(author)}
+          <div key={c.id} style={{ display: 'flex', gap: 9 }}>
+            <Avatar bg={c.author === 'Kepler' ? 'var(--c-1b1a17)' : 'var(--c-5b7a5e)'} size={22} fontSize={9} style={{ marginTop: 1 }}>
+              {c.author === 'Kepler' ? 'K' : c.author === 'Du' ? 'Du' : initials(c.author)}
             </Avatar>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0, flex: '1 1 auto' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--c-1b1a17)' }}>{author}</div>
-                <div style={{ fontSize: 11, color: 'var(--c-a5a29a)' }}>{time}</div>
-                {author === 'Du' && (
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--c-1b1a17)' }}>{c.author}</div>
+                <div style={{ fontSize: 11, color: 'var(--c-a5a29a)' }}>{relTime(c.created_at)}</div>
+                {c.author === 'Du' && (
                   <PopoverAnchor style={{ marginLeft: 'auto' }}>
                     <div
                       className="cmt-menu-btn"
@@ -60,16 +47,10 @@ export function CommentsSection({ cardId }: { cardId: string }) {
                     </div>
                     {menuOpen && (
                       <Popover top={24} right={0} minWidth={150}>
-                        <MenuItem onClick={() => set({ commentEditing: ck, commentEditDraft: body, commentMenu: null })}>
+                        <MenuItem onClick={() => set({ commentEditing: ck, commentEditDraft: c.text, commentMenu: null })}>
                           Bearbeiten
                         </MenuItem>
-                        <MenuItem
-                          danger
-                          onClick={() => set((s) => ({
-                            commentDeletes: { ...s.commentDeletes, [cardId]: { ...s.commentDeletes[cardId], [i]: true } },
-                            commentMenu: null,
-                          }))}
-                        >
+                        <MenuItem danger onClick={() => deleteComment(cardId, c.id)}>
                           Löschen
                         </MenuItem>
                       </Popover>
@@ -100,7 +81,7 @@ export function CommentsSection({ cardId }: { cardId: string }) {
                   </div>
                 </>
               ) : (
-                <MentionText text={body} names={names} />
+                <MentionText text={c.text} names={names} />
               )}
             </div>
           </div>

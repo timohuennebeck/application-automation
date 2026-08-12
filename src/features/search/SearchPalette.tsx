@@ -1,6 +1,7 @@
-import { CHANNEL_BG, COLUMNS } from '../../data/sample-data';
+import { CHANNEL_BG, COLUMNS } from '../../data/config';
 import { highlight, initials } from '../../lib/text';
-import { cardDefFor, useApp } from '../../state/store-context';
+import { cardView } from '../../state/selectors';
+import { useApp } from '../../state/store-context';
 import type { AppStore } from '../../state/store-context';
 import { ColumnIcon, SearchGlyph } from '../../ui/icons';
 
@@ -31,20 +32,9 @@ function buildGroups(store: AppStore, q: string, open: (id: string) => void) {
   const { st, roundsFor, contactsFor, emailContactsFor, person } = store;
 
   const items = st.board.flatMap((ids, ci) => ids.flatMap((id) => {
-    const def = cardDefFor(st, id);
-    if (!def) return [];
-    const overrides = st.factOverrides[id] || {};
-    const named = (label: string, fallback: string) =>
-      (overrides[label] && overrides[label] !== '—' ? overrides[label] : fallback);
-    const [companyRaw, city = ''] = def[1].split(', ');
-    return [{
-      id,
-      role: named('Berufsbezeichnung', def[0]),
-      company: named('Firma', companyRaw),
-      city,
-      channel: def[3],
-      ci,
-    }];
+    const view = cardView(st, id);
+    if (!view) return [];
+    return [{ id, role: view.role, company: view.company, city: view.city, channel: view.channel, ci }];
   }));
 
   const appRow = (it: typeof items[number]): Row => ({

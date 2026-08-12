@@ -1,8 +1,10 @@
-import { AGENT_RUNS, INTERVIEWS, INTEREST, SALARY } from '../../data/sample-data';
-import type { ColumnDef, InterestKey } from '../../data/sample-data';
+import { AGENT_RUNS } from '../../data/sample-data';
+import { INTEREST } from '../../data/config';
+import type { InterestKey, ColumnDef } from '../../data/config';
 import { clock } from '../../lib/date';
 import { initials } from '../../lib/text';
-import { cardDefFor, useApp } from '../../state/store-context';
+import { cardSubtitle, cardView, interviewChip } from '../../state/selectors';
+import { useApp } from '../../state/store-context';
 import { Avatar, PriorityBars, Spinner } from '../../ui/icons';
 import { dragOverCol, endDrag, makeGhost } from './dnd';
 
@@ -11,25 +13,18 @@ export function ApplicationCard({ id, col, ci }: { id: string; col: ColumnDef; c
   const store = useApp();
   const { st, set, openCard, contactsFor } = store;
 
-  const def = cardDefFor(st, id);
-  if (!def) return null;
-  const [role0, company0, basePrio, , updated, followUp] = def;
+  const card = cardView(st, id);
+  if (!card) return null;
+  const role = card.role;
+  const company = card.companyLine;
 
-  const overrides = st.factOverrides[id] || {};
-  const named = (label: string, fallback: string) =>
-    (overrides[label] && overrides[label] !== '—' ? overrides[label] : fallback);
-  const role = named('Berufsbezeichnung', role0);
-  const city = company0.split(', ')[1];
-  const company = overrides['Firma'] && overrides['Firma'] !== '—'
-    ? overrides['Firma'] + (city ? ', ' + city : '')
-    : company0;
-
-  const interest = (st.priority[id] as InterestKey) || basePrio;
+  const interest = (card.interest as InterestKey) || 'none';
   const run = AGENT_RUNS[id];
-  const interview = INTERVIEWS[id];
+  const interview = interviewChip(st, id);
+  const subtitle = cardSubtitle(st, id);
   const contacts = contactsFor(id).filter((c) => c.name && c.name !== '—');
 
-  const dueColor = followUp === 'due' ? 'var(--c-c2564c)' : followUp === 'soon' ? 'var(--c-9a7218)' : 'var(--c-9a978f)';
+  const dueColor = subtitle.tone === 'due' ? 'var(--c-c2564c)' : subtitle.tone === 'soon' ? 'var(--c-9a7218)' : 'var(--c-9a978f)';
 
   return (
     <div
@@ -72,7 +67,7 @@ export function ApplicationCard({ id, col, ci }: { id: string; col: ColumnDef; c
 
       <div style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.3, color: 'var(--c-1b1a17)', textWrap: 'pretty' }}>{role}</div>
       <div style={{ fontSize: 11, color: 'var(--c-77746d)', lineHeight: 1.35 }}>{company}</div>
-      {SALARY[id] && <div style={{ fontSize: 10.5, color: 'var(--c-5f5c56)', fontWeight: 500 }}>{SALARY[id]}</div>}
+      {card.salary && <div style={{ fontSize: 10.5, color: 'var(--c-5f5c56)', fontWeight: 500 }}>{card.salary}</div>}
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0, marginTop: 1 }}>
         {contacts.length > 0 && (
@@ -100,9 +95,9 @@ export function ApplicationCard({ id, col, ci }: { id: string; col: ColumnDef; c
         {!run && !interview && (
           <div style={{
             marginLeft: 'auto', paddingLeft: 12, fontSize: 10.5, color: dueColor,
-            fontWeight: followUp ? 600 : 400, whiteSpace: 'nowrap', flexShrink: 0,
+            fontWeight: subtitle.tone !== 'muted' ? 600 : 400, whiteSpace: 'nowrap', flexShrink: 0,
           }}>
-            {updated}
+            {subtitle.text}
           </div>
         )}
       </div>

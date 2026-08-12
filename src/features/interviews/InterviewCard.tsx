@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { ROUND_STATE, WHERE_OPTIONS } from '../../data/sample-data';
-import type { Round } from '../../data/sample-data';
+import { ROUND_STATE, WHERE_OPTIONS } from '../../data/config';
+import type { Round } from '../../state/store-context';
 import { dateToISO, dayDiff, isoToDate, relLabel, shiftYM, todayISO } from '../../lib/date';
 import { KEPLER_ENTRY } from '../../lib/mentions';
 import { initials } from '../../lib/text';
@@ -27,7 +27,7 @@ export function InterviewCard({ cardId, ri, round, company }: {
   company: string;
 }) {
   const {
-    st, set, mutateRounds, resetRound, logAct, person, peopleForCard,
+    st, set, mutateRounds, resetRound, addRoundNote, logAct, person, peopleForCard,
     savePerson, deletePerson, createPersonForRound,
   } = useApp();
 
@@ -52,7 +52,6 @@ export function InterviewCard({ cardId, ri, round, company }: {
       if (!r) return;
       r.date = date;
       if (!date) r.time = '';
-      r.when = date ? date + (r.time ? ', ' + r.time : '') : 'Termin offen';
       if (r.state !== 'done') r.state = date ? 'next' : 'open';
     });
     logAct(cardId, date
@@ -66,7 +65,6 @@ export function InterviewCard({ cardId, ri, round, company }: {
       const r = rs[ri];
       if (!r) return;
       r.time = time;
-      r.when = r.date ? r.date + (time ? ', ' + time : '') : 'Termin offen';
     });
     if (close) set({ dropdown: null });
   };
@@ -93,12 +91,9 @@ export function InterviewCard({ cardId, ri, round, company }: {
   };
 
   const sendNote = () => {
-    const v = note.trim();
-    if (!v) return;
-    mutateRounds(cardId, (rs) => {
-      if (rs[ri]) rs[ri].notes = [...(rs[ri].notes || []), { author: 'Du', text: v, time: 'gerade eben' }];
-    });
-    logAct(cardId, 'hat „' + round.title + '“ kommentiert');
+    if (!note.trim()) return;
+    // Notes append to their own table; addRoundNote also writes the activity.
+    addRoundNote(cardId, ri, note);
     setNote('');
   };
 

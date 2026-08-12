@@ -1,4 +1,4 @@
-import { SKILLS } from '../../data/sample-data';
+import { SKILLS } from '../../data/config';
 import { useApp } from '../../state/store-context';
 import { ChipToggle } from '../../ui/ChipToggle';
 import { FieldHint, FieldLabel, ModalShell, SubmitButton } from '../../ui/ModalShell';

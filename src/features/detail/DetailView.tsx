@@ -1,5 +1,7 @@
-import { AGENT_RUNS, CHANNEL_BG, COLUMNS, DETAILS } from '../../data/sample-data';
-import { cardDefFor, useApp } from '../../state/store-context';
+import { AGENT_RUNS } from '../../data/sample-data';
+import { CHANNEL_BG, COLUMNS } from '../../data/config';
+import { cardView } from '../../state/selectors';
+import { useApp } from '../../state/store-context';
 import { MenuItem } from '../../ui/MenuItem';
 import { Popover, PopoverAnchor } from '../../ui/Popover';
 import { Avatar, DotsGlyph } from '../../ui/icons';
@@ -16,27 +18,21 @@ import { PropertiesSidebar } from './properties/PropertiesSidebar';
 /* Reading width of the main column. The column itself stretches to the sidebar. */
 const CONTENT_MAX = 700;
 
-/* Resolves a card's display fields, applying any user overrides. */
+/* Resolves a card's display fields from the domain state. */
 function useCard(cardId: string) {
   const { st } = useApp();
-  const def = cardDefFor(st, cardId);
-  if (!def) return null;
+  const view = cardView(st, cardId);
+  if (!view) return null;
 
-  const [role0, company0, , channel, updated] = def;
-  const overrides = st.factOverrides[cardId] || {};
-  const named = (label: string, fallback: string) =>
-    (overrides[label] && overrides[label] !== '—' ? overrides[label] : fallback);
-
-  const [companyRaw, city = ''] = company0.split(', ');
   const columnIndex = Math.max(0, st.board.findIndex((c) => c.includes(cardId)));
-
   return {
-    role: named('Berufsbezeichnung', role0),
-    company: named('Firma', companyRaw),
-    companyFull: company0,
-    city,
-    channel,
-    updated,
+    role: view.role,
+    company: view.company,
+    companyFull: view.companyLine,
+    city: view.city,
+    channel: view.channel,
+    website: view.website,
+    summary: view.summary,
     columnIndex,
   };
 }
@@ -50,9 +46,7 @@ export function DetailView() {
   const cardMenuOpen = st.dropdown === 'card';
   const col = COLUMNS[card.columnIndex];
   const run = AGENT_RUNS[cardId];
-  const summary = st.summaryOverrides[cardId]
-    || DETAILS[cardId]?.summary
-    || card.role + ' bei ' + card.company + '. Stellenanzeige ist übernommen, Anforderungen und Unterlagen liegen strukturiert an der Karte.';
+  const summary = card.summary;
   const docCard = { id: cardId, role: card.role, company: card.companyFull };
 
   return (
@@ -96,7 +90,7 @@ export function DetailView() {
               <div style={{ fontSize: 12.5, color: 'var(--c-8b8880)', lineHeight: 1.4 }}>
                 {card.companyFull.replace(/,\s*/g, ' · ')} ·{' '}
                 <a href="#" style={{ textDecoration: 'none' }}>
-                  {'karriere.' + card.company.toLowerCase().replace(/[^a-z]/g, '') + '.de'}
+                  {card.website || 'karriere.' + card.company.toLowerCase().replace(/[^a-z]/g, '') + '.de'}
                 </a>
               </div>
             </div>
@@ -133,10 +127,7 @@ export function DetailView() {
           cardId={cardId}
           role={card.role}
           company={card.company}
-          city={card.city}
-          channel={card.channel}
           columnIndex={card.columnIndex}
-          updated={card.updated}
         />
       </div>
 

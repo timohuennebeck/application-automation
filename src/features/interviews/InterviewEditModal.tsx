@@ -1,4 +1,4 @@
-import { CHANNEL_BG, WHERE_OPTIONS } from '../../data/sample-data';
+import { CHANNEL_BG, WHERE_OPTIONS } from '../../data/config';
 import { dateToISO, isoToDate, shiftYM, todayISO } from '../../lib/date';
 import { useApp } from '../../state/store-context';
 import { CalendarPopover } from '../../ui/Calendar';

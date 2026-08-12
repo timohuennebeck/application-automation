@@ -11,7 +11,8 @@ import { followUpSlots, slotLabel } from './schedule';
 export function FollowUpSection({ cardId, role, company }: { cardId: string; role: string; company: string }) {
   const { st, set } = useApp();
   const slots = followUpSlots(st, cardId);
-  const sel = Math.min(st.followupSel, slots.length - 1);
+  if (!slots.length) return null;
+  const sel = Math.max(0, Math.min(st.followupSel, slots.length - 1));
   const cur = slots[sel];
   const open = st.dropdown === 'followup';
 

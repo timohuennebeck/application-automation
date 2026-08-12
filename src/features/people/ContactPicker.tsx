@@ -1,4 +1,3 @@
-import { PERSON_COLORS } from '../../data/sample-data';
 import { initials } from '../../lib/text';
 import { useApp } from '../../state/store-context';
 import type { ContactEntry } from '../../state/store-context';
@@ -30,23 +29,20 @@ export function ContactPicker({
   const toggle = (key: string) => {
     const p = peopleForCard(cardId).find((s) => s.key === key);
     if (!p) return;
-    const sel = list.some((c) => c.name === p.name);
+    const pid = Number(key);
+    const sel = list.some((c) => c.personId === pid);
     onSave(sel
-      ? list.filter((c) => c.name !== p.name)
-      : list.concat([{ name: p.name, role: p.role || '', email: p.email || '', phone: p.phone || '', linkedin: p.linkedin || '', bg: p.bg }]));
+      ? list.filter((c) => c.personId !== pid)
+      : list.concat([{ personId: pid, name: p.name, role: p.role || '', email: p.email || '', phone: p.phone || '', linkedin: p.linkedin || '', bg: p.bg }]));
   };
 
-  const startCreate = (name: string) => {
-    let key = 'NP';
-    let i = 2;
-    while (st.people[key]) { key = 'NP' + i; i++; }
-    set((s) => ({
-      people: { ...s.people, [key]: { name: '', role: '', bg: PERSON_COLORS[Object.keys(s.people).length % PERSON_COLORS.length], initials: '?' } },
-      personEdit: { id: cardId, ri: -1, key, isNew: true, forContact: popKey, contactStore: store },
-      personDraft: { name, role: '', email: '', phone: '', linkedin: '' },
-      personField: 'name', personFieldDraft: name, editing: null, dropdown: null,
-    }));
-  };
+  /* The person row is only written to the DB once the editor is saved with a
+     name (savePerson); until then the draft lives under the 'pending' key. */
+  const startCreate = (name: string) => set({
+    personEdit: { id: cardId, ri: -1, key: 'pending', isNew: true, forContact: popKey, contactStore: store },
+    personDraft: { name, role: '', email: '', phone: '', linkedin: '' },
+    personField: 'name', personFieldDraft: name, editing: null, dropdown: null,
+  });
 
   const stack = (list.length ? list : [{ name: '?', bg: 'var(--c-b3b0a8)' }]).slice(0, 3);
   const label = list.length === 0
@@ -88,7 +84,7 @@ export function ContactPicker({
               onDraftChange={(v) => set({ contactDraft: v })}
               company={company}
               people={peopleForCard(cardId)}
-              isSelected={(key) => list.some((c) => c.name === st.people[key]?.name)}
+              isSelected={(key) => list.some((c) => String(c.personId) === key)}
               onToggle={toggle}
               onCreate={startCreate}
               onClose={() => set({ contactEdit: null, contactDraft: '' })}

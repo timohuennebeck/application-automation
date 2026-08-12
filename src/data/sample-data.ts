@@ -1,0 +1,302 @@
+// Sample data ported from the design prototype. Will be replaced by real data
+// from the Claude Agent SDK backend later.
+
+export type InterestKey = 'urgent' | 'high' | 'medium' | 'low' | 'none';
+
+export const INTEREST: Record<InterestKey, [string, number]> = {
+  urgent: ['Traumjob', 4],
+  high: ['Hohes Interesse', 3],
+  medium: ['Interessant', 2],
+  low: ['Zur Sicherheit', 1],
+  none: ['Noch offen', 0],
+};
+export const INTEREST_ORDER: InterestKey[] = ['urgent', 'high', 'medium', 'low', 'none'];
+
+export const CHANNEL_BG: Record<string, string> = {
+  LinkedIn: 'var(--c-3f6ea8)',
+  Karriereseite: 'var(--c-5b7a5e)',
+  Empfehlung: 'var(--c-a4762f)',
+  StepStone: 'var(--c-7a5aa8)',
+  Recruiter: 'var(--c-a8523f)',
+  Xing: 'var(--c-2f7a72)',
+};
+
+export const SALARY: Record<string, string> = {
+  'BEW-41': '78–92k €', 'BEW-44': '85–100k €', 'BEW-38': '70–84k €',
+  'BEW-33': 'CHF 120–135k', 'BEW-29': '58–70k €', 'BEW-35': '65–78k €',
+  'BEW-24': '95–110k €', 'BEW-19': '€ 88–102k', 'BEW-15': '110–125k €',
+  'BEW-11': '92–105k €', 'BEW-07': '80–95k €', 'BEW-04': '62–74k €', 'BEW-02': '55–65k €',
+};
+
+export type AgentStepKind = 'done' | 'run' | 'wait';
+export interface AgentStep {
+  kind: AgentStepKind;
+  label: string;
+  meta: string;
+  doc?: string;
+}
+export interface AgentRun {
+  label: string;
+  started: number;
+  steps: AgentStep[];
+}
+const step = (kind: AgentStepKind, label: string, meta = '', doc?: string): AgentStep => ({ kind, label, meta, doc });
+
+export const AGENT_RUNS: Record<string, AgentRun> = {
+  'BEW-41': {
+    label: 'LinkedIn-Stellenanzeige wird ausgelesen…', started: 96,
+    steps: [
+      step('run', 'LinkedIn-Stellenanzeige wird ausgelesen…'),
+      step('wait', 'Firmendetails ergänzen'),
+      step('wait', 'Kontaktdetails ergänzen'),
+      step('wait', 'Hochgeladenen {doc} einlesen', '', 'Lebenslauf.docx'),
+      step('wait', 'Hochgeladenen {doc} einlesen', '', 'Cover-Letter.docx'),
+      step('wait', 'Lebenslauf für Nordlicht Systems erstellen'),
+      step('wait', 'Cover Letter für Nordlicht Systems erstellen'),
+      step('wait', 'Daten und Formate prüfen'),
+      step('wait', 'Kommentar an {m} mit Bewerbungslink hinterlassen'),
+    ],
+  },
+  'BEW-38': {
+    label: 'Lebenslauf für Aurel Mobility wird erstellt…', started: 214,
+    steps: [
+      step('done', 'Stellenanzeige auf der Karriereseite ausgelesen', 'vor 9 Min'),
+      step('done', 'Firmendetails ergänzt', 'vor 8 Min'),
+      step('done', 'Kontaktdetails ergänzt', 'vor 7 Min'),
+      step('done', 'Hochgeladenen {doc} eingelesen', 'vor 5 Min', 'Lebenslauf.docx'),
+      step('done', 'Hochgeladenen {doc} eingelesen', 'vor 3 Min', 'Cover-Letter.docx'),
+      step('run', 'Lebenslauf für Aurel Mobility wird erstellt…'),
+      step('wait', 'Cover Letter für Aurel Mobility erstellen'),
+      step('wait', 'Daten und Formate prüfen'),
+      step('wait', 'Kommentar an {m} mit Bewerbungslink hinterlassen'),
+    ],
+  },
+  'BEW-35': {
+    label: 'Kontaktdetails werden ergänzt…', started: 47,
+    steps: [
+      step('done', 'Stellenanzeige auf LinkedIn ausgelesen', 'vor 3 Min'),
+      step('done', 'Firmendetails ergänzt', 'vor 1 Min'),
+      step('run', 'Kontaktdetails werden ergänzt…'),
+      step('wait', 'Hochgeladenen {doc} einlesen', '', 'Lebenslauf.docx'),
+      step('wait', 'Hochgeladenen {doc} einlesen', '', 'Cover-Letter.docx'),
+      step('wait', 'Lebenslauf für Helios Energie erstellen'),
+      step('wait', 'Cover Letter für Helios Energie erstellen'),
+      step('wait', 'Daten und Formate prüfen'),
+      step('wait', 'Kommentar an {m} mit Bewerbungslink hinterlassen'),
+    ],
+  },
+};
+
+export const INTERVIEWS: Record<string, { month: string; day: string; time: string; meta: string }> = {
+  'BEW-24': { month: 'AUG', day: '12', time: '10:00 – 11:00', meta: 'Interview · In Person' },
+  'BEW-19': { month: 'AUG', day: '13', time: '14:30 – 15:30', meta: '2. Interview · Google Meet' },
+  'BEW-15': { month: 'AUG', day: '14', time: '09:00 – 10:30', meta: 'Finales Gespräch · In Person' },
+};
+
+export type RoundStateKey = 'done' | 'next' | 'open';
+export const ROUND_STATE: Record<RoundStateKey, {
+  dotFill: string; dotStroke: string; dotDash: string; dotPie: string;
+  titleColor: string; metaColor: string; metaWeight: number; muted: boolean;
+}> = {
+  done: { dotFill: 'var(--c-c9c5bb)', dotStroke: 'var(--c-c9c5bb)', dotDash: '0', dotPie: '', titleColor: 'var(--c-8b8880)', metaColor: 'var(--c-a5a29a)', metaWeight: 400, muted: true },
+  next: { dotFill: 'none', dotStroke: 'var(--c-4f8f6a)', dotDash: '0', dotPie: 'M7 7 L7 1.5 A5.5 5.5 0 0 1 11.5 9.9 Z', titleColor: 'var(--c-1b1a17)', metaColor: 'var(--c-3d6b60)', metaWeight: 600, muted: false },
+  open: { dotFill: 'none', dotStroke: 'var(--c-c9c5bb)', dotDash: '2.2 2.2', dotPie: '', titleColor: 'var(--c-1b1a17)', metaColor: 'var(--c-a5a29a)', metaWeight: 400, muted: false },
+};
+
+export const PERSON_COLORS = ['var(--c-5b9083)', 'var(--c-a4762f)', 'var(--c-7a5aa8)', 'var(--c-3f6ea8)', 'var(--c-a8523f)', 'var(--c-4f8f6a)'];
+
+export interface PersonDef {
+  name: string;
+  role: string;
+  bg: string;
+  email?: string;
+  phone?: string;
+  linkedin?: string;
+  initials?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+export const INITIAL_PEOPLE: Record<string, PersonDef> = {
+  MH: { name: 'Marek Hübner', role: 'Talent Partner', bg: 'var(--c-5b9083)', email: 'm.huebner@talgruppe.de' },
+  SK: { name: 'Sabine Kotter', role: 'Recruiting Lead', bg: 'var(--c-4f8f6a)', email: 's.kotter@orbishealth.at' },
+  TB: { name: 'Tim Bergk', role: 'Design Lead, Fachbereich', bg: 'var(--c-a4762f)', email: 't.bergk@orbishealth.at' },
+  NW: { name: 'Nadine Wolf', role: 'Geschäftsführung', bg: 'var(--c-7a5aa8)' },
+  JR: { name: 'Jonas Reiter', role: 'Head of People', bg: 'var(--c-5b9083)' },
+  IF: { name: 'Ines Faber', role: 'HR', bg: 'var(--c-a8523f)' },
+  AL: { name: 'Anja Leitner', role: 'Head of Design', bg: 'var(--c-7a5aa8)' },
+  TW: { name: 'Timo Wendt', role: 'Engineering', bg: 'var(--c-3f6ea8)' },
+  LB: { name: 'Lea Brinkmann', role: 'Talent Acquisition', bg: 'var(--c-3f6ea8)' },
+};
+
+export const INITIAL_PEOPLE_POOL: Record<string, string[]> = {
+  'BEW-24': ['MH', 'AL', 'TB', 'TW'],
+  'BEW-19': ['SK', 'TB', 'JR', 'NW', 'IF', 'TW'],
+  'BEW-15': ['LB', 'TB', 'SK', 'NW', 'JR', 'IF'],
+};
+
+export const WHERE_OPTIONS = ['In Person', 'Google Meet', 'Microsoft Teams', 'Telefon'];
+
+export interface Round {
+  state: RoundStateKey;
+  title: string;
+  date: string;
+  time: string;
+  when: string;
+  where: string;
+  people: string[];
+  link?: string;
+  notes?: { author: string; text: string; time: string }[];
+  isNew?: boolean;
+}
+export const INITIAL_ROUNDS: Record<string, Round[]> = {
+  'BEW-24': [
+    { state: 'done', title: 'Screening', date: '04.08.2026', time: '', when: 'Di, 04.08. · gelaufen', where: '', people: ['MH'] },
+    { state: 'next', title: 'Runde 1', date: '12.08.2026', time: '10:00 – 11:00', when: 'morgen 10:00', where: 'In Person', people: ['MH'] },
+    { state: 'open', title: 'Runde 2', date: '', time: '', when: 'Termin offen', where: '', people: ['AL', 'TB'] },
+  ],
+  'BEW-19': [
+    { state: 'done', title: 'Screening', date: '30.07.2026', time: '', when: 'Do, 30.07. · gelaufen', where: '', people: ['SK'] },
+    { state: 'done', title: 'Runde 1', date: '05.08.2026', time: '', when: 'Mi, 05.08. · gelaufen', where: '', people: ['MH'] },
+    { state: 'next', title: 'Runde 2', date: '13.08.2026', time: '14:30 – 15:30', when: 'morgen 14:30', where: 'Google Meet', people: ['SK', 'TB'] },
+    { state: 'open', title: 'Finales Gespräch', date: '', time: '', when: 'Termin offen', where: '', people: ['JR', 'TB', 'NW', 'IF'] },
+  ],
+  'BEW-15': [
+    { state: 'done', title: 'Screening', date: '21.07.2026', time: '', when: 'Di, 21.07. · gelaufen', where: '', people: ['LB'] },
+    { state: 'done', title: 'Runde 1', date: '28.07.2026', time: '', when: 'Di, 28.07. · gelaufen', where: '', people: ['LB'] },
+    { state: 'done', title: 'Runde 2', date: '06.08.2026', time: '', when: 'Do, 06.08. · gelaufen', where: '', people: ['TB', 'SK'] },
+    { state: 'next', title: 'Finales Gespräch', date: '14.08.2026', time: '09:00 – 10:30', when: 'Fr, 14.08., 09:00', where: 'In Person', people: ['NW', 'TB', 'JR', 'IF'] },
+  ],
+};
+
+export const FACT_OPTIONS: Record<string, string[]> = {
+  Erfahrung: ['0–2', '2–5', '5–8', '8+'],
+  Plattform: ['LinkedIn', 'Xing', 'StepStone', 'Karriereseite', 'Empfehlung', 'Recruiter'],
+  Branche: ['Software', 'Energie', 'Agentur', 'Gesundheit', 'Handel', 'Finanzen', 'Industrie'],
+  Mitarbeiterzahl: ['1–50', '51–200', '201–500', '501–1.000', '1.001–5.000', '5.000+'],
+};
+
+export type ColumnKind = 'dashed' | 'pie' | 'cancel' | 'muted';
+export interface ColumnDef {
+  name: string;
+  kind: ColumnKind;
+  frac?: number;
+  tint: string;
+  colTint: string;
+  accent: string;
+  open: boolean;
+}
+export const COLUMNS: ColumnDef[] = [
+  { name: 'Interessiert', kind: 'dashed', tint: 'var(--c-f4f2ed)', colTint: 'var(--colt-1)', accent: 'var(--c-b3b0a8)', open: true },
+  { name: 'In Bearbeitung', kind: 'pie', frac: 0.15, tint: 'var(--c-fdf7ea)', colTint: 'var(--colt-2)', accent: 'var(--c-d9a437)', open: true },
+  { name: 'Bewerbung eingereicht', kind: 'pie', frac: 0.3, tint: 'var(--c-f2f5fa)', colTint: 'var(--colt-3)', accent: 'var(--c-6d8cc0)', open: true },
+  { name: 'Screening', kind: 'pie', frac: 0.45, tint: 'var(--c-f6f3fa)', colTint: 'var(--colt-4)', accent: 'var(--c-9078b8)', open: true },
+  { name: 'Interview', kind: 'pie', frac: 0.55, tint: 'var(--c-f0f6f4)', colTint: 'var(--colt-5)', accent: 'var(--c-5b9083)', open: true },
+  { name: '2. Interview', kind: 'pie', frac: 0.7, tint: 'var(--c-eff6f2)', colTint: 'var(--colt-6)', accent: 'var(--c-4f8f6a)', open: true },
+  { name: 'Finales Gespräch', kind: 'pie', frac: 0.85, tint: 'var(--c-f1f3f9)', colTint: 'var(--colt-7)', accent: 'var(--c-5f6fae)', open: false },
+  { name: 'Gehaltsverhandlungen begonnen', kind: 'pie', frac: 0.95, tint: 'var(--c-eef7f0)', colTint: 'var(--colt-8)', accent: 'var(--c-3f8f5a)', open: false },
+  { name: 'Korb erhalten', kind: 'cancel', tint: 'var(--c-fbf1f0)', colTint: 'var(--colt-9)', accent: 'var(--c-c2564c)', open: false },
+  { name: 'Bewerbung zurückgezogen', kind: 'muted', tint: 'var(--c-f3f2f0)', colTint: 'var(--colt-10)', accent: 'var(--c-a5a29a)', open: false },
+];
+
+/* Interview rounds mirror the interview stages of the pipeline, so a round is
+   drawn with its stage's accent and progress instead of a neutral ring. The
+   last round is always the final conversation (seedRounds guarantees one);
+   any extra rounds in between stay on "2. Interview". */
+const ROUND_STAGES = [3, 4, 5, 6]; // indices into COLUMNS
+export function roundStage(index: number, total: number): ColumnDef {
+  const stage = index === total - 1
+    ? ROUND_STAGES[ROUND_STAGES.length - 1]
+    : ROUND_STAGES[Math.min(index, ROUND_STAGES.length - 2)];
+  return COLUMNS[stage];
+}
+
+// [role, company, interest, channel, updated, followupState]
+export type CardDef = [string, string, InterestKey, string, string, 'soon' | 'due' | null];
+export const CARD_DEFS: Record<string, CardDef> = {
+  'BEW-41': ['Senior Product Designer', 'Nordlicht Systems, Hamburg', 'low', 'LinkedIn', 'in 5 Tagen fällig', 'soon'],
+  'BEW-44': ['UX Lead, Plattform', 'Kessler & Roth, Berlin', 'none', 'Xing', 'in 6 Tagen fällig', 'soon'],
+  'BEW-38': ['Interaction Designer', 'Aurel Mobility, München', 'medium', 'Karriereseite', 'in 4 Tagen fällig', 'soon'],
+  'BEW-33': ['Design Systems Engineer', 'Vector Labs, Zürich', 'high', 'StepStone', '3 Tage überfällig', 'due'],
+  'BEW-35': ['Produktdesignerin Web', 'Helios Energie, Köln', 'medium', 'LinkedIn', 'in 2 Tagen fällig', 'soon'],
+  'BEW-29': ['Senior UX Researcher', 'Brandt Digital, Leipzig', 'medium', 'Recruiter', 'heute fällig', 'due'],
+  'BEW-24': ['Lead Designer, Fintech', 'Talgruppe AG, Frankfurt', 'high', 'Empfehlung', 'morgen 10:00', null],
+  'BEW-19': ['Staff Product Designer', 'Orbis Health, Wien', 'urgent', 'Recruiter', 'Do 14:30', null],
+  'BEW-15': ['Head of Design', 'Weferling Group, Stuttgart', 'urgent', 'Empfehlung', 'Fr 09:00', null],
+  'BEW-11': ['Senior Designer, Wachstum', 'Marlow Software, Berlin', 'high', 'LinkedIn', 'vor 1 Tag', null],
+  'BEW-07': ['Design Manager', 'Ferro Retail, Düsseldorf', 'none', 'StepStone', 'vor 2 Wochen', null],
+  'BEW-04': ['Produktdesigner Mobile', 'Sanna Klinik, Bremen', 'none', 'Karriereseite', 'vor 3 Wochen', null],
+  'BEW-02': ['UI Designer, Marktplatz', 'Kranich Handel, Essen', 'none', 'Xing', 'vor 1 Monat', null],
+};
+
+export const INITIAL_BOARD: string[][] = [
+  ['BEW-41', 'BEW-44'], ['BEW-38'], ['BEW-33', 'BEW-35'], ['BEW-29'],
+  ['BEW-24'], ['BEW-19'], ['BEW-15'], ['BEW-11'], ['BEW-07', 'BEW-04'], ['BEW-02'],
+];
+
+export const SKILLS: [string, boolean][] = [
+  ['User Research', false], ['Figma', true], ['Interaction Design', false],
+  ['Frontend (HTML/CSS)', true], ['Deutsch C1', false],
+];
+
+// [label, value, kind?] — kind: 's' select, 'l' link
+export type Fact = [string, string] | [string, string, 's' | 'l'];
+export interface DetailDef {
+  facts: Fact[];
+  summary: string;
+  contacts: [string, string, string, string][];
+  upcoming: [string, string][];
+  comments: [string, string, string, string][];
+}
+export const DETAILS: Record<string, DetailDef> = {
+  'BEW-33': {
+    facts: [['Standort', 'Zürich'], ['Gehalt', 'CHF 120–135k', 's'], ['Erfahrung', '5–8', 's'], ['Plattform', 'StepStone', 's'], ['Branche', 'Software', 's'], ['Mitarbeiterzahl', '201–500', 's'], ['Karriereseite', 'vectorlabs.ch/karriere', 'l'], ['Telefon', '+41 44 512 90 30'], ['E-Mail', 'jobs@vectorlabs.ch', 'l'], ['Beworben am', '24.07.2026'], ['Letzter Kontakt', 'vor 12 Tagen'], ['Kontaktperson', 'Nadine Wolf'], ['Kontaktperson E-Mail', 'n.wolf@vectorlabs.ch', 'l'], ['Kontaktperson Telefon', '+41 44 512 90 34'], ['Kontaktperson LinkedIn', 'linkedin.com/in/nadine-wolf', 'l']],
+    summary: 'Aufbau und Pflege des Design-Systems für Web und Mobile, enge Zusammenarbeit mit Frontend. Bewerbung über StepStone eingereicht, seit 12 Tagen keine Rückmeldung.',
+    contacts: [['Nadine Wolf', 'Recruiterin', 'n.wolf@vectorlabs.ch', 'var(--c-7a5aa8)']],
+    upcoming: [['in 13 Tagen', 'Letztes Follow up']],
+    comments: [
+      ['Kepler', 'vor 3 Tagen', 'Alle Schritte erledigt: Stellenanzeige ausgelesen, Firmen- und Kontaktdetails ergänzt, Lebenslauf und Cover Letter für Vector Labs erstellt und geprüft. Hier bewerben: vectorlabs.ch/careers/design-systems-engineer', 'var(--c-1b1a17)'],
+      ['Kepler', 'vor 3 Tagen', 'Anschreiben auf die drei Kernanforderungen der Anzeige zugeschnitten: Token-Architektur, Komponentendoku, Migration von Legacy-UI.', 'var(--c-1b1a17)'],
+      ['Du', 'vor 3 Tagen', 'Portfolio-Link auf das Case zum Design-System gesetzt, Rest ausgeblendet.', 'var(--c-5b7a5e)'],
+    ],
+  },
+  'BEW-35': {
+    facts: [['Standort', 'Köln'], ['Gehalt', '65–78k €', 's'], ['Erfahrung', '2–5', 's'], ['Plattform', 'LinkedIn', 's'], ['Branche', 'Energie', 's'], ['Mitarbeiterzahl', '1.001–5.000', 's'], ['Karriereseite', 'helios-energie.de/jobs', 'l'], ['Telefon', '+49 221 88 04 200'], ['E-Mail', 'karriere@helios-energie.de', 'l'], ['Beworben am', '01.08.2026'], ['Letzter Kontakt', 'vor 5 Tagen'], ['Kontaktperson', 'Lea Brinkmann'], ['Kontaktperson E-Mail', 'l.brinkmann@helios.de', 'l'], ['Kontaktperson Telefon', '+49 221 88 04 217'], ['Kontaktperson LinkedIn', 'linkedin.com/in/lea-brinkmann', 'l']],
+    summary: 'Produktdesign für das Kundenportal im Bereich erneuerbare Energien. Kontakt kam über LinkedIn, Bewerbung vor 5 Tagen eingereicht.',
+    contacts: [['Lea Brinkmann', 'Talent Acquisition', 'l.brinkmann@helios.de', 'var(--c-3f6ea8)']],
+    upcoming: [['in 9 Tagen', 'Erneutes Follow up'], ['in 25 Tagen', 'Letztes Follow up']],
+    comments: [
+      ['Kepler', 'vor 5 Tagen', 'Stellenanzeige verlangt Erfahrung mit Energiedaten-Visualisierung — im Anschreiben über das Dashboard-Projekt abgedeckt.', 'var(--c-1b1a17)'],
+    ],
+  },
+  'BEW-29': {
+    facts: [['Standort', 'Leipzig'], ['Gehalt', '58–70k €', 's'], ['Erfahrung', '2–5', 's'], ['Plattform', 'Recruiter', 's'], ['Branche', 'Agentur', 's'], ['Mitarbeiterzahl', '51–200', 's'], ['Karriereseite', 'brandt-digital.de/karriere', 'l'], ['Telefon', '+49 341 55 20 100'], ['E-Mail', 'bewerbung@brandt-digital.de', 'l'], ['Beworben am', '21.07.2026'], ['Letzter Kontakt', 'vor 6 Tagen'], ['Kontaktperson', 'Ines Faber'], ['Kontaktperson E-Mail', 'i.faber@brandt-digital.de', 'l'], ['Kontaktperson Telefon', '+49 341 55 20 118'], ['Kontaktperson LinkedIn', 'linkedin.com/in/ines-faber', 'l']],
+    summary: 'Research-Rolle mit Schwerpunkt qualitative Studien. HR hat den Eingang bestätigt und eine Rückmeldung bis Ende der Woche angekündigt.',
+    contacts: [['Ines Faber', 'HR Business Partner', '+49 341 55 20 118', 'var(--c-a8523f)']],
+    upcoming: [['in 16 Tagen', 'Letztes Follow up']],
+    comments: [
+      ['Kepler', 'vor 6 Tagen', 'Eingangsbestätigung erhalten. Nachfassen für heute vorgemerkt.', 'var(--c-1b1a17)'],
+    ],
+  },
+};
+
+export const HISTORY: Record<string, [string, string, string][]> = {
+  'BEW-33': [['Kepler', 'hat die Karte aus der StepStone-Anzeige angelegt', '24.07.'], ['Kepler', 'hat Cover Letter und Lebenslauf erstellt', '26.07.'], ['Du', 'hat die Bewerbung eingereicht', '26.07.']],
+  'BEW-35': [['Kepler', 'hat die Karte aus der LinkedIn-Anzeige angelegt', '30.07.'], ['Du', 'hat die Bewerbung eingereicht', '01.08.']],
+  'BEW-29': [['Kepler', 'hat die Karte angelegt', '18.07.'], ['Du', 'hat die Bewerbung eingereicht', '21.07.'], ['Kepler', 'hat die Eingangsbestätigung erfasst', '01.08.']],
+  'BEW-24': [['Kepler', 'hat die Karte angelegt', '22.07.'], ['Du', 'hat Marek Hübner zu „Runde 1“ hinzugefügt', '04.08.'], ['Du', 'hat „Runde 1“ auf den 12.08. terminiert', '05.08.']],
+  'BEW-19': [['Kepler', 'hat die Karte angelegt', '15.07.'], ['Du', 'hat „Runde 1“ abgeschlossen', '05.08.'], ['Du', 'hat „Runde 2“ auf den 13.08. terminiert', '06.08.']],
+  'BEW-15': [['Kepler', 'hat die Karte angelegt', '10.07.'], ['Du', 'hat „Runde 2“ abgeschlossen', '06.08.'], ['Du', 'hat das finale Gespräch auf den 14.08. terminiert', '06.08.']],
+};
+
+export const SECTIONS: [string, string[]][] = [
+  ['Bewerbung', ['Plattform', 'Beworben am', 'Letzter Kontakt']],
+  ['Position', ['Berufsbezeichnung', 'Standort', 'Gehalt', 'Erfahrung']],
+  ['Unternehmen', ['Firma', 'Branche', 'Mitarbeiterzahl', 'Karriereseite', 'E-Mail', 'Telefon']],
+];
+export const SHORT_LABELS: Record<string, string> = {
+  Kontaktperson: 'Name',
+  'Kontaktperson E-Mail': 'E-Mail',
+  'Kontaktperson Telefon': 'Telefon',
+  'Kontaktperson LinkedIn': 'LinkedIn',
+};
+export const DATE_FIELDS: Record<string, boolean> = { 'Beworben am': true, 'Letzter Kontakt': true };

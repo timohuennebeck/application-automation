@@ -12,6 +12,24 @@ const PRELOAD = path.join(__dirname, 'preload.mjs');
 
 let win: BrowserWindow | null = null;
 
+/* shell.openExternal hands the string to the OS handler, so anything beyond
+   these schemes (file://, custom app schemes) would launch local files or
+   other apps. Application URLs come from job listings, so treat them as
+   untrusted. */
+const ALLOWED_PROTOCOLS = new Set(['http:', 'https:', 'mailto:']);
+
+function openExternal(url: string) {
+  let protocol: string;
+  try {
+    protocol = new URL(url).protocol;
+  } catch {
+    return false;
+  }
+  if (!ALLOWED_PROTOCOLS.has(protocol)) return false;
+  shell.openExternal(url);
+  return true;
+}
+
 function createWindow() {
   win = new BrowserWindow({
     width: 1400,
@@ -34,7 +52,7 @@ function createWindow() {
 
   // External links open in the default browser, never inside the app window.
   win.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
+    openExternal(url);
     return { action: 'deny' };
   });
 
@@ -51,7 +69,7 @@ ipcMain.on('theme:set', (_e, theme: 'light' | 'dark') => {
   win?.setBackgroundColor(theme === 'dark' ? '#0f1012' : '#fbfaf7');
 });
 
-ipcMain.handle('shell:openExternal', (_e, url: string) => shell.openExternal(url));
+ipcMain.handle('shell:openExternal', (_e, url: string) => openExternal(url));
 
 app.whenReady().then(createWindow);
 

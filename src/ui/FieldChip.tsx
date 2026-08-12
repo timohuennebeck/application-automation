@@ -45,6 +45,10 @@ export function FieldChip({
         padding: '2px 6px',
         cursor: locked ? 'not-allowed' : 'pointer',
         whiteSpace: 'nowrap',
+        /* Chromium sizes an intrinsic width against the border box, so with the
+           app-wide border-box default the padding is subtracted from the pill
+           instead of added to it and the last child sits flush on the edge. */
+        boxSizing: 'content-box',
         width: 'fit-content',
         maxWidth: '100%',
         minWidth: 0,

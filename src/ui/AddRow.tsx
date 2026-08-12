@@ -17,7 +17,8 @@ export function AddRow({
       onClick={onClick}
       style={{
         display: 'flex', alignItems: 'center', gap: 6,
-        padding: '2px 6px', marginLeft: -6, width: 'fit-content',
+        /* content-box: see FieldChip — an intrinsic width otherwise eats the padding. */
+        padding: '2px 6px', marginLeft: -6, width: 'fit-content', boxSizing: 'content-box',
         borderRadius: 5,
         ...(active ? { color: 'var(--c-5f5c56)', background: 'var(--c-e7e4dc)' } : null),
         ...style,

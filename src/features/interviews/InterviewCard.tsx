@@ -234,7 +234,7 @@ export function InterviewCard({ cardId, ri, round, company }: {
                 className="add-row"
                 title="Alle anzeigen"
                 onClick={() => set((s) => ({ roundExpanded: { ...s.roundExpanded, [cardId + ':' + ri]: true } }))}
-                style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '2px 6px', marginLeft: -6, width: 'fit-content' }}
+                style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '2px 6px', marginLeft: -6, width: 'fit-content', boxSizing: 'content-box' }}
               >
                 <div style={{ display: 'flex', flexShrink: 0 }}>
                   {people.slice(0, 3).map((p, i) => (

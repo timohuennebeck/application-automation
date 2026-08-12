@@ -48,6 +48,11 @@ export function ApplicationCard({ id, col, ci }: { id: string; col: ColumnDef; c
       onDragOver={(e) => { e.stopPropagation(); dragOverCol(store, ci, e); }}
       onDrop={(e) => { e.preventDefault(); e.stopPropagation(); endDrag(store); }}
       onClick={() => openCard(id)}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        set({ cardMenu: { id, x: e.clientX, y: e.clientY } });
+      }}
       style={{
         opacity: st.dragId === id ? 0.35 : run ? 0.78 : 1,
         background: run

@@ -33,6 +33,7 @@ const initialState = (): AppState => ({
   mentionAt: null,
   mentionIx: 0,
   openCardId: null,
+  cardMenu: null,
   modalOpen: false,
   multiple: false,
   jobUrl: 'https://karriere.nordlicht-systems.de/jobs/senior-product-designer-4821',
@@ -228,7 +229,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const openCard = useCallback((id: string) => {
     window.clearTimeout(mailTimerRef.current);
     set({
-      openCardId: id, emailLoading: false, emailExpanded: false, followupSel: 0,
+      openCardId: id, cardMenu: null, emailLoading: false, emailExpanded: false, followupSel: 0,
       dropdown: null, editing: null, editDraft: '', commentDraft: '', mentionAt: null,
       roundEdit: null, roundDraft: null, roundPop: null,
       personEdit: null, personDraft: null, personField: null, personFieldDraft: '',
@@ -254,6 +255,44 @@ export function AppProvider({ children }: { children: ReactNode }) {
       board: s2.board.map((c, i) => (i === 0 ? [id, ...c] : c)),
       modalOpen: s2.multiple,
     }));
+  }, [set]);
+
+  /* Drops the application from the board and discards everything stored under
+     its id, so no editor can outlive the card it was bound to. */
+  const deleteCard = useCallback((id: string) => {
+    set((s) => {
+      const drop = <T,>(m: Record<string, T>): Record<string, T> => {
+        if (!Object.prototype.hasOwnProperty.call(m, id)) return m;
+        const next = { ...m };
+        delete next[id];
+        return next;
+      };
+      return {
+        board: s.board.map((c) => c.filter((x) => x !== id)),
+        extraCards: drop(s.extraCards),
+        priority: drop(s.priority),
+        factOverrides: drop(s.factOverrides),
+        summaryOverrides: drop(s.summaryOverrides),
+        addedComments: drop(s.addedComments),
+        history: drop(s.history),
+        commentEdits: drop(s.commentEdits),
+        commentDeletes: drop(s.commentDeletes),
+        roundsState: drop(s.roundsState),
+        roundExpanded: drop(s.roundExpanded),
+        roundSel: drop(s.roundSel),
+        contactOverrides: drop(s.contactOverrides),
+        emailContactOverrides: drop(s.emailContactOverrides),
+        dueOverrides: drop(s.dueOverrides),
+        peoplePool: drop(s.peoplePool),
+        cardMenu: null,
+        openCardId: s.openCardId === id ? null : s.openCardId,
+        dragId: null, overCol: null,
+        dropdown: null, editing: null, editDraft: '',
+        roundEdit: null, roundDraft: null, roundPop: null,
+        personEdit: null, personDraft: null, personField: null, personFieldDraft: '',
+        contactEdit: null, commentMenu: null, commentEditing: null,
+      };
+    });
   }, [set]);
 
   const savePerson = useCallback(() => {
@@ -442,7 +481,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const onKey = (e: KeyboardEvent) => {
       const s = stRef.current;
       if (e.key === 'Escape') {
-        if (s.searchOpen) set({ searchOpen: false });
+        if (s.cardMenu) set({ cardMenu: null });
+        else if (s.searchOpen) set({ searchOpen: false });
         else if (s.personEdit) savePerson();
         else if (s.contactEdit) set({ contactEdit: null });
         else if (s.roundPop) set({ roundPop: null });
@@ -476,6 +516,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const ae = document.activeElement as HTMLElement | null;
       if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA')) ae.blur();
       if (s.dropdown) set({ dropdown: null });
+      if (s.cardMenu) set({ cardMenu: null });
       if (s.commentMenu) set({ commentMenu: null });
       if (s.personEdit) savePerson();
       if (s.contactEdit) set({ contactEdit: null });
@@ -494,12 +535,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const store = useMemo<AppStore>(() => ({
     st, set, toggleTheme, roundsFor, mutateRounds, resetRound, logAct,
     contactsFor, setContacts, emailContactsFor, setEmailContacts,
-    person, peopleForCard, moveCard, openCard, createCard, savePerson, deletePerson,
+    person, peopleForCard, moveCard, openCard, createCard, deleteCard, savePerson, deletePerson,
     createPersonForRound, saveRound, regenerateEmail, addComment,
     cancelEditRef, dragPosRef, swapLockRef, ghostRef,
   }), [st, set, toggleTheme, roundsFor, mutateRounds, resetRound, logAct, contactsFor, setContacts,
     emailContactsFor, setEmailContacts, person, peopleForCard, moveCard, openCard, createCard,
-    savePerson, deletePerson, createPersonForRound, saveRound, regenerateEmail, addComment]);
+    deleteCard, savePerson, deletePerson, createPersonForRound, saveRound, regenerateEmail, addComment]);
 
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
 }

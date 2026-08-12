@@ -1,6 +1,8 @@
 import { AGENT_RUNS, CHANNEL_BG, COLUMNS, DETAILS } from '../../data/sample-data';
 import { cardDefFor, useApp } from '../../state/store-context';
-import { Avatar } from '../../ui/icons';
+import { MenuItem } from '../../ui/MenuItem';
+import { Popover, PopoverAnchor } from '../../ui/Popover';
+import { Avatar, DotsGlyph } from '../../ui/icons';
 import { FollowUpSection } from '../followup/FollowUpSection';
 import { InterviewEditModal } from '../interviews/InterviewEditModal';
 import { InterviewsSection } from '../interviews/InterviewsSection';
@@ -40,11 +42,12 @@ function useCard(cardId: string) {
 }
 
 export function DetailView() {
-  const { st, set } = useApp();
+  const { st, set, deleteCard } = useApp();
   const cardId = st.openCardId!;
   const card = useCard(cardId);
   if (!card) return null;
 
+  const cardMenuOpen = st.dropdown === 'card';
   const col = COLUMNS[card.columnIndex];
   const run = AGENT_RUNS[cardId];
   const summary = st.summaryOverrides[cardId]
@@ -59,6 +62,24 @@ export function DetailView() {
         <div style={{ fontSize: 12.5, color: 'var(--c-c3c0b8)' }}>›</div>
         <div style={{ fontSize: 12.5, color: 'var(--c-1b1a17)', fontWeight: 600 }}>{cardId}</div>
         <div style={{ fontSize: 12.5, color: 'var(--c-9a978f)' }}>{col.name}</div>
+
+        <PopoverAnchor style={{ marginLeft: 'auto', flexShrink: 0 }}>
+          <div
+            className="dots-btn"
+            title="Mehr"
+            onClick={() => set((s) => ({ dropdown: s.dropdown === 'card' ? null : 'card', editing: null }))}
+            style={{ background: cardMenuOpen ? 'var(--c-e7e4dc)' : 'transparent', color: cardMenuOpen ? 'var(--c-1b1a17)' : 'var(--c-a5a29a)' }}
+          >
+            <DotsGlyph />
+          </div>
+          {cardMenuOpen && (
+            <Popover top={29} right={0} width={196}>
+              <MenuItem danger style={{ whiteSpace: 'nowrap' }} onClick={() => deleteCard(cardId)}>
+                Bewerbung löschen
+              </MenuItem>
+            </Popover>
+          )}
+        </PopoverAnchor>
       </div>
 
       <div style={{ flex: '1 1 0', minHeight: 0, display: 'flex', alignItems: 'stretch' }}>

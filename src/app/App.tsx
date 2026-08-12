@@ -1,4 +1,5 @@
 import { Board } from '../features/board/Board';
+import { CardMenu } from '../features/board/CardMenu';
 import { NewApplicationModal } from '../features/create/NewApplicationModal';
 import { DetailView } from '../features/detail/DetailView';
 import { SearchPalette } from '../features/search/SearchPalette';
@@ -15,6 +16,7 @@ function Shell() {
     }}>
       <TopBar />
       {st.openCardId ? <DetailView /> : <Board />}
+      <CardMenu />
       {st.searchOpen && <SearchPalette />}
       {st.modalOpen && <NewApplicationModal />}
     </div>

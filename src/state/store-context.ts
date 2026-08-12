@@ -23,6 +23,13 @@ export interface PersonEditState {
   contactStore?: 'email' | 'card';
 }
 
+/* Position of the board context menu, in viewport coordinates. */
+export interface CardMenuState {
+  id: string;
+  x: number;
+  y: number;
+}
+
 export interface RoundEditState {
   id: string;
   ri: number;
@@ -59,6 +66,7 @@ export interface AppState {
   mentionAt: number | null;
   mentionIx: number;
   openCardId: string | null;
+  cardMenu: CardMenuState | null;
   modalOpen: boolean;
   multiple: boolean;
   jobUrl: string;
@@ -120,6 +128,7 @@ export interface AppStore {
   moveCard: (id: string, toCol: number, toIdx: number | null, live?: boolean) => void;
   openCard: (id: string) => void;
   createCard: () => void;
+  deleteCard: (id: string) => void;
   savePerson: () => void;
   deletePerson: (id: string, key: string, isNew: boolean) => void;
   createPersonForRound: (id: string, ri: number, name: string) => void;

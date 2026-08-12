@@ -17,10 +17,9 @@ export function Composer({
 }) {
   const ready = !!value.trim();
   return (
-    <div style={{
-      background: 'var(--c-fff)', border: '1px solid var(--c-eae7e0)', borderRadius: 10,
+    <div className="composer" style={{
       padding: '12px 12px 10px', display: 'flex', flexDirection: 'column', gap: 10,
-      boxShadow: '0 1px 2px var(--s-8)', position: 'relative',
+      position: 'relative',
     }}>
       {children}
       <textarea

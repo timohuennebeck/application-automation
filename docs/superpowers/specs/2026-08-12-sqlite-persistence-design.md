@@ -45,10 +45,11 @@ Conventions:
   plus optional start/end times — a UTC instant would shift the displayed hour
   across DST changes, and interview times are ranges in both the data and the
   editor (`TimeRangePicker` picks start *and* end).
-- **`facts.value` is renderer-owned display text**, exempt from the ISO rule:
-  `FactField`'s date picker writes German `DD.MM.YYYY` strings today and the seed
-  keeps values like `'vor 12 Tagen'` verbatim. Normalizing fact values is a
-  possible later cleanup, not part of this change.
+- **`facts.value` is renderer-owned display text**, exempt from the ISO rule
+  (`FactField`'s date picker writes German `DD.MM.YYYY` strings today). Date-like
+  labels with semantics (`Beworben am`, `Letzter Kontakt`) are NOT facts — they
+  route to real `YYYY-MM-DD` columns (see routing rule below). Normalizing the
+  remaining fact values is a possible later cleanup, not part of this change.
 - All child tables use `ON DELETE CASCADE`, so deleting an application removes its
   facts, comments, rounds, follow-ups, and history in one statement (matching
   today's `deleteCard`). People and company rows are **not** garbage-collected when
@@ -78,9 +79,11 @@ CREATE TABLE stages (
 CREATE TABLE companies (
   id              INTEGER PRIMARY KEY,
   name            TEXT NOT NULL UNIQUE,
-  industry        TEXT,                -- Branche; no UI yet, home for it exists
-  employee_count  TEXT,                -- free-form ('50-200'); no UI yet
-  website         TEXT,
+  industry        TEXT,                -- 'Branche' in the sidebar
+  employee_count  TEXT,                -- 'Mitarbeiterzahl'; free-form ('50-200')
+  website         TEXT,                -- 'Karriereseite'
+  email           TEXT,                -- UNTERNEHMEN section E-Mail
+  phone           TEXT,                -- UNTERNEHMEN section Telefon
   notes           TEXT,
   created_at      TEXT NOT NULL,
   updated_at      TEXT NOT NULL
@@ -97,9 +100,14 @@ CREATE TABLE applications (
   stage_id        TEXT NOT NULL REFERENCES stages(id),
   stage_position  INTEGER NOT NULL,    -- order within the column, reindexed on drag
   summary         TEXT,                -- NULL → renderer falls back to generated text
+  applied_at      TEXT,                -- 'YYYY-MM-DD'; 'Beworben am' in the sidebar
+  last_contact_at TEXT,                -- 'YYYY-MM-DD'; 'Letzter Kontakt'
   created_at      TEXT NOT NULL,
   updated_at      TEXT NOT NULL
 );
+-- applied_at / last_contact_at are real DATE columns, not facts: they are dates
+-- with semantics (sorting, follow-up timing) and obvious future queries, unlike
+-- free-form sidebar text such as 'Erfahrung'.
 ```
 
 Two columns from revision 1 are **gone**:
@@ -132,16 +140,24 @@ CREATE TABLE facts (                   -- label/value bag for the properties sid
 -- FACT_OPTIONS code config; the DB stores only the chosen value. Options move to
 -- a table only if in-app editing of option lists is ever wanted.
 
--- Fact-label routing rule: three labels are NOT facts — they alias application
--- columns, and today's factOverrides for them shadow role/company everywhere.
--- The repo routes them on write and synthesizes them on read:
+-- Fact-label routing rule: the sidebar is a fixed catalog of labeled fields
+-- (SECTIONS config: BEWERBUNG / POSITION / UNTERNEHMEN), and most labels alias
+-- real columns. The repo routes them on write and synthesizes them on read;
+-- they are never stored as facts rows, so two write paths can't diverge:
 --   'Berufsbezeichnung' ↔ applications.role
+--   'Plattform'         ↔ applications.channel
+--   'Beworben am'       ↔ applications.applied_at
+--   'Letzter Kontakt'   ↔ applications.last_contact_at
 --   'Firma'             ↔ the linked company's name (editing it find-or-creates a
 --                         company with the new name and RE-LINKS company_id — it
 --                         does not rename the shared row, so fixing a typo on one
 --                         card can't silently rename another application's company)
---   'Plattform'         ↔ applications.channel
--- They are never stored as facts rows, so the two write paths can't diverge.
+--   'Branche'           ↔ companies.industry      (updates the shared row)
+--   'Mitarbeiterzahl'   ↔ companies.employee_count (updates the shared row)
+--   'Karriereseite'     ↔ companies.website        (updates the shared row)
+--   'E-Mail'/'Telefon' (UNTERNEHMEN section) ↔ companies.email / companies.phone
+-- Only genuinely free-form position fields remain facts rows: 'Standort',
+-- 'Gehalt', 'Erfahrung', and any future ad-hoc labels.
 
 CREATE TABLE people (
   id          INTEGER PRIMARY KEY,
@@ -323,12 +339,14 @@ values, which are messier than "German date → ISO":
    - `'Kontaktperson E-Mail'/'Telefon'/'LinkedIn'` facts (BEW-33) are **folded into
      the person row** (the tuple itself lacks phone/linkedin — dropping these facts
      without folding would lose data) and are not inserted as facts rows.
-5. **Facts:** from `DETAILS.facts`, minus the routed labels (`Berufsbezeichnung`,
-   `Firma`, `Plattform` → application columns; `Kontaktperson *` → person rows).
-   Values are kept **verbatim** (including `'vor 12 Tagen'` and `DD.MM.YYYY` dates) —
-   `facts.value` is display text. Plus: `SALARY` map fans out to a `'Gehalt'` fact
-   per card (10 of 13 cards have salaries but no `DETAILS` entry; without this step
-   the board's salary lines vanish).
+5. **Facts:** from `DETAILS.facts`, minus every routed label (`Berufsbezeichnung`/
+   `Plattform` → application columns; `Firma`/`Branche`/`Mitarbeiterzahl`/
+   `Karriereseite` → company columns; `Kontaktperson *` → person rows;
+   `Beworben am` → `applied_at` parsing `DD.MM.YYYY`; `Letzter Kontakt` →
+   `last_contact_at`, back-dating `'vor 12 Tagen'`). Remaining values are kept
+   **verbatim** — `facts.value` is display text. Plus: `SALARY` map fans out to a
+   `'Gehalt'` fact per card (10 of 13 cards have salaries but no `DETAILS` entry;
+   without this step the board's salary lines vanish).
 6. **Rounds:** from `INITIAL_ROUNDS` where present; the 10 cards without an entry
    get the 4 canonical rounds. Cards whose seed data lacks a final round (BEW-24:
    Screening/Runde 1/Runde 2) get `'Finales Gespräch'` appended — materializing

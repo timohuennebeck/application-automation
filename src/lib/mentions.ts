@@ -3,6 +3,19 @@
 
 export const KEPLER = 'Kepler';
 
+export interface Mentionable {
+  key: string;
+  name: string;
+  role: string;
+  bg: string;
+  initials: string;
+}
+
+/* The assistant is mentionable in every thread, alongside the card's people. */
+export const KEPLER_ENTRY: Mentionable = {
+  key: KEPLER, name: KEPLER, role: 'KI-Assistent', bg: 'var(--c-1b1a17)', initials: 'K',
+};
+
 export interface TextPart {
   t: string;
   mention: boolean;

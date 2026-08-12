@@ -30,8 +30,6 @@ const initialState = (): AppState => ({
   commentEditing: null,
   commentEditDraft: '',
   commentDraft: '',
-  mentionAt: null,
-  mentionIx: 0,
   openCardId: null,
   cardMenu: null,
   modalOpen: false,
@@ -230,7 +228,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     window.clearTimeout(mailTimerRef.current);
     set({
       openCardId: id, cardMenu: null, emailLoading: false, emailExpanded: false, followupSel: 0,
-      dropdown: null, editing: null, editDraft: '', commentDraft: '', mentionAt: null,
+      dropdown: null, editing: null, editDraft: '', commentDraft: '',
       roundEdit: null, roundDraft: null, roundPop: null,
       personEdit: null, personDraft: null, personField: null, personFieldDraft: '',
       contactEdit: null, contactDraft: '', commentMenu: null, commentEditing: null,
@@ -453,7 +451,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         [id]: [...(s.addedComments[id] || []), ['Du', 'gerade eben', body, 'var(--c-5b7a5e)'] as [string, string, string, string]],
       },
       commentDraft: '',
-      mentionAt: null,
     }));
   }, [set]);
 

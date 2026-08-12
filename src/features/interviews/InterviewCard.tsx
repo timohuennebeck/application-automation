@@ -2,14 +2,16 @@ import { useState } from 'react';
 import { ROUND_STATE, WHERE_OPTIONS } from '../../data/sample-data';
 import type { Round } from '../../data/sample-data';
 import { dateToISO, dayDiff, isoToDate, relLabel, shiftYM, todayISO } from '../../lib/date';
+import { KEPLER_ENTRY } from '../../lib/mentions';
 import { initials } from '../../lib/text';
 import { useApp } from '../../state/store-context';
 import { AddRow } from '../../ui/AddRow';
 import { CalendarPopover } from '../../ui/Calendar';
 import { ChipToggle } from '../../ui/ChipToggle';
-import { Composer } from '../../ui/Composer';
 import { FieldChip } from '../../ui/FieldChip';
 import { FieldRow } from '../../ui/FieldRow';
+import { MentionComposer } from '../../ui/MentionComposer';
+import { MentionText } from '../../ui/MentionText';
 import { MenuItem } from '../../ui/MenuItem';
 import { Popover, PopoverAnchor } from '../../ui/Popover';
 import { TimeRangePopover } from '../../ui/TimeRangePicker';
@@ -101,6 +103,10 @@ export function InterviewCard({ cardId, ri, round, company }: {
   };
 
   const people = round.people.map(person);
+  // Notes take the same mentions as the card comments: the assistant plus
+  // everyone attached to this application, not only this round's participants.
+  const mentionable = [KEPLER_ENTRY, ...peopleForCard(cardId)];
+  const mentionNames = mentionable.map((p) => p.name);
   const expanded = !!st.roundExpanded[cardId + ':' + ri];
   const asStack = people.length > 3 && !expanded;
   const meetLink = round.where === 'Google Meet' || round.where === 'Microsoft Teams';
@@ -326,16 +332,17 @@ export function InterviewCard({ cardId, ri, round, company }: {
                       <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--c-1b1a17)' }}>{n.author}</div>
                       <div style={{ fontSize: 11, color: 'var(--c-a5a29a)' }}>{n.time}</div>
                     </div>
-                    <div style={{ fontSize: 12.5, color: 'var(--c-5f5c56)', lineHeight: 1.6, whiteSpace: 'pre-line', textWrap: 'pretty' }}>{n.text}</div>
+                    <MentionText text={n.text} names={mentionNames} style={{ lineHeight: 1.6, whiteSpace: 'pre-line' }} />
                   </div>
                 </div>
               ))}
             </div>
           )}
-          <Composer
+          <MentionComposer
             value={note}
             onChange={setNote}
             onSend={sendNote}
+            people={mentionable}
             onKeyDown={(e) => {
               if (e.key === 'Escape') { e.stopPropagation(); setNote(''); }
               else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); sendNote(); }

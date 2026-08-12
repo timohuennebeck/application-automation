@@ -62,9 +62,6 @@ export interface AppState {
   commentEditing: string | null;
   commentEditDraft: string;
   commentDraft: string;
-  /* Caret offset where the in-progress @-mention started, or null. */
-  mentionAt: number | null;
-  mentionIx: number;
   openCardId: string | null;
   cardMenu: CardMenuState | null;
   modalOpen: boolean;

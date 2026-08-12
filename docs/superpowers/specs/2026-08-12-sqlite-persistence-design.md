@@ -51,7 +51,7 @@ Conventions:
   route to real `YYYY-MM-DD` columns (see routing rule below). Normalizing the
   remaining fact values is a possible later cleanup, not part of this change.
 - All child tables use `ON DELETE CASCADE`, so deleting an application removes its
-  facts, comments, rounds, follow-ups, and history in one statement (matching
+  facts, comments, rounds, follow-ups, documents, and activities in one statement (matching
   today's `deleteCard`). People and company rows are **not** garbage-collected when
   their last application is deleted — those directories outlive cards, matching
   current behavior.
@@ -285,8 +285,8 @@ CREATE TABLE documents (               -- Bewerbungsunterlagen (Cover Letter, Le
 -- format + created_at/updated_at. repo.deleteApplication removes the card's
 -- document folder along with the cascade.
 
-CREATE TABLE history (                 -- per-application activity log:
-  id              INTEGER PRIMARY KEY, -- "<author> <text>", e.g. "Kepler hat die
+CREATE TABLE activities (              -- the 'Historie' log; one row per entry,
+  id              INTEGER PRIMARY KEY, -- rendered "<author> <text>", e.g. "Kepler
   application_id  TEXT NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
   author          TEXT NOT NULL,       -- who acted: 'Du' | 'Kepler'
   text            TEXT NOT NULL,       -- what happened: 'hat die Karte … angelegt'
@@ -393,8 +393,9 @@ values, which are messier than "German date → ISO":
    `docx`, `file_path` NULL, dates from the stub captions) — matching the
    hardcoded `DOCS` pair that `DocumentsSection` currently renders identically
    for every card. Real files arrive with the Agent SDK work.
-10. **History:** dates are `'24.07.'` — **no year** (the app's own `dateToISO`
-    rejects them). Seed-only parser assumes 2026, `DD.MM.` → `2026-MM-DD`.
+10. **Activities:** from the sample `HISTORY` map. Its dates are `'24.07.'` —
+    **no year** (the app's own `dateToISO` rejects them). Seed-only parser
+    assumes 2026, `DD.MM.` → `2026-MM-DD`.
 11. **Counter:** `meta.next_bew_num = 45`. (Agent runs are not seeded — the agent
     panel keeps rendering the static `AGENT_RUNS` stub until the SDK work.)
 
@@ -410,7 +411,7 @@ Exposed as `window.desktop.db`, typed in `src/desktop.d.ts`:
   label`; routed labels update the application/company row instead),
   `db:facts.delete`, `db:comments.add` / `.update` / `.delete`, `db:rounds.*`,
   `db:roundNotes.*`, `db:people.*`, `db:applicationPeople.set` (kind-scoped list
-  replace), `db:followups.setDue`, `db:followups.saveEmail`, `db:history.add`,
+  replace), `db:followups.setDue`, `db:followups.saveEmail`, `db:activities.add`,
   `db:documents.open` (reveals/opens the file when `file_path` is set; falls back
   to the stub download otherwise — richer document mutations come with the SDK
   work). Each writes and returns the affected row(s); the renderer sets state
@@ -424,7 +425,7 @@ The renderer never constructs SQL and never receives a database handle.
 
 - **Domain state** — normalized entities from `db:load`:
   `applications: Record<id, Application>`, `companies`, `factsByApp`,
-  `commentsByApp`, `roundsByApp`, `people`, `followupsByApp`, `historyByApp`,
+  `commentsByApp`, `roundsByApp`, `people`, `followupsByApp`, `activitiesByApp`,
   `documentsByApp`, plus `board` derived from `(stage_id, stage_position)`.
   Mutation helpers call the IPC channel, then set state from the returned row.
   `DocumentsSection` drops its hardcoded `DOCS` pair and renders from state.
@@ -523,4 +524,8 @@ static data until the SDK work); follow-up email drafts are now generated once
 and persisted (`email_subject`/`email_text`/`generated_at` +
 `db:followups.saveEmail`) instead of regenerated per render; `history.actor` →
 `author`; `comments.body`/`round_notes.body` → `text`; documented that dropdown
-option lists (`FACT_OPTIONS`) stay in code config.
+option lists (`FACT_OPTIONS`) stay in code config. Later follow-ups: sidebar
+date/company fields routed to real columns (`applied_at`, `last_contact_at`,
+company columns), `applied_via` added, `industry`/`employee_count` →
+`sector`/`headcount`, `documents` table added for Bewerbungsunterlagen, and
+`history` renamed to `activities`.

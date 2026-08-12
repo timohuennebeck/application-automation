@@ -26,8 +26,11 @@ its tables get designed with the real SDK work, when we know what a run looks li
 
 ## Architecture Overview
 
-- **Engine:** `better-sqlite3` in the Electron main process. Synchronous, no network,
-  no second process. The renderer never touches SQL.
+- **Engine:** `node:sqlite` (`DatabaseSync`) in the Electron main process —
+  built into Electron 43's embedded Node 24, so no native module, no
+  electron-rebuild, and vitest exercises the identical module under plain Node.
+  Synchronous, no network, no second process. The renderer never touches SQL.
+  (Amended from `better-sqlite3` at implementation time; same synchronous API.)
 - **File:** `app.getPath('userData')/bewerbungen.db`, WAL mode, foreign keys on.
 - **Boundary:** typed IPC channels on `window.desktop.db` via `electron/preload.ts` —
   the same seam already reserved for Agent SDK calls.

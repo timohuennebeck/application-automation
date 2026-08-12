@@ -26,6 +26,8 @@ describe('repo', () => {
     expect(res.rounds.map((r) => r.title)).toEqual(['Screening', 'Runde 1', 'Runde 2', 'Finales Gespräch']);
     expect(res.followups).toHaveLength(3);
     expect(res.documents).toHaveLength(2);
+    expect(res.comments).toHaveLength(1);
+    expect(res.comments[0].author).toBe('Kepler');
 
     repo.deleteApplication('BEW-45');
     const again = repo.createApplication({ role: 'X', company: 'Acme GmbH', channel: null });

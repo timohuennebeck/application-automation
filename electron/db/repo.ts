@@ -36,6 +36,9 @@ const PERSON_COLORS = [
     "var(--c-4f8f6a)",
 ];
 
+const DEFAULT_COMMENT =
+    "Karte aus der Stellenanzeige angelegt. Anschreiben und Lebenslauf liegen im Reiter Bewerbungsunterlagen.";
+
 const CANONICAL_ROUNDS = [
     "Screening",
     "Runde 1",
@@ -124,6 +127,7 @@ export function createRepo(
         rounds: RoundRow[];
         followups: FollowupRow[];
         documents: DocumentRow[];
+        comments: CommentRow[];
     } {
         const insRound = db.prepare(
             "INSERT INTO rounds (application_id, position, state, title) VALUES (?,?,?,?)",
@@ -131,6 +135,10 @@ export function createRepo(
         CANONICAL_ROUNDS.forEach((title, pos) =>
             insRound.run(appId, pos, "open", title),
         );
+
+        db.prepare(
+            "INSERT INTO comments (application_id, author, text, created_at) VALUES (?,?,?,?)",
+        ).run(appId, "Kepler", DEFAULT_COMMENT, now.toISOString());
 
         /* Same follow-up cadence a fresh card gets today: immediate + the two defaults. */
         const midnight = new Date(
@@ -172,6 +180,11 @@ export function createRepo(
                     "SELECT * FROM documents WHERE application_id = ? ORDER BY id",
                 )
                 .all(appId) as unknown as DocumentRow[],
+            comments: db
+                .prepare(
+                    "SELECT * FROM comments WHERE application_id = ? ORDER BY id",
+                )
+                .all(appId) as unknown as CommentRow[],
         };
     }
 

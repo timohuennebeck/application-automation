@@ -164,6 +164,7 @@ export interface CreateApplicationResult {
     rounds: RoundRow[];
     followups: FollowupRow[];
     documents: DocumentRow[];
+    comments: CommentRow[];
     /* Stage siblings whose position shifted to make room. */
     applications: ApplicationRow[];
 }

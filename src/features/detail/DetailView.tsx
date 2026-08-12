@@ -1,0 +1,125 @@
+import { AGENT_RUNS, CHANNEL_BG, COLUMNS, DETAILS } from '../../data/sample-data';
+import { cardDefFor, useApp } from '../../state/store-context';
+import { Avatar } from '../../ui/icons';
+import { FollowUpSection } from '../followup/FollowUpSection';
+import { InterviewEditModal } from '../interviews/InterviewEditModal';
+import { InterviewsSection } from '../interviews/InterviewsSection';
+import { AgentRunPanel } from './AgentRunPanel';
+import { CommentsSection } from './CommentsSection';
+import { DocumentsSection } from './DocumentsSection';
+import { HistorySection } from './HistorySection';
+import { SummaryField } from './SummaryField';
+import { PropertiesSidebar } from './properties/PropertiesSidebar';
+
+/* Reading width of the main column. The column itself stretches to the sidebar. */
+const CONTENT_MAX = 700;
+
+/* Resolves a card's display fields, applying any user overrides. */
+function useCard(cardId: string) {
+  const { st } = useApp();
+  const def = cardDefFor(st, cardId);
+  if (!def) return null;
+
+  const [role0, company0, , channel, updated] = def;
+  const overrides = st.factOverrides[cardId] || {};
+  const named = (label: string, fallback: string) =>
+    (overrides[label] && overrides[label] !== '—' ? overrides[label] : fallback);
+
+  const [companyRaw, city = ''] = company0.split(', ');
+  const columnIndex = Math.max(0, st.board.findIndex((c) => c.includes(cardId)));
+
+  return {
+    role: named('Berufsbezeichnung', role0),
+    company: named('Firma', companyRaw),
+    companyFull: company0,
+    city,
+    channel,
+    updated,
+    columnIndex,
+  };
+}
+
+export function DetailView() {
+  const { st, set } = useApp();
+  const cardId = st.openCardId!;
+  const card = useCard(cardId);
+  if (!card) return null;
+
+  const col = COLUMNS[card.columnIndex];
+  const run = AGENT_RUNS[cardId];
+  const summary = st.summaryOverrides[cardId]
+    || DETAILS[cardId]?.summary
+    || card.role + ' bei ' + card.company + '. Stellenanzeige ist übernommen, Anforderungen und Unterlagen liegen strukturiert an der Karte.';
+  const docCard = { id: cardId, role: card.role, company: card.companyFull };
+
+  return (
+    <div style={{ flex: '1 1 0', minHeight: 0, display: 'flex', flexDirection: 'column', background: 'var(--c-fbfaf7)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '2px 22px 14px', flexShrink: 0 }}>
+        <div className="crumb" onClick={() => set({ openCardId: null })}>Bewerbungen</div>
+        <div style={{ fontSize: 12.5, color: 'var(--c-c3c0b8)' }}>›</div>
+        <div style={{ fontSize: 12.5, color: 'var(--c-1b1a17)', fontWeight: 600 }}>{cardId}</div>
+        <div style={{ fontSize: 12.5, color: 'var(--c-9a978f)' }}>{col.name}</div>
+      </div>
+
+      <div style={{ flex: '1 1 0', minHeight: 0, display: 'flex', alignItems: 'stretch' }}>
+        {/* The column fills the space left by the sidebar and only its content is
+            capped, so the gap beside it still belongs to the scroller below. */}
+        <div style={{ flex: '1 1 0', minWidth: 0, boxSizing: 'border-box', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+          {/* Pinned head of the page: identity and summary stay in view. */}
+          <div style={{ display: 'flex', gap: 13, flexShrink: 0, padding: '6px 24px 0', maxWidth: CONTENT_MAX, boxSizing: 'border-box' }}>
+            <Avatar bg={CHANNEL_BG[card.channel] || 'var(--c-8b8880)'} size={36} fontSize={15}>{card.company[0]}</Avatar>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
+              <div style={{ fontSize: 21, fontWeight: 600, color: 'var(--c-1b1a17)', lineHeight: 1.2, letterSpacing: '-0.01em', textWrap: 'pretty' }}>
+                {card.role}
+              </div>
+              <div style={{ fontSize: 12.5, color: 'var(--c-8b8880)', lineHeight: 1.4 }}>
+                {card.companyFull.replace(/,\s*/g, ' · ')} ·{' '}
+                <a href="#" style={{ textDecoration: 'none' }}>
+                  {'karriere.' + card.company.toLowerCase().replace(/[^a-z]/g, '') + '.de'}
+                </a>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ padding: '16px 24px 12px', width: '100%', maxWidth: CONTENT_MAX, boxSizing: 'border-box', flexShrink: 0 }}>
+            <SummaryField cardId={cardId} summary={summary} locked={!!run} />
+          </div>
+
+          <div
+            className="no-scrollbar"
+            style={{
+              flex: '1 1 0', minHeight: 0, overflowY: 'scroll', boxSizing: 'border-box',
+              WebkitMaskImage: 'linear-gradient(to bottom, transparent 0, var(--c-000) 24px)',
+              maskImage: 'linear-gradient(to bottom, transparent 0, var(--c-000) 24px)',
+            }}
+          >
+            <div style={{
+              maxWidth: CONTENT_MAX, padding: '26px 24px 28px', boxSizing: 'border-box',
+              display: 'flex', flexDirection: 'column', gap: 26,
+            }}>
+              {/* The agent panel grows with every step, so it scrolls. */}
+              {run && <AgentRunPanel run={run} card={docCard} />}
+              <FollowUpSection cardId={cardId} role={card.role} company={card.company} />
+              <InterviewsSection cardId={cardId} company={card.company} />
+              <DocumentsSection card={docCard} />
+              <CommentsSection cardId={cardId} />
+              <HistorySection cardId={cardId} />
+            </div>
+          </div>
+        </div>
+
+        <PropertiesSidebar
+          cardId={cardId}
+          role={card.role}
+          company={card.company}
+          city={card.city}
+          channel={card.channel}
+          columnIndex={card.columnIndex}
+          updated={card.updated}
+        />
+      </div>
+
+      {st.roundEdit && <InterviewEditModal company={card.company} channel={card.channel} />}
+    </div>
+  );
+}

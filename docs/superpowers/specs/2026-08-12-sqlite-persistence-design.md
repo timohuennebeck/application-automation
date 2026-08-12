@@ -1,8 +1,9 @@
 # SQLite Persistence Layer — Design
 
 **Date:** 2026-08-12
-**Status:** Draft for review (revision 2 — reworked after an adversarial schema audit
-against the actual data model; see "Review findings incorporated" at the end)
+**Status:** Draft for review (revision 3 — revision 2 reworked the schema after an
+adversarial audit against the actual data model; revision 3 folds in Timo's review:
+companies as a first-class table, agent tables deferred, naming cleanups)
 
 ## Goal
 
@@ -18,8 +19,10 @@ Requirements settled during brainstorming:
 - Keeps the door open for Supabase/Postgres later: the normalized schema translates
   nearly 1:1 if multi-device sync is ever needed.
 
-Explicitly out of scope: multi-user support, cloud backup, i18n, Agent SDK integration
-(the schema reserves tables for agent runs, but the SDK backend itself is separate work).
+Explicitly out of scope: multi-user support, cloud backup, i18n, and Agent SDK
+integration — including agent-run tables. The agent panel is a hardcoded stub today
+(static data + fake timer); it keeps rendering from the `AGENT_RUNS` sample stub, and
+its tables get designed with the real SDK work, when we know what a run looks like.
 
 ## Architecture Overview
 
@@ -47,9 +50,9 @@ Conventions:
   keeps values like `'vor 12 Tagen'` verbatim. Normalizing fact values is a
   possible later cleanup, not part of this change.
 - All child tables use `ON DELETE CASCADE`, so deleting an application removes its
-  facts, comments, rounds, follow-ups, history, and agent runs in one statement
-  (matching today's `deleteCard`). People rows are **not** garbage-collected when
-  their last application is deleted — the person directory outlives cards, matching
+  facts, comments, rounds, follow-ups, and history in one statement (matching
+  today's `deleteCard`). People and company rows are **not** garbage-collected when
+  their last application is deleted — those directories outlive cards, matching
   current behavior.
 - Presentation values (stage tint/accent colors, comment background colors) stay in
   theme code keyed by id. **Exception:** person avatar colors are persisted (see
@@ -72,10 +75,23 @@ CREATE TABLE stages (
 --   interessiert, in-bearbeitung, eingereicht, screening, interview,
 --   interview-2, finale, gehaltsverhandlung, korb, zurueckgezogen
 
+CREATE TABLE companies (
+  id              INTEGER PRIMARY KEY,
+  name            TEXT NOT NULL UNIQUE,
+  industry        TEXT,                -- Branche; no UI yet, home for it exists
+  employee_count  TEXT,                -- free-form ('50-200'); no UI yet
+  website         TEXT,
+  notes           TEXT,
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL
+);
+-- Two applications at the same company share one row. Like people, company rows
+-- are not garbage-collected when their last application is deleted.
+
 CREATE TABLE applications (
   id              TEXT PRIMARY KEY,    -- 'BEW-41'
   role            TEXT NOT NULL,
-  company         TEXT NOT NULL,
+  company_id      INTEGER NOT NULL REFERENCES companies(id),
   interest        TEXT NOT NULL DEFAULT 'none',
   channel         TEXT,
   stage_id        TEXT NOT NULL REFERENCES stages(id),
@@ -112,12 +128,18 @@ CREATE TABLE facts (                   -- label/value bag for the properties sid
   UNIQUE (application_id, label)       -- labels ARE semantic keys ('Kontaktperson…'
 );                                     -- filters, FACT_OPTIONS, DATE_FIELDS) and the
                                        -- upsert channel needs a conflict target
+-- The MENU of choices for select-facts (Plattform → LinkedIn/Xing/…) stays in the
+-- FACT_OPTIONS code config; the DB stores only the chosen value. Options move to
+-- a table only if in-app editing of option lists is ever wanted.
 
 -- Fact-label routing rule: three labels are NOT facts — they alias application
 -- columns, and today's factOverrides for them shadow role/company everywhere.
 -- The repo routes them on write and synthesizes them on read:
 --   'Berufsbezeichnung' ↔ applications.role
---   'Firma'             ↔ applications.company
+--   'Firma'             ↔ the linked company's name (editing it find-or-creates a
+--                         company with the new name and RE-LINKS company_id — it
+--                         does not rename the shared row, so fixing a typo on one
+--                         card can't silently rename another application's company)
 --   'Plattform'         ↔ applications.channel
 -- They are never stored as facts rows, so the two write paths can't diverge.
 
@@ -155,7 +177,7 @@ CREATE TABLE comments (
   id              INTEGER PRIMARY KEY, -- stable id replaces index-keyed edit/delete maps
   application_id  TEXT NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
   author          TEXT NOT NULL,       -- 'Du' | 'Kepler' (single-user assumption kept)
-  body            TEXT NOT NULL,
+  text            TEXT NOT NULL,
   created_at      TEXT NOT NULL,
   edited_at       TEXT
 );
@@ -190,7 +212,7 @@ CREATE TABLE round_notes (             -- interview notes incl. @-mentions (plai
   id          INTEGER PRIMARY KEY,
   round_id    INTEGER NOT NULL REFERENCES rounds(id) ON DELETE CASCADE,
   author      TEXT NOT NULL,
-  body        TEXT NOT NULL,
+  text        TEXT NOT NULL,
   created_at  TEXT NOT NULL
 );
 
@@ -202,6 +224,11 @@ CREATE TABLE followups (               -- replaces DETAILS[id].upcoming + dueOve
   position        INTEGER NOT NULL,    -- slot 0 is the initial follow-up (today it is
                                        -- SYNTHESIZED by schedule.ts, not in `upcoming` —
                                        -- it must be materialized as a real row)
+  email_subject   TEXT,                -- the drafted follow-up email. NULL until first
+  email_text      TEXT,                -- generated; generated ONCE and stored, then
+                                       -- read from here — never regenerated on open.
+                                       -- The regenerate button overwrites these.
+  generated_at    TEXT,
   UNIQUE (application_id, position)
 );
 -- No `state` column: dot/pie/dashed urgency is derived from due_at vs. today at
@@ -209,31 +236,19 @@ CREATE TABLE followups (               -- replaces DETAILS[id].upcoming + dueOve
 -- today's due dates FLOAT against a recomputed anchor (schedule.ts:31-37); once
 -- seeded they are fixed dates that age naturally. Fixed is the correct semantic
 -- for real usage; the floating behavior was a prototype artifact.
+--
+-- Email drafts: today draftEmail() regenerates the text on every render. That
+-- changes: the first time a slot's email is needed (or when the user hits
+-- regenerate), the draft is generated, persisted via db:followups.saveEmail, and
+-- from then on read from email_subject/email_text. This also makes the drafts
+-- durable input for the future Agent SDK generation, which won't be free to rerun.
 
-CREATE TABLE history (                 -- per-application activity log
-  id              INTEGER PRIMARY KEY,
+CREATE TABLE history (                 -- per-application activity log:
+  id              INTEGER PRIMARY KEY, -- "<author> <text>", e.g. "Kepler hat die
   application_id  TEXT NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
-  actor           TEXT NOT NULL,
-  text            TEXT NOT NULL,
+  author          TEXT NOT NULL,       -- who acted: 'Du' | 'Kepler'
+  text            TEXT NOT NULL,       -- what happened: 'hat die Karte … angelegt'
   created_at      TEXT NOT NULL
-);
-
-CREATE TABLE agent_runs (
-  id              INTEGER PRIMARY KEY,
-  application_id  TEXT NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
-  label           TEXT NOT NULL,
-  started_at      TEXT NOT NULL
-);
-
-CREATE TABLE agent_steps (
-  id        INTEGER PRIMARY KEY,
-  run_id    INTEGER NOT NULL REFERENCES agent_runs(id) ON DELETE CASCADE,
-  position  INTEGER NOT NULL,
-  kind      TEXT NOT NULL,             -- 'done' | 'run' | 'wait'
-  label     TEXT NOT NULL,
-  meta      TEXT,                      -- display text from the current stub; will be
-                                       -- redesigned with the real Agent SDK work
-  doc       TEXT
 );
 ```
 
@@ -284,14 +299,17 @@ Runs once on an empty DB, inside one transaction. Speced against the actual samp
 values, which are messier than "German date → ISO":
 
 1. **Stages:** insert the 10 stages with the slug ids listed above.
-2. **Applications:** from `CARDS` + `BOARD`. `interest` from `CardDef[2]`;
+2. **Companies:** one row per distinct company name in `CARDS` (name only;
+   industry/size columns start NULL — there is no such sample data).
+3. **Applications:** from `CARDS` + `BOARD`, linked via `company_id`.
+   `interest` from `CardDef[2]`;
    `followupState` (`CardDef[5]`) is **dropped** (derived now). `updated_at`: parse
    only genuine past-activity phrases — `vor N Tagen/Wochen/Monaten` (seed-only
    parser; the app's `dateToISO` handles only `vor N Tagen`). Interview-ish
    (`'morgen 10:00'`, `'Do 14:30'`) and follow-up-ish (`'in 5 Tagen fällig'`)
    phrases do **not** touch `updated_at` — they are derived views (see above);
    such cards get `updated_at = created_at`.
-3. **People, in two passes with an explicit collision rule:**
+4. **People, in two passes with an explicit collision rule:**
    - Pass 1: the 13 initials-keyed `INITIAL_PEOPLE` become `people` rows with their
      seeded colors; `peoplePool` becomes `kind='pool'` join rows.
    - Pass 2: `DETAILS.contacts` name-tuples merge into an existing person **only on
@@ -305,32 +323,32 @@ values, which are messier than "German date → ISO":
    - `'Kontaktperson E-Mail'/'Telefon'/'LinkedIn'` facts (BEW-33) are **folded into
      the person row** (the tuple itself lacks phone/linkedin — dropping these facts
      without folding would lose data) and are not inserted as facts rows.
-4. **Facts:** from `DETAILS.facts`, minus the routed labels (`Berufsbezeichnung`,
+5. **Facts:** from `DETAILS.facts`, minus the routed labels (`Berufsbezeichnung`,
    `Firma`, `Plattform` → application columns; `Kontaktperson *` → person rows).
    Values are kept **verbatim** (including `'vor 12 Tagen'` and `DD.MM.YYYY` dates) —
    `facts.value` is display text. Plus: `SALARY` map fans out to a `'Gehalt'` fact
    per card (10 of 13 cards have salaries but no `DETAILS` entry; without this step
    the board's salary lines vanish).
-5. **Rounds:** from `INITIAL_ROUNDS` where present; the 10 cards without an entry
+6. **Rounds:** from `INITIAL_ROUNDS` where present; the 10 cards without an entry
    get the 4 canonical rounds. Cards whose seed data lacks a final round (BEW-24:
    Screening/Runde 1/Runde 2) get `'Finales Gespräch'` appended — materializing
    what `seedRounds()` fakes at read time, preserving the `roundStage()` invariant.
    `'10:00 – 11:00'` ranges split into `start_time`/`end_time`; date-only rounds
    get NULL times. `round_people` keeps the seeded participant order.
-6. **Comments:** from `DETAILS.comments`, relative times (`'vor 3 Tagen'`)
+7. **Comments:** from `DETAILS.comments`, relative times (`'vor 3 Tagen'`)
    back-dated to ISO instants. Cards **without** `DETAILS` get the synthetic default
    Kepler comment inserted (today `CommentsSection` fabricates it at render for 10
    of 13 cards; without seeding it those sections would empty out).
-7. **Follow-ups:** materialize the full slot list per card — the synthesized slot 0
+8. **Follow-ups:** materialize the full slot list per card — the synthesized slot 0
    (`'Follow up zur Bewerbung'`) **plus** `DETAILS.upcoming` (or the two defaults),
    with concrete `due_at` dates computed once from today's anchor logic. This
    freezes the floating prototype dates (deliberate, noted above) and keeps
-   slot-0 overrides representable.
-8. **History:** dates are `'24.07.'` — **no year** (the app's own `dateToISO`
+   slot-0 overrides representable. `email_subject`/`email_text` start NULL —
+   drafts are generated and stored on first open, not at seed.
+9. **History:** dates are `'24.07.'` — **no year** (the app's own `dateToISO`
    rejects them). Seed-only parser assumes 2026, `DD.MM.` → `2026-MM-DD`.
-9. **Agent runs/steps:** `started` is elapsed seconds; `started_at = seed time −
-   started`. Step `meta` strings kept verbatim (stub data).
-10. **Counter:** `meta.next_bew_num = 45`.
+10. **Counter:** `meta.next_bew_num = 45`. (Agent runs are not seeded — the agent
+    panel keeps rendering the static `AGENT_RUNS` stub until the SDK work.)
 
 ## IPC Surface
 
@@ -340,12 +358,13 @@ Exposed as `window.desktop.db`, typed in `src/desktop.d.ts`:
   (all tables as plain objects). Data volume is tiny; no partial loading.
 - **One channel per mutation**, mirroring `repo.ts`: `db:applications.create`,
   `db:applications.update`, `db:applications.move`, `db:applications.delete`,
-  `db:facts.upsert` (conflict target: `application_id + label`; routed labels
-  update the application row instead), `db:facts.delete`,
-  `db:comments.add` / `.update` / `.delete`, `db:rounds.*`, `db:roundNotes.*`,
-  `db:people.*`, `db:applicationPeople.set` (kind-scoped list replace),
-  `db:followups.setDue`, `db:history.add`. Each writes and returns the affected
-  row(s); the renderer sets state from the response.
+  `db:companies.update`, `db:facts.upsert` (conflict target: `application_id +
+  label`; routed labels update the application/company row instead),
+  `db:facts.delete`, `db:comments.add` / `.update` / `.delete`, `db:rounds.*`,
+  `db:roundNotes.*`, `db:people.*`, `db:applicationPeople.set` (kind-scoped list
+  replace), `db:followups.setDue`, `db:followups.saveEmail`, `db:history.add`.
+  Each writes and returns the affected row(s); the renderer sets state from the
+  response.
 
 The renderer never constructs SQL and never receives a database handle.
 
@@ -354,8 +373,8 @@ The renderer never constructs SQL and never receives a database handle.
 `src/state/store.tsx` splits into:
 
 - **Domain state** — normalized entities from `db:load`:
-  `applications: Record<id, Application>`, `factsByApp`, `commentsByApp`,
-  `roundsByApp`, `people`, `followupsByApp`, `historyByApp`, `agentRunsByApp`,
+  `applications: Record<id, Application>`, `companies`, `factsByApp`,
+  `commentsByApp`, `roundsByApp`, `people`, `followupsByApp`, `historyByApp`,
   plus `board` derived from `(stage_id, stage_position)`. Mutation helpers call
   the IPC channel, then set state from the returned row.
 - **UI state** — `dragId`, `dropdown`, drafts, edit buffers, collapsed sections,
@@ -371,7 +390,11 @@ Deleted outright: `factOverrides`, `summaryOverrides`, `addedComments`,
 and all merge-at-read adapters. Components keep their props largely unchanged —
 the merge adapters become straight selectors.
 
-`sample-data.ts` becomes seed input only and is no longer imported by the renderer.
+`sample-data.ts` stops being the renderer's data source. Its **domain data**
+(cards, details, rounds, people, history) becomes seed input only; its **config
+constants** (`INTEREST`, `FACT_OPTIONS`, `DATE_FIELDS`, `PERSON_COLORS`, stage
+colors, …) move to a `src/data/config.ts` the renderer keeps importing; the
+`AGENT_RUNS` stub stays imported by the agent panel until the SDK work.
 
 A boot loading state covers the (fast, local) `db:load` call before first paint
 of the board.
@@ -391,6 +414,9 @@ First tests in the repo: `vitest`, main-process side only, using in-memory SQLit
 3. **Repo round-trips:** create → load → update → delete for applications and
    comments; cascade delete removes all children; board move reindexes positions;
    `upsertFact('Berufsbezeichnung')` updates `applications.role`, not a fact row;
+   `upsertFact('Firma')` find-or-creates a company and re-links `company_id`
+   without renaming the shared row; two seeded applications at the same company
+   share one `companies` row; `saveEmail` persists a draft that survives reload;
    `createApplication` inserts the 4 default rounds and increments `next_bew_num`;
    deleting the newest card does not cause id reuse.
 
@@ -433,3 +459,12 @@ same-name different-person collisions, `SALARY`/default-comment/default-round/
 slot-0 materialization). Nice-to-haves adopted: `facts.kind` rename, `followups`
 constraints and dropped undefined `state`, counter table instead of `MAX(id)+1`,
 real stage id enumeration, documented pool fallback and derived-view work.
+
+**Revision 3 (Timo's review):** companies became a first-class table
+(`companies` + `applications.company_id`, `'Firma'` edits re-link rather than
+rename); `agent_runs`/`agent_steps` dropped from scope (stub keeps rendering
+static data until the SDK work); follow-up email drafts are now generated once
+and persisted (`email_subject`/`email_text`/`generated_at` +
+`db:followups.saveEmail`) instead of regenerated per render; `history.actor` →
+`author`; `comments.body`/`round_notes.body` → `text`; documented that dropdown
+option lists (`FACT_OPTIONS`) stay in code config.

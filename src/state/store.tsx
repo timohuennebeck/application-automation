@@ -42,6 +42,7 @@ const initialState = (): AppState => ({
   people: {},
   linksByApp: {},
   commentsByApp: {},
+  attachmentsByComment: {},
   roundsState: {},
   followupsByApp: {},
   documentsByApp: {},
@@ -56,6 +57,7 @@ const initialState = (): AppState => ({
   commentEditing: null,
   commentEditDraft: '',
   commentDraft: '',
+  commentAttachments: [],
   openCardId: null,
   cardMenu: null,
   cardContact: null,
@@ -486,6 +488,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         emailExpanded: false,
         followupSel: 0,
         commentDraft: '',
+        commentAttachments: [],
         contactDraft: '',
       });
     },
@@ -879,23 +882,59 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [set],
   );
 
+  /* Not optimistic when files are staged: the attachment rows may only exist
+     once the bytes are in userData, so the copy runs first and the comment
+     appears when the database answers (same reasoning as replaceDocument). */
   const addComment = useCallback(
     (id: string, text: string) => {
       const body = text.trim();
-      if (!body) return;
-      set({ commentDraft: '' });
+      const staged = stRef.current.commentAttachments;
+      if (!body && staged.length === 0) return;
+      set({ commentDraft: '', commentAttachments: [] });
+      const desktop = window.desktop;
+      if (!desktop) return;
       persist(
-        db()
-          ?.comments.add(id, Author.DU, body)
-          .then((row) => {
-            set((s) => ({
-              commentsByApp: { ...s.commentsByApp, [id]: [...(s.commentsByApp[id] || []), row] },
-            }));
-          }),
+        (async () => {
+          const atts = staged.length
+            ? await desktop.attachments.copy(
+                id,
+                staged.map((a) => a.path),
+              )
+            : [];
+          const res = await desktop.db.comments.add(id, Author.DU, body, atts);
+          set((s) => ({
+            commentsByApp: { ...s.commentsByApp, [id]: [...(s.commentsByApp[id] || []), res.comment] },
+            attachmentsByComment: res.attachments.length
+              ? { ...s.attachmentsByComment, [String(res.comment.id)]: res.attachments }
+              : s.attachmentsByComment,
+          }));
+        })(),
       );
     },
     [set],
   );
+
+  const pickCommentAttachments = useCallback(() => {
+    window.desktop?.attachments.pick('Anhänge auswählen').then((files) => {
+      if (files) set((s) => ({ commentAttachments: [...s.commentAttachments, ...files] }));
+    });
+  }, [set]);
+
+  const removeCommentAttachment = useCallback(
+    (index: number) => {
+      set((s) => ({ commentAttachments: s.commentAttachments.filter((_, i) => i !== index) }));
+    },
+    [set],
+  );
+
+  const openStagedAttachment = useCallback((index: number) => {
+    const a = stRef.current.commentAttachments[index];
+    if (a) window.desktop?.attachments.openSource(a.path);
+  }, []);
+
+  const openAttachment = useCallback((filePath: string) => {
+    window.desktop?.documents.open(filePath);
+  }, []);
 
   const updateComment = useCallback(
     (id: string, commentId: number, text: string) => {
@@ -913,13 +952,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const deleteComment = useCallback(
     (id: string, commentId: number) => {
-      set((s) => ({
-        commentsByApp: {
-          ...s.commentsByApp,
-          [id]: (s.commentsByApp[id] || []).filter((c) => c.id !== commentId),
-        },
-        commentMenu: null,
-      }));
+      set((s) => {
+        const attachmentsByComment = { ...s.attachmentsByComment };
+        delete attachmentsByComment[String(commentId)];
+        return {
+          commentsByApp: {
+            ...s.commentsByApp,
+            [id]: (s.commentsByApp[id] || []).filter((c) => c.id !== commentId),
+          },
+          attachmentsByComment,
+          commentMenu: null,
+        };
+      });
       persist(db()?.comments.delete(commentId));
     },
     [set],
@@ -1200,6 +1244,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addComment,
       updateComment,
       deleteComment,
+      pickCommentAttachments,
+      removeCommentAttachment,
+      openStagedAttachment,
+      openAttachment,
       setFollowupDue,
       setFollowupCompleted,
       saveEmailDraft,
@@ -1243,6 +1291,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addComment,
       updateComment,
       deleteComment,
+      pickCommentAttachments,
+      removeCommentAttachment,
+      openStagedAttachment,
+      openAttachment,
       setFollowupDue,
       saveEmailDraft,
       regenerateEmail,

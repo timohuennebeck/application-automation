@@ -5,6 +5,7 @@ import type {
   ActivityRow,
   ApplicationPersonRow,
   ApplicationRow,
+  CommentAttachmentRow,
   CommentRow,
   CompanyRow,
   DbSnapshot,
@@ -60,6 +61,8 @@ export interface DomainState {
   people: Record<string, PersonView>;
   linksByApp: Record<string, ApplicationPersonRow[]>;
   commentsByApp: Record<string, CommentRow[]>;
+  /* Keyed by String(comment id). */
+  attachmentsByComment: Record<string, CommentAttachmentRow[]>;
   roundsState: Record<string, RoundView[]>;
   followupsByApp: Record<string, FollowupRow[]>;
   documentsByApp: Record<string, DocumentRow[]>;
@@ -171,6 +174,7 @@ export function indexSnapshot(snap: DbSnapshot, now = new Date()): DomainState {
     people: Object.fromEntries(snap.people.map((p) => [String(p.id), personView(p)])),
     linksByApp: groupBy(snap.applicationPeople, (l) => l.application_id),
     commentsByApp: groupBy(snap.comments, (c) => c.application_id),
+    attachmentsByComment: groupBy(snap.commentAttachments, (a) => a.comment_id),
     roundsState,
     followupsByApp: groupBy(snap.followups, (f) => f.application_id),
     documentsByApp: groupBy(snap.documents, (d) => d.application_id),

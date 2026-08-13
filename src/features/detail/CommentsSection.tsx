@@ -1,3 +1,4 @@
+import { formatBytes } from '../../lib/bytes';
 import { KEPLER_ENTRY } from '../../lib/mentions';
 import { Author, AUTHOR_LABEL } from '../../shared/enums';
 import { relTime } from '../../state/db-view';
@@ -7,10 +8,21 @@ import { MentionText } from '../../ui/MentionText';
 import { MenuItem } from '../../ui/MenuItem';
 import { Popover, PopoverAnchor } from '../../ui/Popover';
 import { Section } from '../../ui/Section';
-import { Avatar, DotsGlyph } from '../../ui/icons';
+import { Avatar, DotsGlyph, PaperclipGlyph } from '../../ui/icons';
 
 export function CommentsSection({ cardId }: { cardId: string }) {
-  const { st, set, addComment, updateComment, deleteComment, peopleForCard } = useApp();
+  const {
+    st,
+    set,
+    addComment,
+    updateComment,
+    deleteComment,
+    pickCommentAttachments,
+    removeCommentAttachment,
+    openStagedAttachment,
+    openAttachment,
+    peopleForCard,
+  } = useApp();
 
   // Kepler is always mentionable; everyone attached to this card as well.
   const mentionable = [KEPLER_ENTRY, ...peopleForCard(cardId)];
@@ -24,6 +36,7 @@ export function CommentsSection({ cardId }: { cardId: string }) {
         const ck = cardId + ':' + c.id;
         const editing = st.commentEditing === ck;
         const menuOpen = st.commentMenu === ck;
+        const attachments = st.attachmentsByComment[String(c.id)] || [];
         const saveEdit = () => updateComment(cardId, c.id, st.commentEditDraft);
 
         return (
@@ -107,7 +120,36 @@ export function CommentsSection({ cardId }: { cardId: string }) {
                   </div>
                 </>
               ) : (
-                <MentionText text={c.text} names={names} />
+                c.text && <MentionText text={c.text} names={names} />
+              )}
+
+              {attachments.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 2 }}>
+                  {attachments.map((a) => (
+                    <div
+                      key={a.id}
+                      className="cmt-attachment"
+                      title="Anhang öffnen"
+                      onClick={() => openAttachment(a.file_path)}
+                    >
+                      <PaperclipGlyph />
+                      <span
+                        style={{
+                          fontSize: 12,
+                          color: 'var(--c-1b1a17)',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {a.name}
+                      </span>
+                      <span style={{ fontSize: 11, color: 'var(--c-a5a29a)', whiteSpace: 'nowrap' }}>
+                        {formatBytes(a.size)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           </div>
@@ -118,6 +160,10 @@ export function CommentsSection({ cardId }: { cardId: string }) {
         value={st.commentDraft}
         onChange={(v) => set({ commentDraft: v })}
         onSend={() => addComment(cardId, st.commentDraft)}
+        onAttach={pickCommentAttachments}
+        attachments={st.commentAttachments}
+        onRemoveAttachment={removeCommentAttachment}
+        onOpenAttachment={openStagedAttachment}
         people={mentionable}
         onKeyDown={(e) => {
           if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {

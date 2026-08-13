@@ -382,6 +382,24 @@
   color: var(--c-5f5c56);
 }
 
+/* One attachment under a comment — the whole row opens the file. fit-content,
+   so the hover fill hugs the name instead of spanning the thread. */
+.cmt-attachment {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px;
+  margin-left: -6px;
+  border-radius: 6px;
+  cursor: pointer;
+  width: fit-content;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.cmt-attachment:hover {
+  background: var(--c-f1efe9);
+}
+
 /* Comment ⋯ button */
 .cmt-menu-btn {
   width: 22px;

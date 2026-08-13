@@ -3,6 +3,7 @@ import type { CSSProperties, KeyboardEvent } from 'react';
 import { applyMention, mentionQuery } from '../lib/mentions';
 import type { Mentionable } from '../lib/mentions';
 import { Composer } from './Composer';
+import type { PendingAttachment } from './Composer';
 import { MenuItem } from './MenuItem';
 import { Avatar } from './icons';
 
@@ -17,6 +18,10 @@ export function MentionComposer({
   placeholder,
   onKeyDown,
   popoverWidth = 290,
+  onAttach,
+  attachments,
+  onRemoveAttachment,
+  onOpenAttachment,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -27,6 +32,11 @@ export function MentionComposer({
   /* Runs for every key the mention popover did not consume. */
   onKeyDown?: (e: KeyboardEvent<HTMLTextAreaElement>) => void;
   popoverWidth?: number;
+  /* Passed straight through to Composer; the paperclip only shows with onAttach. */
+  onAttach?: () => void;
+  attachments?: PendingAttachment[];
+  onRemoveAttachment?: (index: number) => void;
+  onOpenAttachment?: (index: number) => void;
 }) {
   const boxRef = useRef<HTMLTextAreaElement>(null);
   const [at, setAt] = useState<number | null>(null);
@@ -106,6 +116,10 @@ export function MentionComposer({
       onChange={sync}
       onKeyDown={handleKey}
       onSend={onSend}
+      onAttach={onAttach}
+      attachments={attachments}
+      onRemoveAttachment={onRemoveAttachment}
+      onOpenAttachment={onOpenAttachment}
     >
       {open && (
         <div data-dd="1" style={popStyle}>

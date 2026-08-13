@@ -5,6 +5,7 @@ import type {
   ActivityRow,
   ApplicationPersonRow,
   ApplicationRow,
+  CommentAttachmentRow,
   CommentRow,
   CompanyRow,
   DocumentRow,
@@ -75,6 +76,14 @@ export interface RoundDraft {
   people: string[];
 }
 
+/* A file picked for the comment being written, still at its source path — the
+   bytes are only copied into userData when the comment is sent. */
+export interface StagedAttachment {
+  path: string;
+  name: string;
+  size: number;
+}
+
 export interface AppState {
   dark: boolean;
 
@@ -90,6 +99,8 @@ export interface AppState {
   people: Record<string, PersonView>;
   linksByApp: Record<string, ApplicationPersonRow[]>;
   commentsByApp: Record<string, CommentRow[]>;
+  /* Keyed by String(comment id). */
+  attachmentsByComment: Record<string, CommentAttachmentRow[]>;
   roundsState: Record<string, RoundView[]>;
   followupsByApp: Record<string, FollowupRow[]>;
   documentsByApp: Record<string, DocumentRow[]>;
@@ -107,6 +118,8 @@ export interface AppState {
   commentEditing: string | null;
   commentEditDraft: string;
   commentDraft: string;
+  /* Files staged for the comment being written, sent with the next addComment. */
+  commentAttachments: StagedAttachment[];
   openCardId: string | null;
   cardMenu: CardPointerState | null;
   /* The card whose contacts are being edited straight from the board. */
@@ -206,6 +219,13 @@ export interface AppStore {
   addComment: (id: string, text: string) => void;
   updateComment: (id: string, commentId: number, text: string) => void;
   deleteComment: (id: string, commentId: number) => void;
+  /* Opens the multi-select picker and stages what was chosen. */
+  pickCommentAttachments: () => void;
+  removeCommentAttachment: (index: number) => void;
+  /* Opens a staged pick at its source path — it has no stored copy yet. */
+  openStagedAttachment: (index: number) => void;
+  /* Hands a stored attachment to the OS. */
+  openAttachment: (filePath: string) => void;
   setFollowupDue: (id: string, followupId: number, dueISO: string) => void;
   setFollowupCompleted: (id: string, followupId: number, done: boolean) => void;
   /* Persist a generated draft silently (first open). */

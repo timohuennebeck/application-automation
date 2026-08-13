@@ -8,6 +8,7 @@ import {
   CARD_DEFS, DETAILS, HISTORY, INITIAL_BOARD, INITIAL_PEOPLE, INITIAL_PEOPLE_POOL,
   INITIAL_ROUNDS, SALARY,
 } from '../../src/data/sample-data.ts';
+import { CANONICAL_ROUNDS, DEFAULT_COMMENT, DEFAULT_FOLLOWUPS } from '../../src/shared/domain.ts';
 import { STAGES } from './schema.ts';
 import {
   dayMonthToISO, germanDateToISO, looksLikePhone, relativeToISO, splitCompany, splitTimeRange,
@@ -23,17 +24,11 @@ const ROUTED_LABELS = new Set([
   'Kontaktperson', 'Kontaktperson E-Mail', 'Kontaktperson Telefon', 'Kontaktperson LinkedIn',
 ]);
 
-const DEFAULT_UPCOMING: [string, string][] = [
-  ['in 9 Tagen', 'Erneutes Follow up'],
-  ['in 25 Tagen', 'Letztes Follow up'],
-];
-
-const DEFAULT_COMMENT =
-  'Karte aus der Stellenanzeige angelegt. Anschreiben und Lebenslauf liegen im Reiter Bewerbungsunterlagen.';
-
-const CANONICAL_ROUNDS = ['Screening', 'Runde 1', 'Runde 2', 'Finales Gespräch'];
-
 const atNine = (isoDate: string) => `${isoDate}T09:00:00.000Z`;
+
+/* An unscheduled round in the sample-data shape the seed loop consumes. */
+const emptyRound = (title: string) =>
+  ({ state: 'open' as const, title, date: '', time: '', where: '', people: [] as string[], link: '' });
 
 /* Local calendar date — toISOString would shift the day for users west of UTC. */
 const localDay = (d: Date) =>
@@ -232,12 +227,12 @@ export function seedIfEmpty(db: DatabaseSync, now = new Date()): boolean {
 
     /* Rounds — canonical defaults, final round guaranteed last. */
     for (const id of Object.keys(CARD_DEFS)) {
-      const seeded = INITIAL_ROUNDS[id];
-      const rounds = seeded
-        ? seeded.some((r) => /final/i.test(r.title))
-          ? seeded
-          : [...seeded, { state: 'open' as const, title: 'Finales Gespräch', date: '', time: '', where: '', people: [] as string[], link: '' }]
-        : CANONICAL_ROUNDS.map((title) => ({ state: 'open' as const, title, date: '', time: '', where: '', people: [] as string[], link: '' }));
+      const sample = INITIAL_ROUNDS[id];
+      const rounds = !sample
+        ? CANONICAL_ROUNDS.map((title) => emptyRound(title))
+        : sample.some((r) => /final/i.test(r.title))
+          ? sample
+          : [...sample, emptyRound('Finales Gespräch')];
       rounds.forEach((r, pos) => {
         const [start, end] = splitTimeRange(r.time);
         const res = insRound.run(
@@ -252,13 +247,17 @@ export function seedIfEmpty(db: DatabaseSync, now = new Date()): boolean {
        board subtitle names a due date keep it (that's the urgency chip);
        everyone else gets the frozen Sep-1 anchor. */
     for (const [id, card] of Object.entries(CARD_DEFS)) {
-      const upcoming = DETAILS[id]?.upcoming ?? DEFAULT_UPCOMING;
-      const offsets = [0, ...upcoming.map((u) => +(u[0].match(/\d+/) || ['0'])[0])];
-      const dates = followupDates(now, offsets);
+      // DETAILS.upcoming names its offsets in prose ('in 9 Tagen'); cards
+      // without one fall back to the shared default cadence.
+      const upcoming = DETAILS[id]?.upcoming;
+      const slots: [number, string][] = upcoming
+        ? upcoming.map((u) => [+(u[0].match(/\d+/) || ['0'])[0], u[1]])
+        : DEFAULT_FOLLOWUPS.slice(1);
+      slots.unshift([0, DEFAULT_FOLLOWUPS[0][1]]);
+      const dates = followupDates(now, slots.map((s) => s[0]));
       const slot0 = card[5] ? dueDateFromSubtitle(card[4], now) : null;
       if (slot0) dates[0] = slot0;
-      const labels = ['Follow up zur Bewerbung', ...upcoming.map((u) => u[1])];
-      labels.forEach((label, pos) => insFollowup.run(id, label, dates[pos], pos));
+      slots.forEach(([, label], pos) => insFollowup.run(id, label, dates[pos], pos));
     }
 
     /* Documents — the stub pair every card shows today; files come with the

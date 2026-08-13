@@ -3,8 +3,9 @@
    in-memory view in sync and owns all transient UI state. */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { SKILLS, STAGE_IDS } from '../data/config';
+import { COLUMNS, SKILLS, STAGE_IDS } from '../data/config';
 import type { ActivityRow, FollowupRow } from '../shared/db-types';
+import { CANONICAL_ROUNDS } from '../shared/domain';
 import { indexSnapshot, roundInput, personView } from './db-view';
 import type { RoundView } from './db-view';
 import { dateToISO } from '../lib/date';
@@ -29,7 +30,7 @@ const initialState = (): AppState => ({
   activitiesByApp: {},
   board: STAGE_IDS.map(() => []),
 
-  colOpen: [true, true, true, true, true, true, false, false, false, false],
+  colOpen: COLUMNS.map((c) => c.open),
   secOpen: {},
   commentMenu: null,
   commentEditing: null,
@@ -69,7 +70,7 @@ const initialState = (): AppState => ({
   searchQ: '',
 });
 
-const CANONICAL_TITLES = new Set(['Screening', 'Runde 1', 'Runde 2', 'Finales Gespräch']);
+const CANONICAL_TITLES = new Set(CANONICAL_ROUNDS);
 
 const emptyRound = (title: string): RoundView =>
   ({ state: 'open', title, date: '', time: '', where: '', people: [], notes: [] });
@@ -92,6 +93,15 @@ const COMPANY_FIELD: Record<string, 'sector' | 'headcount' | 'website' | 'email'
 const DATE_COLUMNS = new Set(['Beworben am', 'Letzter Kontakt']);
 /* Cleared facts that should default to the select kind. */
 const SELECT_FACTS = new Set(['Gehalt', 'Erfahrung']);
+
+/* Every editor bound to one card. Cleared whenever the open card changes or
+   goes away, so a dialog can never save onto the wrong application. */
+const CLOSED_EDITORS = {
+  dropdown: null, editing: null, editDraft: '',
+  roundEdit: null, roundDraft: null, roundPop: null,
+  personEdit: null, personDraft: null, personField: null, personFieldDraft: '',
+  contactEdit: null, commentMenu: null, commentEditing: null,
+} satisfies Partial<AppState>;
 
 const db = () => window.desktop?.db;
 
@@ -348,16 +358,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     set({ board, overCol: toCol });
   }, [persist, set]);
 
-  /* Opening a card clears every editor bound to the previous one, so a dialog
-     can never save onto the wrong application. */
   const openCard = useCallback((id: string) => {
     window.clearTimeout(mailTimerRef.current);
     set({
+      ...CLOSED_EDITORS,
       openCardId: id, cardMenu: null, emailLoading: false, emailExpanded: false, followupSel: 0,
-      dropdown: null, editing: null, editDraft: '', commentDraft: '',
-      roundEdit: null, roundDraft: null, roundPop: null,
-      personEdit: null, personDraft: null, personField: null, personFieldDraft: '',
-      contactEdit: null, contactDraft: '', commentMenu: null, commentEditing: null,
+      commentDraft: '', contactDraft: '',
     });
   }, [set]);
 
@@ -410,6 +416,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return next;
       };
       return {
+        ...CLOSED_EDITORS,
         board: s.board.map((c) => c.filter((x) => x !== id)),
         applications: drop(s.applications),
         factsByApp: drop(s.factsByApp),
@@ -424,10 +431,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         cardMenu: null,
         openCardId: s.openCardId === id ? null : s.openCardId,
         dragId: null, overCol: null,
-        dropdown: null, editing: null, editDraft: '',
-        roundEdit: null, roundDraft: null, roundPop: null,
-        personEdit: null, personDraft: null, personField: null, personFieldDraft: '',
-        contactEdit: null, commentMenu: null, commentEditing: null,
       };
     });
   }, [set]);
@@ -446,14 +449,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       phone: (draft.phone || '').trim(),
       linkedin: (draft.linkedin || '').trim(),
     };
-    const clearEdit = { personEdit: null, personDraft: null, personField: null, personFieldDraft: '', contactEdit: e.forContact ? null : s.contactEdit } as Partial<AppState>;
+    const clearEdit: Partial<AppState> = { personEdit: null, personDraft: null, personField: null, personFieldDraft: '', contactEdit: e.forContact ? null : s.contactEdit };
 
     const attachContact = (personId: number) => {
       if (!e.forContact) return;
       const isEmail = e.contactStore === 'email';
       const cur = isEmail ? emailContactsFor(e.id) : contactsFor(e.id);
-      const ids = [...new Set([...cur.map((c) => c.personId).filter((n): n is number => n != null), personId])];
-      saveLinks(e.id, isEmail ? 'email' : 'contact', ids);
+      saveLinks(e.id, isEmail ? 'email' : 'contact', [...new Set([...idsOf(cur), personId])]);
       // A contact belongs in the card's suggestion pool as well, like today.
       const pool = linksOf(e.id, 'pool').map((l) => l.person_id);
       if (pool.length && !pool.includes(personId)) saveLinks(e.id, 'pool', [...pool, personId]);
@@ -502,7 +504,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } else {
       set(clearEdit);
     }
-  }, [contactsFor, emailContactsFor, linksOf, logAct, mutateRounds, saveLinks, set]);
+  }, [contactsFor, emailContactsFor, idsOf, linksOf, logAct, mutateRounds, saveLinks, set]);
 
   /* Removes a person everywhere they are referenced: the directory, every
      card's links and rounds. The DB cascade does the same on its side. */
@@ -512,15 +514,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const pid = Number(key);
     if (Number.isFinite(pid) && s.people[key]) persist(db()?.people.delete(pid));
 
-    const roundsState: Record<string, RoundView[]> = {};
-    Object.keys(s.roundsState).forEach((k) => {
-      roundsState[k] = s.roundsState[k].map((r) => ({ ...r, people: r.people.filter((pk) => pk !== key) }));
-    });
     const people = { ...s.people };
     delete people[key];
 
     set({
-      roundsState,
+      roundsState: Object.fromEntries(Object.entries(s.roundsState).map(([k, rounds]) =>
+        [k, rounds.map((r) => ({ ...r, people: r.people.filter((pk) => pk !== key) }))])),
       people,
       linksByApp: Object.fromEntries(Object.entries(s.linksByApp).map(([k, v]) => [k, v.filter((l) => String(l.person_id) !== key)])),
       personEdit: null, personDraft: null, personField: null, personFieldDraft: '',

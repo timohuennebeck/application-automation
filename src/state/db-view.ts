@@ -2,8 +2,8 @@
    components render: German dates, "10:00 – 11:00" ranges, relative times.
    The DB stores ISO; everything display-flavoured is derived here. */
 import type {
-  ApplicationPersonRow, ApplicationRow, DbSnapshot, PersonRow, RoundInput,
-  RoundNoteRow, RoundPersonRow, RoundRow,
+  ActivityRow, ApplicationPersonRow, ApplicationRow, CommentRow, CompanyRow, DbSnapshot,
+  DocumentRow, FactRow, FollowupRow, PersonRow, RoundInput, RoundNoteRow, RoundPersonRow, RoundRow,
 } from '../shared/db-types';
 import { STAGE_IDS, type RoundStateKey } from '../data/config';
 import { dateToISO, dayDiff, isoToDate } from '../lib/date';
@@ -41,15 +41,15 @@ export interface PersonView {
 
 export interface DomainState {
   applications: Record<string, ApplicationRow>;
-  companies: Record<number, import('../shared/db-types').CompanyRow>;
-  factsByApp: Record<string, import('../shared/db-types').FactRow[]>;
+  companies: Record<number, CompanyRow>;
+  factsByApp: Record<string, FactRow[]>;
   people: Record<string, PersonView>;
   linksByApp: Record<string, ApplicationPersonRow[]>;
-  commentsByApp: Record<string, import('../shared/db-types').CommentRow[]>;
+  commentsByApp: Record<string, CommentRow[]>;
   roundsState: Record<string, RoundView[]>;
-  followupsByApp: Record<string, import('../shared/db-types').FollowupRow[]>;
-  documentsByApp: Record<string, import('../shared/db-types').DocumentRow[]>;
-  activitiesByApp: Record<string, import('../shared/db-types').ActivityRow[]>;
+  followupsByApp: Record<string, FollowupRow[]>;
+  documentsByApp: Record<string, DocumentRow[]>;
+  activitiesByApp: Record<string, ActivityRow[]>;
   board: string[][];
 }
 
@@ -120,16 +120,16 @@ export function roundView(
 
 /* View round → db:rounds.set input. */
 export function roundInput(r: RoundView): RoundInput {
-  const [start, end] = r.time
-    ? (r.time.split(/\s*[–-]\s*/).map((t) => t.trim() || null) as [string | null, string | null])
-    : [null, null];
+  // '' splits to one empty slot and '10:00' to a single time, so both ends
+  // fall back to null rather than being asserted into a pair.
+  const [start = null, end = null] = r.time.split(/\s*[–-]\s*/).map((t) => t.trim() || null);
   return {
     id: r.dbId,
     state: r.state,
     title: r.title,
     scheduled_date: dateToISO(r.date) || null,
-    start_time: start ?? null,
-    end_time: end ?? null,
+    start_time: start,
+    end_time: end,
     location: r.where || null,
     link: r.link || null,
     people: r.people.map(Number).filter((n) => Number.isFinite(n)),

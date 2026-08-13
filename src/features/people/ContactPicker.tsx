@@ -84,7 +84,7 @@ export function ContactPicker({
               onDraftChange={(v) => set({ contactDraft: v })}
               company={company}
               people={peopleForCard(cardId)}
-              isSelected={(key) => list.some((c) => String(c.personId) === key)}
+              isSelected={(key) => list.some((c) => c.personId === Number(key))}
               onToggle={toggle}
               onCreate={startCreate}
               onClose={() => set({ contactEdit: null, contactDraft: '' })}

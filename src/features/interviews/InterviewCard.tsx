@@ -49,10 +49,13 @@ export function InterviewCard({ cardId, ri, round, company }: {
   const toggle = (name: string, extra?: Record<string, unknown>) =>
     set((s) => ({ dropdown: s.dropdown === key(name) ? null : key(name), ...extra }));
 
+  /* Every edit on this card touches its own round; the row can be gone if the
+     list changed underneath, so each write goes through the same guard. */
+  const editRound = (fn: (r: Round) => void) =>
+    mutateRounds(cardId, (rs) => { if (rs[ri]) fn(rs[ri]); });
+
   const setDate = (date: string) => {
-    mutateRounds(cardId, (rs) => {
-      const r = rs[ri];
-      if (!r) return;
+    editRound((r) => {
       r.date = date;
       if (!date) r.time = '';
       if (r.state !== 'done') r.state = date ? 'next' : 'open';
@@ -64,18 +67,12 @@ export function InterviewCard({ cardId, ri, round, company }: {
   };
 
   const setTime = (time: string, close: boolean) => {
-    mutateRounds(cardId, (rs) => {
-      const r = rs[ri];
-      if (!r) return;
-      r.time = time;
-    });
+    editRound((r) => { r.time = time; });
     if (close) set({ dropdown: null });
   };
 
   const setWhere = (where: string) => {
-    mutateRounds(cardId, (rs) => {
-      const r = rs[ri];
-      if (!r) return;
+    editRound((r) => {
       r.where = where;
       if (where !== 'Google Meet' && where !== 'Microsoft Teams') r.link = '';
     });
@@ -86,9 +83,8 @@ export function InterviewCard({ cardId, ri, round, company }: {
 
   const togglePerson = (pk: string) => {
     const has = round.people.includes(pk);
-    mutateRounds(cardId, (rs) => {
-      if (!rs[ri]) return;
-      rs[ri].people = has ? rs[ri].people.filter((k) => k !== pk) : [...rs[ri].people, pk];
+    editRound((r) => {
+      r.people = has ? r.people.filter((k) => k !== pk) : [...r.people, pk];
     });
     logAct(cardId, 'hat ' + person(pk).name + (has ? ' aus „' : ' zu „') + round.title + (has ? '“ entfernt' : '“ hinzugefügt'));
   };
@@ -205,7 +201,7 @@ export function InterviewCard({ cardId, ri, round, company }: {
                 title={round.link}
                 style={{ padding: '2px 7px', marginLeft: -7 }}
                 onClick={() => toggle('link')}
-                onClear={round.link ? () => mutateRounds(cardId, (rs) => { if (rs[ri]) rs[ri].link = ''; }) : undefined}
+                onClear={round.link ? () => editRound((r) => { r.link = ''; }) : undefined}
                 clearTitle="Link entfernen"
               >
                 <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
@@ -222,7 +218,7 @@ export function InterviewCard({ cardId, ri, round, company }: {
                     onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
                     onBlur={() => {
                       if (linkDraft != null && linkDraft !== (round.link || '')) {
-                        mutateRounds(cardId, (rs) => { if (rs[ri]) rs[ri].link = linkDraft; });
+                        editRound((r) => { r.link = linkDraft; });
                       }
                       setLinkDraft(null);
                     }}
@@ -275,7 +271,7 @@ export function InterviewCard({ cardId, ri, round, company }: {
                         dropdown: null, editing: null,
                       })}
                       onClear={() => {
-                        mutateRounds(cardId, (rs) => { if (rs[ri]) rs[ri].people = rs[ri].people.filter((k) => k !== p.key); });
+                        editRound((r) => { r.people = r.people.filter((k) => k !== p.key); });
                         logAct(cardId, 'hat ' + p.name + ' aus „' + round.title + '“ entfernt');
                         set({ personEdit: null, personDraft: null });
                       }}

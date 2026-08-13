@@ -43,6 +43,16 @@ export function cardView(st: AppState, id: string): CardView | null {
   };
 }
 
+/* The soonest round that is scheduled and not done yet, with its index in the
+   card's round list. Both the date chip and the subtitle key off this one. */
+function nextRound(rounds: AppState['roundsState'][string]) {
+  const today = todayISO();
+  return rounds
+    .map((r, i) => ({ r, i, iso: dateToISO(r.date) }))
+    .filter(({ r, iso }) => r.state !== 'done' && iso && iso >= today)
+    .sort((a, b) => (a.iso < b.iso ? -1 : 1))[0];
+}
+
 export interface InterviewChip {
   month: string;
   day: string;
@@ -53,11 +63,7 @@ export interface InterviewChip {
 /* The next scheduled, not-yet-done round — the card's date chip. */
 export function interviewChip(st: AppState, id: string): InterviewChip | null {
   const rounds = st.roundsState[id] || [];
-  const today = todayISO();
-  const next = rounds
-    .map((r, i) => ({ r, i, iso: dateToISO(r.date) }))
-    .filter(({ r, iso }) => r.state !== 'done' && iso && iso >= today)
-    .sort((a, b) => (a.iso < b.iso ? -1 : 1))[0];
+  const next = nextRound(rounds);
   if (!next) return null;
   const d = new Date(next.iso + 'T00:00:00');
   return {
@@ -76,12 +82,7 @@ export interface CardSubtitle {
 /* Precedence mirrors the sample data: next interview, else a follow-up coming
    due within a week, else last activity. */
 export function cardSubtitle(st: AppState, id: string): CardSubtitle {
-  const rounds = st.roundsState[id] || [];
-  const today = todayISO();
-  const next = rounds
-    .map((r) => ({ r, iso: dateToISO(r.date) }))
-    .filter(({ r, iso }) => r.state !== 'done' && iso && iso >= today)
-    .sort((a, b) => (a.iso < b.iso ? -1 : 1))[0];
+  const next = nextRound(st.roundsState[id] || []);
   if (next) {
     const diff = dayDiff(next.iso);
     const start = next.r.time.split(/\s*[–-]\s*/)[0] || '';
@@ -92,14 +93,14 @@ export function cardSubtitle(st: AppState, id: string): CardSubtitle {
 
   // The next actionable follow-up: the soonest upcoming one if it is within a
   // week, else the most recently missed one — never the oldest overdue slot.
-  const followups = (st.followupsByApp[id] || []).map((f) => ({ diff: dayDiff(f.due_at) }));
-  const upcoming = followups.filter((x) => x.diff >= 0).sort((a, b) => a.diff - b.diff)[0];
-  const overdue = followups.filter((x) => x.diff < 0).sort((a, b) => b.diff - a.diff)[0];
-  const due = upcoming && upcoming.diff <= 7 ? upcoming : overdue;
-  if (due) {
-    if (due.diff < 0) return { text: -due.diff + (due.diff === -1 ? ' Tag' : ' Tage') + ' überfällig', tone: 'due' };
-    if (due.diff === 0) return { text: 'heute fällig', tone: 'due' };
-    return { text: 'in ' + due.diff + ' Tagen fällig', tone: 'soon' };
+  const diffs = (st.followupsByApp[id] || []).map((f) => dayDiff(f.due_at));
+  const upcoming = diffs.filter((d) => d >= 0).sort((a, b) => a - b)[0];
+  const overdue = diffs.filter((d) => d < 0).sort((a, b) => b - a)[0];
+  const due = upcoming !== undefined && upcoming <= 7 ? upcoming : overdue;
+  if (due !== undefined) {
+    if (due < 0) return { text: -due + (due === -1 ? ' Tag' : ' Tage') + ' überfällig', tone: 'due' };
+    if (due === 0) return { text: 'heute fällig', tone: 'due' };
+    return { text: 'in ' + due + ' Tagen fällig', tone: 'soon' };
   }
 
   const upd = st.applications[id]?.updated_at;

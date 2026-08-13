@@ -5,10 +5,12 @@
 import type { DatabaseSync } from "node:sqlite";
 import type {
     ActivityRow,
+    ApplicationPatch,
     ApplicationPersonRow,
     ApplicationRow,
     Author,
     CommentRow,
+    CompanyPatch,
     CompanyRow,
     CreateApplicationResult,
     DbSnapshot,
@@ -17,6 +19,8 @@ import type {
     FactRow,
     FollowupRow,
     LinkKind,
+    PersonInput,
+    PersonPatch,
     PersonRow,
     RoundInput,
     RoundNoteRow,
@@ -24,9 +28,13 @@ import type {
     RoundRow,
     StageRow,
 } from "../../src/shared/db-types.ts";
+import {
+    CANONICAL_ROUNDS,
+    DEFAULT_COMMENT,
+    DEFAULT_FOLLOWUPS,
+} from "../../src/shared/domain.ts";
 
-/* Person avatar palette — insertion-order assignment, persisted per row
-   (mirrors PERSON_COLORS in the renderer config). */
+/* Person avatar palette — insertion-order assignment, persisted per row. */
 const PERSON_COLORS = [
     "var(--c-5b9083)",
     "var(--c-a4762f)",
@@ -36,16 +44,37 @@ const PERSON_COLORS = [
     "var(--c-4f8f6a)",
 ];
 
-const DEFAULT_COMMENT =
-    "Karte aus der Stellenanzeige angelegt. Anschreiben und Lebenslauf liegen im Reiter Bewerbungsunterlagen.";
-
-const CANONICAL_ROUNDS = [
-    "Screening",
-    "Runde 1",
-    "Runde 2",
-    "Finales Gespräch",
-];
 const DAY = 86_400_000;
+
+/* Columns each patch method may write. stage_id is deliberately absent from
+   the application list: stage changes go through moveCard, which keeps
+   stage_position contiguous. */
+const APPLICATION_FIELDS: (keyof ApplicationPatch)[] = [
+    "role",
+    "interest",
+    "channel",
+    "summary",
+    "applied_at",
+    "applied_via",
+    "last_contact_at",
+];
+const COMPANY_FIELDS: (keyof CompanyPatch)[] = [
+    "name",
+    "sector",
+    "headcount",
+    "website",
+    "email",
+    "phone",
+    "notes",
+];
+const PERSON_FIELDS: (keyof PersonPatch)[] = [
+    "name",
+    "role",
+    "email",
+    "phone",
+    "linkedin",
+    "initials",
+];
 
 export type Repo = ReturnType<typeof createRepo>;
 
@@ -54,6 +83,13 @@ export function createRepo(
     nowFn: () => Date = () => new Date(),
 ) {
     const nowISO = () => nowFn().toISOString();
+
+    /* node:sqlite is untyped beyond SupportedValueType, so every read casts.
+       These two keep that cast in one place instead of at 40 call sites. */
+    const all = <T>(sql: string, ...args: unknown[]): T[] =>
+        db.prepare(sql).all(...(args as never[])) as unknown as T[];
+    const one = <T>(sql: string, ...args: unknown[]): T =>
+        db.prepare(sql).get(...(args as never[])) as unknown as T;
 
     const tx = <T>(fn: () => T): T => {
         db.exec("BEGIN");
@@ -67,27 +103,45 @@ export function createRepo(
         }
     };
 
+    /* Writes the patched columns and bumps updated_at. Keys the patch does not
+       carry (or carries as undefined) are left alone: NULLing a NOT NULL column
+       would roll the statement back and silently drop the other edits with it. */
+    const patchRow = (
+        table: string,
+        fields: string[],
+        patch: Record<string, string | number | null | undefined>,
+        id: string | number,
+    ): void => {
+        const keys = fields.filter(
+            (k) => k in patch && patch[k] !== undefined,
+        );
+        if (!keys.length) return;
+        const setSql = keys.map((k) => `${k} = ?`).join(", ");
+        db.prepare(
+            `UPDATE ${table} SET ${setSql}, updated_at = ? WHERE id = ?`,
+        ).run(
+            ...(keys.map((k) => patch[k] ?? null) as never[]),
+            nowISO(),
+            id as never,
+        );
+    };
+
     const getApplication = (id: string) =>
-        db
-            .prepare("SELECT * FROM applications WHERE id = ?")
-            .get(id) as unknown as ApplicationRow | undefined;
+        one<ApplicationRow | undefined>(
+            "SELECT * FROM applications WHERE id = ?",
+            id,
+        );
     const mustGetApplication = (id: string): ApplicationRow => {
         const row = getApplication(id);
         if (!row) throw new Error(`unknown application ${id}`);
         return row;
     };
     const getCompany = (id: number) =>
-        db
-            .prepare("SELECT * FROM companies WHERE id = ?")
-            .get(id) as unknown as CompanyRow;
+        one<CompanyRow>("SELECT * FROM companies WHERE id = ?", id);
     const getPerson = (id: number) =>
-        db
-            .prepare("SELECT * FROM people WHERE id = ?")
-            .get(id) as unknown as PersonRow;
+        one<PersonRow>("SELECT * FROM people WHERE id = ?", id);
     const getFollowup = (id: number) =>
-        db
-            .prepare("SELECT * FROM followups WHERE id = ?")
-            .get(id) as unknown as FollowupRow;
+        one<FollowupRow>("SELECT * FROM followups WHERE id = ?", id);
 
     const touchApplication = (id: string) =>
         db
@@ -95,9 +149,10 @@ export function createRepo(
             .run(nowISO(), id);
 
     function findOrCreateCompany(name: string): CompanyRow {
-        const existing = db
-            .prepare("SELECT * FROM companies WHERE name = ?")
-            .get(name.trim()) as unknown as CompanyRow | undefined;
+        const existing = one<CompanyRow | undefined>(
+            "SELECT * FROM companies WHERE name = ?",
+            name.trim(),
+        );
         if (existing) return existing;
         const t = nowISO();
         const res = db
@@ -109,11 +164,10 @@ export function createRepo(
     }
 
     function reindexStage(stageId: string) {
-        const rows = db
-            .prepare(
-                "SELECT id FROM applications WHERE stage_id = ? ORDER BY stage_position",
-            )
-            .all(stageId) as unknown as { id: string }[];
+        const rows = all<{ id: string }>(
+            "SELECT id FROM applications WHERE stage_id = ? ORDER BY stage_position",
+            stageId,
+        );
         const upd = db.prepare(
             "UPDATE applications SET stage_position = ? WHERE id = ?",
         );
@@ -140,7 +194,7 @@ export function createRepo(
             "INSERT INTO comments (application_id, author, text, created_at) VALUES (?,?,?,?)",
         ).run(appId, "Kepler", DEFAULT_COMMENT, now.toISOString());
 
-        /* Same follow-up cadence a fresh card gets today: immediate + the two defaults. */
+        /* The default cadence, counted from today's midnight. */
         const midnight = new Date(
             now.getFullYear(),
             now.getMonth(),
@@ -153,9 +207,9 @@ export function createRepo(
         const insFollowup = db.prepare(
             "INSERT INTO followups (application_id, label, due_at, position) VALUES (?,?,?,?)",
         );
-        insFollowup.run(appId, "Follow up zur Bewerbung", due(0), 0);
-        insFollowup.run(appId, "Erneutes Follow up", due(9), 1);
-        insFollowup.run(appId, "Letztes Follow up", due(25), 2);
+        DEFAULT_FOLLOWUPS.forEach(([days, label], pos) =>
+            insFollowup.run(appId, label, due(days), pos),
+        );
 
         const t = now.toISOString();
         const insDoc = db.prepare(
@@ -165,87 +219,59 @@ export function createRepo(
         insDoc.run(appId, "lebenslauf", "Lebenslauf", "docx", t, t);
 
         return {
-            rounds: db
-                .prepare(
-                    "SELECT * FROM rounds WHERE application_id = ? ORDER BY position",
-                )
-                .all(appId) as unknown as RoundRow[],
-            followups: db
-                .prepare(
-                    "SELECT * FROM followups WHERE application_id = ? ORDER BY position",
-                )
-                .all(appId) as unknown as FollowupRow[],
-            documents: db
-                .prepare(
-                    "SELECT * FROM documents WHERE application_id = ? ORDER BY id",
-                )
-                .all(appId) as unknown as DocumentRow[],
-            comments: db
-                .prepare(
-                    "SELECT * FROM comments WHERE application_id = ? ORDER BY id",
-                )
-                .all(appId) as unknown as CommentRow[],
+            rounds: all<RoundRow>(
+                "SELECT * FROM rounds WHERE application_id = ? ORDER BY position",
+                appId,
+            ),
+            followups: all<FollowupRow>(
+                "SELECT * FROM followups WHERE application_id = ? ORDER BY position",
+                appId,
+            ),
+            documents: all<DocumentRow>(
+                "SELECT * FROM documents WHERE application_id = ? ORDER BY id",
+                appId,
+            ),
+            comments: all<CommentRow>(
+                "SELECT * FROM comments WHERE application_id = ? ORDER BY id",
+                appId,
+            ),
         };
     }
 
     return {
         load(): DbSnapshot {
             return {
-                stages: db
-                    .prepare("SELECT * FROM stages ORDER BY position")
-                    .all() as unknown as StageRow[],
-                companies: db
-                    .prepare("SELECT * FROM companies")
-                    .all() as unknown as CompanyRow[],
-                applications: db
-                    .prepare("SELECT * FROM applications")
-                    .all() as unknown as ApplicationRow[],
-                facts: db
-                    .prepare(
-                        "SELECT * FROM facts ORDER BY application_id, position",
-                    )
-                    .all() as unknown as FactRow[],
-                people: db
-                    .prepare("SELECT * FROM people")
-                    .all() as unknown as PersonRow[],
-                applicationPeople: db
-                    .prepare(
-                        "SELECT * FROM application_people ORDER BY application_id, kind, position",
-                    )
-                    .all() as unknown as ApplicationPersonRow[],
-                comments: db
-                    .prepare(
-                        "SELECT * FROM comments ORDER BY application_id, id",
-                    )
-                    .all() as unknown as CommentRow[],
-                rounds: db
-                    .prepare(
-                        "SELECT * FROM rounds ORDER BY application_id, position",
-                    )
-                    .all() as unknown as RoundRow[],
-                roundPeople: db
-                    .prepare(
-                        "SELECT * FROM round_people ORDER BY round_id, position",
-                    )
-                    .all() as unknown as RoundPersonRow[],
-                roundNotes: db
-                    .prepare("SELECT * FROM round_notes ORDER BY round_id, id")
-                    .all() as unknown as RoundNoteRow[],
-                followups: db
-                    .prepare(
-                        "SELECT * FROM followups ORDER BY application_id, position",
-                    )
-                    .all() as unknown as FollowupRow[],
-                documents: db
-                    .prepare(
-                        "SELECT * FROM documents ORDER BY application_id, id",
-                    )
-                    .all() as unknown as DocumentRow[],
-                activities: db
-                    .prepare(
-                        "SELECT * FROM activities ORDER BY application_id, id",
-                    )
-                    .all() as unknown as ActivityRow[],
+                stages: all<StageRow>("SELECT * FROM stages ORDER BY position"),
+                companies: all<CompanyRow>("SELECT * FROM companies"),
+                applications: all<ApplicationRow>("SELECT * FROM applications"),
+                facts: all<FactRow>(
+                    "SELECT * FROM facts ORDER BY application_id, position",
+                ),
+                people: all<PersonRow>("SELECT * FROM people"),
+                applicationPeople: all<ApplicationPersonRow>(
+                    "SELECT * FROM application_people ORDER BY application_id, kind, position",
+                ),
+                comments: all<CommentRow>(
+                    "SELECT * FROM comments ORDER BY application_id, id",
+                ),
+                rounds: all<RoundRow>(
+                    "SELECT * FROM rounds ORDER BY application_id, position",
+                ),
+                roundPeople: all<RoundPersonRow>(
+                    "SELECT * FROM round_people ORDER BY round_id, position",
+                ),
+                roundNotes: all<RoundNoteRow>(
+                    "SELECT * FROM round_notes ORDER BY round_id, id",
+                ),
+                followups: all<FollowupRow>(
+                    "SELECT * FROM followups ORDER BY application_id, position",
+                ),
+                documents: all<DocumentRow>(
+                    "SELECT * FROM documents ORDER BY application_id, id",
+                ),
+                activities: all<ActivityRow>(
+                    "SELECT * FROM activities ORDER BY application_id, id",
+                ),
             };
         },
 
@@ -258,12 +284,8 @@ export function createRepo(
                 const now = nowFn();
                 const t = now.toISOString();
                 const num = Number(
-                    (
-                        db
-                            .prepare(
-                                "SELECT value FROM meta WHERE key = 'next_bew_num'",
-                            )
-                            .get() as unknown as { value: string }
+                    one<{ value: string }>(
+                        "SELECT value FROM meta WHERE key = 'next_bew_num'",
                     ).value,
                 );
                 db.prepare(
@@ -297,51 +319,16 @@ export function createRepo(
                     application: mustGetApplication(id),
                     company,
                     ...children,
-                    applications: db
-                        .prepare(
-                            "SELECT * FROM applications WHERE stage_id = 'interessiert'",
-                        )
-                        .all() as unknown as ApplicationRow[],
+                    applications: all<ApplicationRow>(
+                        "SELECT * FROM applications WHERE stage_id = 'interessiert'",
+                    ),
                 };
             });
         },
 
-        updateApplication(
-            id: string,
-            patch: Partial<
-                Pick<
-                    ApplicationRow,
-                    | "role"
-                    | "interest"
-                    | "channel"
-                    | "summary"
-                    | "applied_at"
-                    | "applied_via"
-                    | "last_contact_at"
-                >
-            >,
-        ): ApplicationRow {
+        updateApplication(id: string, patch: ApplicationPatch): ApplicationRow {
             return tx(() => {
-                // stage_id is deliberately absent: stage changes go through
-                // moveCard, which keeps stage_position contiguous.
-                const allowed = [
-                    "role",
-                    "interest",
-                    "channel",
-                    "summary",
-                    "applied_at",
-                    "applied_via",
-                    "last_contact_at",
-                ] as const;
-                const keys = allowed.filter(
-                    (k) => k in patch && patch[k] !== undefined,
-                );
-                if (keys.length) {
-                    const setSql = keys.map((k) => `${k} = ?`).join(", ");
-                    db.prepare(
-                        `UPDATE applications SET ${setSql}, updated_at = ? WHERE id = ?`,
-                    ).run(...keys.map((k) => patch[k] ?? null), nowISO(), id);
-                }
+                patchRow("applications", APPLICATION_FIELDS, patch, id);
                 return mustGetApplication(id);
             });
         },
@@ -359,12 +346,10 @@ export function createRepo(
                     "UPDATE applications SET stage_id = ?, stage_position = ? WHERE id = ?",
                 ).run(toStageId, 100000, id);
                 reindexStage(fromStage);
-                const siblings = (
-                    db
-                        .prepare(
-                            "SELECT id FROM applications WHERE stage_id = ? AND id != ? ORDER BY stage_position",
-                        )
-                        .all(toStageId, id) as unknown as { id: string }[]
+                const siblings = all<{ id: string }>(
+                    "SELECT id FROM applications WHERE stage_id = ? AND id != ? ORDER BY stage_position",
+                    toStageId,
+                    id,
                 ).map((r) => r.id);
                 const idx = Math.max(0, Math.min(toIndex, siblings.length));
                 siblings.splice(idx, 0, id);
@@ -373,11 +358,11 @@ export function createRepo(
                 );
                 siblings.forEach((sid, i) => upd.run(i, sid));
                 touchApplication(id);
-                return db
-                    .prepare(
-                        "SELECT * FROM applications WHERE stage_id IN (?, ?)",
-                    )
-                    .all(fromStage, toStageId) as unknown as ApplicationRow[];
+                return all<ApplicationRow>(
+                    "SELECT * FROM applications WHERE stage_id IN (?, ?)",
+                    fromStage,
+                    toStageId,
+                );
             });
         },
 
@@ -400,44 +385,9 @@ export function createRepo(
             });
         },
 
-        updateCompany(
-            companyId: number,
-            patch: Partial<
-                Pick<
-                    CompanyRow,
-                    | "name"
-                    | "sector"
-                    | "headcount"
-                    | "website"
-                    | "email"
-                    | "phone"
-                    | "notes"
-                >
-            >,
-        ): CompanyRow {
+        updateCompany(companyId: number, patch: CompanyPatch): CompanyRow {
             return tx(() => {
-                const allowed = [
-                    "name",
-                    "sector",
-                    "headcount",
-                    "website",
-                    "email",
-                    "phone",
-                    "notes",
-                ] as const;
-                const keys = allowed.filter(
-                    (k) => k in patch && patch[k] !== undefined,
-                );
-                if (keys.length) {
-                    const setSql = keys.map((k) => `${k} = ?`).join(", ");
-                    db.prepare(
-                        `UPDATE companies SET ${setSql}, updated_at = ? WHERE id = ?`,
-                    ).run(
-                        ...keys.map((k) => patch[k] ?? null),
-                        nowISO(),
-                        companyId,
-                    );
-                }
+                patchRow("companies", COMPANY_FIELDS, patch, companyId);
                 return getCompany(companyId);
             });
         },
@@ -449,23 +399,20 @@ export function createRepo(
             kind: FactKind,
         ): FactRow {
             return tx(() => {
-                const next = (
-                    db
-                        .prepare(
-                            "SELECT COALESCE(MAX(position) + 1, 0) AS p FROM facts WHERE application_id = ?",
-                        )
-                        .get(applicationId) as unknown as { p: number }
+                const next = one<{ p: number }>(
+                    "SELECT COALESCE(MAX(position) + 1, 0) AS p FROM facts WHERE application_id = ?",
+                    applicationId,
                 ).p;
                 db.prepare(
                     `INSERT INTO facts (application_id, label, value, kind, position) VALUES (?,?,?,?,?)
            ON CONFLICT (application_id, label) DO UPDATE SET value = excluded.value, kind = excluded.kind`,
                 ).run(applicationId, label, value, kind, next);
                 touchApplication(applicationId);
-                return db
-                    .prepare(
-                        "SELECT * FROM facts WHERE application_id = ? AND label = ?",
-                    )
-                    .get(applicationId, label) as unknown as FactRow;
+                return one<FactRow>(
+                    "SELECT * FROM facts WHERE application_id = ? AND label = ?",
+                    applicationId,
+                    label,
+                );
             });
         },
 
@@ -490,9 +437,10 @@ export function createRepo(
                     )
                     .run(applicationId, author, text, nowISO());
                 touchApplication(applicationId);
-                return db
-                    .prepare("SELECT * FROM comments WHERE id = ?")
-                    .get(Number(res.lastInsertRowid)) as unknown as CommentRow;
+                return one<CommentRow>(
+                    "SELECT * FROM comments WHERE id = ?",
+                    Number(res.lastInsertRowid),
+                );
             });
         },
 
@@ -501,9 +449,10 @@ export function createRepo(
                 db.prepare(
                     "UPDATE comments SET text = ?, edited_at = ? WHERE id = ?",
                 ).run(text, nowISO(), commentId);
-                return db
-                    .prepare("SELECT * FROM comments WHERE id = ?")
-                    .get(commentId) as unknown as CommentRow;
+                return one<CommentRow>(
+                    "SELECT * FROM comments WHERE id = ?",
+                    commentId,
+                );
             });
         },
 
@@ -523,12 +472,9 @@ export function createRepo(
                 const keep = rounds
                     .filter((r) => r.id != null)
                     .map((r) => r.id as number);
-                const existing = (
-                    db
-                        .prepare(
-                            "SELECT id FROM rounds WHERE application_id = ?",
-                        )
-                        .all(applicationId) as unknown as { id: number }[]
+                const existing = all<{ id: number }>(
+                    "SELECT id FROM rounds WHERE application_id = ?",
+                    applicationId,
                 ).map((r) => r.id);
                 const del = db.prepare("DELETE FROM rounds WHERE id = ?");
                 for (const rid of existing)
@@ -589,16 +535,14 @@ export function createRepo(
                 });
                 touchApplication(applicationId);
                 return {
-                    rounds: db
-                        .prepare(
-                            "SELECT * FROM rounds WHERE application_id = ? ORDER BY position",
-                        )
-                        .all(applicationId) as unknown as RoundRow[],
-                    roundPeople: db
-                        .prepare(
-                            "SELECT rp.* FROM round_people rp JOIN rounds r ON r.id = rp.round_id WHERE r.application_id = ? ORDER BY rp.round_id, rp.position",
-                        )
-                        .all(applicationId) as unknown as RoundPersonRow[],
+                    rounds: all<RoundRow>(
+                        "SELECT * FROM rounds WHERE application_id = ? ORDER BY position",
+                        applicationId,
+                    ),
+                    roundPeople: all<RoundPersonRow>(
+                        "SELECT rp.* FROM round_people rp JOIN rounds r ON r.id = rp.round_id WHERE r.application_id = ? ORDER BY rp.round_id, rp.position",
+                        applicationId,
+                    ),
                 };
             });
         },
@@ -614,26 +558,17 @@ export function createRepo(
                         "INSERT INTO round_notes (round_id, author, text, created_at) VALUES (?,?,?,?)",
                     )
                     .run(roundId, author, text, nowISO());
-                return db
-                    .prepare("SELECT * FROM round_notes WHERE id = ?")
-                    .get(
-                        Number(res.lastInsertRowid),
-                    ) as unknown as RoundNoteRow;
+                return one<RoundNoteRow>(
+                    "SELECT * FROM round_notes WHERE id = ?",
+                    Number(res.lastInsertRowid),
+                );
             });
         },
 
-        createPerson(input: {
-            name: string;
-            role?: string;
-            email?: string;
-            phone?: string;
-            linkedin?: string;
-        }): PersonRow {
+        createPerson(input: PersonInput): PersonRow {
             return tx(() => {
-                const count = (
-                    db
-                        .prepare("SELECT COUNT(*) AS n FROM people")
-                        .get() as unknown as { n: number }
+                const count = one<{ n: number }>(
+                    "SELECT COUNT(*) AS n FROM people",
                 ).n;
                 const initials =
                     input.name
@@ -663,44 +598,9 @@ export function createRepo(
             });
         },
 
-        updatePerson(
-            personId: number,
-            patch: Partial<
-                Pick<
-                    PersonRow,
-                    | "name"
-                    | "role"
-                    | "email"
-                    | "phone"
-                    | "linkedin"
-                    | "initials"
-                >
-            >,
-        ): PersonRow {
+        updatePerson(personId: number, patch: PersonPatch): PersonRow {
             return tx(() => {
-                const allowed = [
-                    "name",
-                    "role",
-                    "email",
-                    "phone",
-                    "linkedin",
-                    "initials",
-                ] as const;
-                // Skip undefined values: NULLing NOT NULL columns (name) would
-                // roll back the whole patch and silently drop the other edits.
-                const keys = allowed.filter(
-                    (k) => k in patch && patch[k] !== undefined,
-                );
-                if (keys.length) {
-                    const setSql = keys.map((k) => `${k} = ?`).join(", ");
-                    db.prepare(
-                        `UPDATE people SET ${setSql}, updated_at = ? WHERE id = ?`,
-                    ).run(
-                        ...keys.map((k) => patch[k] ?? null),
-                        nowISO(),
-                        personId,
-                    );
-                }
+                patchRow("people", PERSON_FIELDS, patch, personId);
                 return getPerson(personId);
             });
         },
@@ -726,14 +626,11 @@ export function createRepo(
                 [...new Set(personIds)].forEach((pid, i) =>
                     ins.run(applicationId, pid, kind, i),
                 );
-                return db
-                    .prepare(
-                        "SELECT * FROM application_people WHERE application_id = ? AND kind = ? ORDER BY position",
-                    )
-                    .all(
-                        applicationId,
-                        kind,
-                    ) as unknown as ApplicationPersonRow[];
+                return all<ApplicationPersonRow>(
+                    "SELECT * FROM application_people WHERE application_id = ? AND kind = ? ORDER BY position",
+                    applicationId,
+                    kind,
+                );
             });
         },
 
@@ -771,9 +668,10 @@ export function createRepo(
                         "INSERT INTO activities (application_id, author, text, created_at) VALUES (?,?,?,?)",
                     )
                     .run(applicationId, author, text, nowISO());
-                return db
-                    .prepare("SELECT * FROM activities WHERE id = ?")
-                    .get(Number(res.lastInsertRowid)) as unknown as ActivityRow;
+                return one<ActivityRow>(
+                    "SELECT * FROM activities WHERE id = ?",
+                    Number(res.lastInsertRowid),
+                );
             });
         },
     };

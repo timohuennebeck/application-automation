@@ -32,8 +32,6 @@ export const ROUND_STATE: Record<RoundStateKey, {
   open: { dotFill: 'none', dotStroke: 'var(--c-c9c5bb)', dotDash: '2.2 2.2', dotPie: '', titleColor: 'var(--c-1b1a17)', metaColor: 'var(--c-a5a29a)', metaWeight: 400, muted: false },
 };
 
-export const PERSON_COLORS = ['var(--c-5b9083)', 'var(--c-a4762f)', 'var(--c-7a5aa8)', 'var(--c-3f6ea8)', 'var(--c-a8523f)', 'var(--c-4f8f6a)'];
-
 export const WHERE_OPTIONS = ['In Person', 'Google Meet', 'Microsoft Teams', 'Telefon'];
 
 export const FACT_OPTIONS: Record<string, string[]> = {

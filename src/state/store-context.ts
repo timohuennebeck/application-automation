@@ -2,7 +2,8 @@
    Kept apart from the provider so the store module only exports a component. */
 import { createContext, useContext } from 'react';
 import type {
-  ActivityRow, ApplicationRow, CommentRow, CompanyRow, DocumentRow, FactRow, FollowupRow,
+  ActivityRow, ApplicationPersonRow, ApplicationRow, CommentRow, CompanyRow, DocumentRow,
+  FactRow, FollowupRow,
 } from '../shared/db-types';
 import type { PersonView, RoundView } from './db-view';
 
@@ -66,7 +67,7 @@ export interface AppState {
   factsByApp: Record<string, FactRow[]>;
   /* Keyed by String(person id). */
   people: Record<string, PersonView>;
-  linksByApp: Record<string, import('../shared/db-types').ApplicationPersonRow[]>;
+  linksByApp: Record<string, ApplicationPersonRow[]>;
   commentsByApp: Record<string, CommentRow[]>;
   roundsState: Record<string, RoundView[]>;
   followupsByApp: Record<string, FollowupRow[]>;

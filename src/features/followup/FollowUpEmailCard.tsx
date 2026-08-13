@@ -54,6 +54,12 @@ export function FollowUpEmailCard({ cardId, role, company, slots, sel }: {
   const max = sel < slots.length - 1 ? shiftISO(slots[sel + 1].iso, -1) : null;
   const outOfRange = (iso: string) => !(iso >= min && (!max || iso <= max));
 
+  // The calendar spans a year from the due date (or today, whichever is
+  // earlier) and always stretches far enough to show the due date itself.
+  const fromYM = (slot.iso < today ? slot.iso : today).slice(0, 7);
+  const dueYM = slot.iso.slice(0, 7);
+  const toYM = shiftYM(fromYM, 11);
+
   const contacts = emailContactsFor(cardId);
   const stored = slot.emailText != null;
   const { subject, body } = stored
@@ -97,12 +103,8 @@ export function FollowUpEmailCard({ cardId, role, company, slots, sel }: {
                 <CalendarPopover
                   left={70}
                   selectedISO={slot.iso}
-                  fromYM={(slot.iso < today ? slot.iso : today).slice(0, 7)}
-                  toYM={(() => {
-                    const from = (slot.iso < today ? slot.iso : today).slice(0, 7);
-                    const to = shiftYM(from, 11);
-                    return slot.iso.slice(0, 7) > to ? slot.iso.slice(0, 7) : to;
-                  })()}
+                  fromYM={fromYM}
+                  toYM={dueYM > toYM ? dueYM : toYM}
                   isDisabled={outOfRange}
                   onPick={(iso) => {
                     if (outOfRange(iso)) return;

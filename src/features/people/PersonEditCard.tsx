@@ -11,7 +11,7 @@ interface FieldDef {
 }
 
 const FIELDS: FieldDef[] = [
-  { label: 'Name', prop: 'name', placeholder: 'Name' },
+  { label: 'Name', prop: 'name', placeholder: '—' },
   { label: 'Position', prop: 'role', placeholder: '—' },
   { label: 'E-Mail', prop: 'email', placeholder: '—', link: true },
   { label: 'Telefon', prop: 'phone', placeholder: '—' },
@@ -57,7 +57,7 @@ export function PersonEditCard({
               textOverflow: 'ellipsis',
             }}
           >
-            {liveName ? liveName + (subExtra || '') : 'Neue Person'}
+            {liveName ? liveName + (subExtra || '') : 'Person hinzufügen'}
           </div>
           <div style={{ fontSize: 10.5, color: 'var(--c-c3c0b8)', whiteSpace: 'nowrap' }}>
             {stored?.updatedAt
@@ -131,10 +131,14 @@ export function PersonEditCard({
         })}
       </div>
 
+      {/* Only an existing person can be deleted. A new one that is closed
+          without a name is undone by savePerson anyway. */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
-        <div className="btn-ghost" onClick={onDelete}>
-          {canDelete ? 'Löschen' : 'Verwerfen'}
-        </div>
+        {canDelete && (
+          <div className="btn-ghost" onClick={onDelete}>
+            Löschen
+          </div>
+        )}
         <div className="btn-dark" onClick={onDone}>
           Fertig
         </div>

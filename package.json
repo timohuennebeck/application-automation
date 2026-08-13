@@ -8,6 +8,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "test": "vitest run",
     "preview": "vite preview",
     "dist": "npm run build && electron-builder --mac"
@@ -24,6 +26,7 @@
     "electron": "^43.3.0",
     "electron-builder": "^26.15.3",
     "oxlint": "^1.75.0",
+    "prettier": "^3.9.6",
     "typescript": "~6.0.2",
     "vite": "^8.2.0",
     "vite-plugin-electron": "^1.1.1",

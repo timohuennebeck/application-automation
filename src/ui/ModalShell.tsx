@@ -10,7 +10,8 @@ export function ModalShell({
 }: {
   onClose: () => void;
   header: ReactNode;
-  footer: ReactNode;
+  /* Omitted by dialogs that save as you go and have nothing to confirm. */
+  footer?: ReactNode;
   children: ReactNode;
 }) {
   return (
@@ -55,17 +56,19 @@ export function ModalShell({
           </div>
           {children}
         </div>
-        <div
-          style={{
-            padding: '12px 24px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            flexShrink: 0,
-          }}
-        >
-          {footer}
-        </div>
+        {footer && (
+          <div
+            style={{
+              padding: '12px 24px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexShrink: 0,
+            }}
+          >
+            {footer}
+          </div>
+        )}
       </div>
     </div>
   );

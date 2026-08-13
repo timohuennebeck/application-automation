@@ -7,7 +7,9 @@
    Electron import out of the pure parts. */
 import { copyFileSync, mkdirSync, rmSync, statSync } from 'node:fs';
 import path from 'node:path';
-import { DocumentKind } from '../src/shared/enums.ts';
+import { toISO } from '../src/lib/date.ts';
+import type { TemplateInfo } from '../src/shared/domain.ts';
+import { DocumentKind, TemplateKind } from '../src/shared/enums.ts';
 
 /* The one format the whole pipeline starts from: the agent edits the markup and
    exports the PDF from it, so what gets uploaded is always the source, never
@@ -101,4 +103,54 @@ export function documentSize(userDataPath: string, storedPath: string): number |
   } catch {
     return null;
   }
+}
+
+/* ── Profile templates ────────────────────────────────────────────────────
+   The CV and cover letter kept once for the whole profile, in userData/templates.
+   There is no table behind them: the file being there *is* the state, and its
+   size and date come from the filesystem. That leaves nothing to keep in sync
+   and no row that can outlive its file. */
+
+const TEMPLATE_FILE_NAMES: Record<TemplateKind, string> = {
+  [TemplateKind.LEBENSLAUF]: 'lebenslauf.html',
+  [TemplateKind.ANSCHREIBEN]: 'anschreiben.html',
+};
+
+/* Absolute path of a slot. The kind comes from the renderer, so an unknown one
+   is rejected here rather than joined into the path as `undefined`. */
+export function templatePath(userDataPath: string, kind: TemplateKind): string {
+  const name = TEMPLATE_FILE_NAMES[kind];
+  if (!name) throw new Error(`unknown template kind: ${kind}`);
+  return path.join(userDataPath, 'templates', name);
+}
+
+/* Puts a picked file into its slot, replacing whatever was there, and reports
+   what now sits in it so the dialog can redraw without a second round trip. */
+export function copyTemplate(userDataPath: string, kind: TemplateKind, sourcePath: string): TemplateInfo {
+  if (!isHtml(sourcePath)) throw new Error(`not an HTML file: ${sourcePath}`);
+  const target = templatePath(userDataPath, kind);
+  mkdirSync(path.dirname(target), { recursive: true });
+  copyFileSync(sourcePath, target);
+  return describe(statSync(target));
+}
+
+function describe(s: { size: number; mtime: Date }): TemplateInfo {
+  return { size: s.size, day: toISO(s.mtime) };
+}
+
+function templateInfo(userDataPath: string, kind: TemplateKind): TemplateInfo | null {
+  try {
+    return describe(statSync(templatePath(userDataPath, kind)));
+  } catch {
+    return null;
+  }
+}
+
+/* Both slots at once — null where nothing has been uploaded, or where the file
+   has since disappeared from disk. */
+export function listTemplates(userDataPath: string): Record<TemplateKind, TemplateInfo | null> {
+  return {
+    [TemplateKind.LEBENSLAUF]: templateInfo(userDataPath, TemplateKind.LEBENSLAUF),
+    [TemplateKind.ANSCHREIBEN]: templateInfo(userDataPath, TemplateKind.ANSCHREIBEN),
+  };
 }

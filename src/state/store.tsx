@@ -87,6 +87,7 @@ const initialState = (): AppState => ({
   followupSel: 0,
   searchOpen: false,
   searchQ: '',
+  profileOpen: false,
 });
 
 const CANONICAL_TITLES = new Set(CANONICAL_ROUNDS);
@@ -1025,6 +1026,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         else if (s.personEdit) savePerson();
         else if (s.cardContact) set({ cardContact: null, contactDraft: '' });
         else if (s.searchOpen) set({ searchOpen: false });
+        else if (s.profileOpen) set({ profileOpen: false });
         else if (s.contactEdit) set({ contactEdit: null });
         else if (s.roundPop) set({ roundPop: null });
         else if (s.roundEdit) set({ roundEdit: null, roundDraft: null, roundPop: null });
@@ -1046,6 +1048,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       } else if (k === 'k') {
         e.preventDefault();
         set((s2) => ({ searchOpen: !s2.searchOpen, searchQ: '' }));
+      } else if (k === 'p') {
+        // Chromium's own print dialog would otherwise open over the board.
+        e.preventDefault();
+        set((s2) => ({ profileOpen: !s2.profileOpen }));
       } else if (k === 'c') {
         // Never steal ⌘C from a real copy: text fields own their own selection,
         // and Chromium does not report it through window.getSelection().

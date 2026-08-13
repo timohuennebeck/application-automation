@@ -27,3 +27,11 @@ export interface DocumentUpload {
   pdfPath: string | null;
   pdfError: string | null;
 }
+
+/* What the profile dialog knows about a stored template. Read from the file
+   itself on every call — there is no row that could disagree with it. */
+export interface TemplateInfo {
+  size: number;
+  /* Local calendar day the file was last written, as YYYY-MM-DD. */
+  day: string;
+}

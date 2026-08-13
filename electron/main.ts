@@ -8,14 +8,17 @@ import { createRepo } from './db/repo.ts';
 import { registerDbIpc } from './db/ipc.ts';
 import {
   copyDocument,
+  copyTemplate,
   documentPaths,
   documentSize,
+  listTemplates,
   purgeApplicationFiles,
   resolveDocumentPath,
+  templatePath,
 } from './files.ts';
 import { renderPdf } from './pdf.ts';
 import type { DocumentUpload } from '../src/shared/domain.ts';
-import type { DocumentKind } from '../src/shared/enums.ts';
+import type { DocumentKind, TemplateKind } from '../src/shared/enums.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -136,6 +139,19 @@ ipcMain.handle('documents:sizes', (_e, filePaths: string[]) =>
    string openPath gives on failure ('' means it opened). */
 ipcMain.handle('documents:open', (_e, filePath: string) =>
   shell.openPath(resolveDocumentPath(app.getPath('userData'), filePath)),
+);
+
+/* Profile templates: the two documents that are not tied to an application.
+   They share the picker above, so the extension is checked once more in
+   copyTemplate before anything is written. */
+ipcMain.handle('templates:list', () => listTemplates(app.getPath('userData')));
+
+ipcMain.handle('templates:save', (_e, kind: TemplateKind, sourcePath: string) =>
+  copyTemplate(app.getPath('userData'), kind, sourcePath),
+);
+
+ipcMain.handle('templates:open', (_e, kind: TemplateKind) =>
+  shell.openPath(templatePath(app.getPath('userData'), kind)),
 );
 
 /* The database must be usable before any window exists; a broken store means

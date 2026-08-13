@@ -54,6 +54,16 @@ export const DocumentKind = {
 } as const;
 export type DocumentKind = (typeof DocumentKind)[keyof typeof DocumentKind];
 
+/* The two documents kept once for the whole profile, not per application: the
+   CV and the cover letter the agent fills in for each new posting. There are
+   exactly two, so this is deliberately not DocumentKind — an OTHER template
+   would have no slot to live in. */
+export const TemplateKind = {
+  LEBENSLAUF: 'LEBENSLAUF',
+  ANSCHREIBEN: 'ANSCHREIBEN',
+} as const;
+export type TemplateKind = (typeof TemplateKind)[keyof typeof TemplateKind];
+
 export const Interest = {
   URGENT: 'URGENT',
   HIGH: 'HIGH',

@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { DbApi } from '../src/shared/db-types.ts';
-import type { DocumentUpload } from '../src/shared/domain.ts';
-import type { DocumentKind } from '../src/shared/enums.ts';
+import type { DocumentUpload, TemplateInfo } from '../src/shared/domain.ts';
+import type { DocumentKind, TemplateKind } from '../src/shared/enums.ts';
 
 const invoke =
   (channel: string) =>
@@ -67,6 +67,16 @@ const api = {
       ipcRenderer.invoke('documents:sizes', filePaths),
     /* Hands the file to the OS; resolves to '' on success, else the reason. */
     open: (filePath: string): Promise<string> => ipcRenderer.invoke('documents:open', filePath),
+  },
+  /* The two profile-wide templates. There is no database behind these — the
+     file on disk is the state, so every call reads it fresh. */
+  templates: {
+    list: (): Promise<Record<TemplateKind, TemplateInfo | null>> => ipcRenderer.invoke('templates:list'),
+    /* Copies a picked file into its slot, resolving to what now sits there. */
+    save: (kind: TemplateKind, sourcePath: string): Promise<TemplateInfo> =>
+      ipcRenderer.invoke('templates:save', kind, sourcePath),
+    /* Hands the slot's file to the OS; '' on success, else the reason. */
+    open: (kind: TemplateKind): Promise<string> => ipcRenderer.invoke('templates:open', kind),
   },
 };
 

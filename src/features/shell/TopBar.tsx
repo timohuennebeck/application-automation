@@ -29,6 +29,10 @@ export function TopBar() {
         <div>Bewerbung anlegen</div>
         <div className="kbd">⌘C</div>
       </div>
+      <div className="top-btn no-drag" title="Profil" onClick={() => set({ profileOpen: true })}>
+        <div>Profil</div>
+        <div className="kbd">⌘P</div>
+      </div>
       <div
         className="top-btn no-drag"
         title={st.dark ? 'Zu hellem Modus wechseln' : 'Zu dunklem Modus wechseln'}

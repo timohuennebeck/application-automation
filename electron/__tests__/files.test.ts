@@ -2,14 +2,18 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync, existsSync
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { DocumentKind } from '../../src/shared/enums.ts';
+import { DocumentKind, TemplateKind } from '../../src/shared/enums.ts';
+import { toISO } from '../../src/lib/date.ts';
 import {
   copyDocument,
+  copyTemplate,
   documentFileName,
   documentPaths,
   isHtml,
+  listTemplates,
   purgeApplicationFiles,
   resolveDocumentPath,
+  templatePath,
 } from '../files.ts';
 
 let root: string;
@@ -146,5 +150,87 @@ describe('purgeApplicationFiles', () => {
     mkdirSync(path.join(root, 'keep'), { recursive: true });
     expect(() => purgeApplicationFiles(root, '../keep')).toThrow(/id/i);
     expect(existsSync(path.join(root, 'keep'))).toBe(true);
+  });
+});
+
+describe('templatePath', () => {
+  it('gives each kind its own fixed name under templates/', () => {
+    expect(templatePath(root, TemplateKind.LEBENSLAUF)).toBe(path.join(root, 'templates', 'lebenslauf.html'));
+    expect(templatePath(root, TemplateKind.ANSCHREIBEN)).toBe(
+      path.join(root, 'templates', 'anschreiben.html'),
+    );
+  });
+
+  /* The kind arrives from the renderer, so an unknown one must not fall through
+     to path.join(dir, undefined) and fail somewhere less obvious. */
+  it('refuses a kind that is not one of the two slots', () => {
+    expect(() => templatePath(root, 'OTHER' as TemplateKind)).toThrow(/kind/i);
+    expect(() => templatePath(root, '../../etc/passwd' as TemplateKind)).toThrow(/kind/i);
+  });
+});
+
+describe('copyTemplate', () => {
+  it('stores the file under its slot and reports what landed there', () => {
+    const info = copyTemplate(root, TemplateKind.LEBENSLAUF, source('Mein Lebenslauf.html', 'cv bytes'));
+
+    expect(readFileSync(templatePath(root, TemplateKind.LEBENSLAUF), 'utf8')).toBe('cv bytes');
+    expect(info).toEqual({ size: 8, day: toISO(new Date()) });
+  });
+
+  it('overwrites the slot rather than piling up versions', () => {
+    copyTemplate(root, TemplateKind.LEBENSLAUF, source('a.html', 'first'));
+    const info = copyTemplate(root, TemplateKind.LEBENSLAUF, source('b.html', 'second'));
+
+    expect(readFileSync(templatePath(root, TemplateKind.LEBENSLAUF), 'utf8')).toBe('second');
+    expect(info.size).toBe(6);
+  });
+
+  /* A .htm source still lands under the canonical .html name, so the slot has
+     exactly one path whatever was picked. */
+  it('normalises the extension of what was picked', () => {
+    copyTemplate(root, TemplateKind.LEBENSLAUF, source('a.htm', 'cv'));
+
+    expect(readFileSync(templatePath(root, TemplateKind.LEBENSLAUF), 'utf8')).toBe('cv');
+  });
+
+  it('keeps the two slots apart', () => {
+    copyTemplate(root, TemplateKind.LEBENSLAUF, source('a.html', 'cv'));
+    copyTemplate(root, TemplateKind.ANSCHREIBEN, source('b.html', 'letter'));
+
+    expect(readFileSync(templatePath(root, TemplateKind.LEBENSLAUF), 'utf8')).toBe('cv');
+    expect(readFileSync(templatePath(root, TemplateKind.ANSCHREIBEN), 'utf8')).toBe('letter');
+  });
+
+  /* The agent edits the markup and exports the PDF from it, so a finished PDF
+     or a Word file is the wrong end of the pipeline. */
+  it('refuses anything that is not HTML, leaving the slot empty', () => {
+    for (const name of ['cv.pdf', 'cv.docx']) {
+      expect(() => copyTemplate(root, TemplateKind.LEBENSLAUF, source(name)), name).toThrow(/html/i);
+    }
+    expect(existsSync(path.join(root, 'templates'))).toBe(false);
+  });
+});
+
+describe('listTemplates', () => {
+  it('reports both slots as empty before anything is uploaded', () => {
+    expect(listTemplates(root)).toEqual({ LEBENSLAUF: null, ANSCHREIBEN: null });
+  });
+
+  it('reports size and day for the slot that is filled', () => {
+    copyTemplate(root, TemplateKind.ANSCHREIBEN, source('a.html', 'letter'));
+
+    expect(listTemplates(root)).toEqual({
+      LEBENSLAUF: null,
+      ANSCHREIBEN: { size: 6, day: toISO(new Date()) },
+    });
+  });
+
+  /* Deleted from Finder, or never synced down: the slot reads as empty again
+     rather than offering a file that cannot be opened. */
+  it('treats a file that vanished as an empty slot', () => {
+    copyTemplate(root, TemplateKind.LEBENSLAUF, source('a.html'));
+    rmSync(templatePath(root, TemplateKind.LEBENSLAUF));
+
+    expect(listTemplates(root).LEBENSLAUF).toBe(null);
   });
 });

@@ -144,6 +144,8 @@ export interface AppState {
   followupSel: number;
   searchOpen: boolean;
   searchQ: string;
+  /* The profile dialog with the two document templates. */
+  profileOpen: boolean;
 }
 
 export type Patch = Partial<AppState> | ((s: AppState) => Partial<AppState>);

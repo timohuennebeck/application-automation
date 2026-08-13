@@ -72,12 +72,33 @@ export function ContactPickerBody({
       dropdown: null,
     });
 
+  /* An existing person opens the same editor, only already named — which is
+     what turns "Löschen" on inside it. */
+  const startEdit = (key: string) =>
+    set((s) => {
+      const p = s.people[key];
+      return {
+        personEdit: { id: cardId, ri: -1, key, isNew: false, forContact: popKey, contactStore: store },
+        personDraft: {
+          name: p?.name || '',
+          role: p?.role || '',
+          email: p?.email || '',
+          phone: p?.phone || '',
+          linkedin: p?.linkedin || '',
+        },
+        personField: null,
+        personFieldDraft: '',
+        editing: null,
+        dropdown: null,
+      };
+    });
+
   if (editing) {
     return (
       <PersonEditCard
         personKey={editing.key}
-        canDelete={false}
-        onDelete={() => deletePerson(cardId, editing.key, true)}
+        canDelete={!editing.isNew}
+        onDelete={() => deletePerson(cardId, editing.key, editing.isNew)}
         onDone={savePerson}
       />
     );
@@ -91,6 +112,7 @@ export function ContactPickerBody({
       people={peopleForCard(cardId)}
       isSelected={(key) => list.some((c) => c.personId === Number(key))}
       onToggle={toggle}
+      onEdit={startEdit}
       onCreate={startCreate}
       onClose={onClose}
     />

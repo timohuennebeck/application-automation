@@ -96,6 +96,28 @@
   background: var(--c-faf0ee);
 }
 
+/* Pencil on a person row: out of the way until the row is under the cursor,
+   and always there for keyboard and pointer users who go looking for it. */
+.row-edit {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  padding: 2px;
+  margin: -2px 0 -2px 2px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--c-b3b0a8);
+  opacity: 0;
+}
+.menu-item:hover .row-edit,
+.row-edit:focus-visible {
+  opacity: 1;
+}
+.row-edit:hover {
+  color: var(--c-5f5c56);
+  background: var(--c-e0ded8);
+}
+
 /* Small icon buttons */
 .icon-btn {
   display: flex;

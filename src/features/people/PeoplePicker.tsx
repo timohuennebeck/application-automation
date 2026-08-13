@@ -1,5 +1,5 @@
 import { MenuItem, MenuLabel } from '../../ui/MenuItem';
-import { Avatar, SearchGlyph } from '../../ui/icons';
+import { Avatar, PencilGlyph, SearchGlyph } from '../../ui/icons';
 import type { PersonView } from '../../state/db-view';
 
 export type Suggestion = PersonView & { key: string; initials: string };
@@ -13,6 +13,7 @@ export function PeoplePicker({
   people,
   isSelected,
   onToggle,
+  onEdit,
   onCreate,
   onClose,
 }: {
@@ -22,6 +23,8 @@ export function PeoplePicker({
   people: Suggestion[];
   isSelected: (key: string) => boolean;
   onToggle: (key: string) => void;
+  /* Opens the person's editor. Omitted where a picker only picks. */
+  onEdit?: (key: string) => void;
   onCreate: (name: string) => void;
   onClose: () => void;
 }) {
@@ -95,6 +98,27 @@ export function PeoplePicker({
               >
                 {p.role}
               </div>
+              {/* stopPropagation, or editing would also toggle the row. */}
+              {onEdit && (
+                <span
+                  className="row-edit"
+                  role="button"
+                  tabIndex={0}
+                  title="Person bearbeiten"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEdit(p.key);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key !== 'Enter' && e.key !== ' ') return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onEdit(p.key);
+                  }}
+                >
+                  <PencilGlyph />
+                </span>
+              )}
             </MenuItem>
           );
         })}

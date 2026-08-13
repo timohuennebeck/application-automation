@@ -167,6 +167,22 @@ export function SearchGlyph({ size = 12, style }: { size?: number; style?: CSSPr
   );
 }
 
+/* Pencil: opens the editor for a row that is otherwise only selectable. */
+export function PencilGlyph({ size = 12, style }: { size?: number; style?: CSSProperties }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 14 14" style={{ flexShrink: 0, ...style }}>
+      <path
+        d="M9.4 1.9 L12.1 4.6 L4.8 11.9 L1.7 12.3 L2.1 9.2 Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinejoin="round"
+      />
+      <path d="M8.1 3.2 L10.8 5.9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export function DocGlyph({
   width = 26,
   height = 32,

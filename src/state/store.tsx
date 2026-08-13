@@ -3,16 +3,25 @@
    in-memory view in sync and owns all transient UI state. */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { COLUMNS, SKILLS, STAGE_IDS } from '../data/config';
+import { COLUMNS, STAGE_IDS } from '../data/config';
 import { Author, FactKind, Interest, LinkKind, RoundState } from '../shared/enums';
 import type { ActivityRow, FollowupRow } from '../shared/db-types';
 import { CANONICAL_ROUNDS } from '../shared/domain';
 import { indexSnapshot, roundInput, personView } from './db-view';
 import type { RoundView } from './db-view';
 import { dateToISO } from '../lib/date';
-import { cap, initials } from '../lib/text';
+import { initials } from '../lib/text';
+import { parsePosting } from '../features/create/parse-posting';
 import { Ctx } from './store-context';
 import type { AppState, AppStore, ContactEntry, Patch, Round } from './store-context';
+
+/* The create dialog's inputs. Kept as one object so "Erstelle mehrere" can
+   reset the whole form after each card without listing the fields twice. */
+const EMPTY_DRAFT = {
+  jobUrl: '',
+  jobDescription: '',
+  jobPeople: [] as string[],
+} satisfies Partial<AppState>;
 
 const initialState = (): AppState => ({
   dark: false,
@@ -41,9 +50,8 @@ const initialState = (): AppState => ({
   cardMenu: null,
   modalOpen: false,
   multiple: false,
-  jobUrl: 'https://karriere.nordlicht-systems.de/jobs/senior-product-designer-4821',
+  ...EMPTY_DRAFT,
   tick: 0,
-  selected: SKILLS.map((s) => s[1]),
   dropdown: null,
   editing: null,
   editDraft: '',
@@ -370,18 +378,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const createCard = useCallback(() => {
     const s = stRef.current;
-    const url = (s.jobUrl || '').trim();
-    let role = 'Neue Bewerbung';
-    let company = 'Unbekanntes Unternehmen';
-    try {
-      const u = new URL(/^https?:/.test(url) ? url : 'https://' + url);
-      const host = u.hostname.replace(/^(www|karriere|jobs|career)\./, '').split('.')[0];
-      if (host) company = host.split('-').map(cap).join(' ');
-      const slug = (u.pathname.split('/').filter(Boolean).pop() || '').replace(/[-_]?\d+$/, '');
-      if (slug) role = slug.split(/[-_]/).filter(Boolean).map(cap).join(' ');
-    } catch { /* keep the generic defaults */ }
-    set((s2) => ({ modalOpen: s2.multiple }));
-    persist(db()?.applications.create({ role, company, channel: 'Karriereseite' }).then((res) => {
+    const { role, company } = parsePosting(s.jobUrl);
+    const people = s.jobPeople.map(Number).filter((n) => Number.isFinite(n));
+    // Keep the dialog open for the next card, but always start it empty.
+    set((s2) => ({ modalOpen: s2.multiple, ...EMPTY_DRAFT }));
+    persist(db()?.applications.create({
+      role,
+      company,
+      channel: 'Karriereseite',
+      summary: s.jobDescription.trim() || null,
+      people,
+    }).then((res) => {
       set((s2) => ({
         applications: {
           ...s2.applications,
@@ -390,6 +397,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         },
         companies: { ...s2.companies, [res.company.id]: res.company },
         board: s2.board.map((c, i) => (i === 0 ? [res.application.id, ...c] : c)),
+        linksByApp: { ...s2.linksByApp, [res.application.id]: res.people },
         roundsState: {
           ...s2.roundsState,
           [res.application.id]: res.rounds.map((r) => ({

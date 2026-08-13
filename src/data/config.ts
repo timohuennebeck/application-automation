@@ -113,8 +113,3 @@ export const SECTIONS: [string, string[]][] = [
   ['Unternehmen', ['Firma', 'Branche', 'Mitarbeiterzahl', 'Karriereseite', 'E-Mail', 'Telefon']],
 ];
 export const DATE_FIELDS: Record<string, boolean> = { 'Beworben am': true, 'Letzter Kontakt': true };
-
-export const SKILLS: [string, boolean][] = [
-  ['User Research', false], ['Figma', true], ['Interaction Design', false],
-  ['Frontend (HTML/CSS)', true], ['Deutsch C1', false],
-];

@@ -90,10 +90,13 @@ export interface AppState {
   cardMenu: CardMenuState | null;
   modalOpen: boolean;
   multiple: boolean;
+  /* The create dialog's inputs: posting URL, free-text description and the
+     people to attach as contacts (person ids, as AppState.people is keyed). */
   jobUrl: string;
+  jobDescription: string;
+  jobPeople: string[];
   /* Ticks once a second to drive the running-agent timers. */
   tick: number;
-  selected: boolean[];
   /* Key of the single open dropdown, or null. */
   dropdown: string | null;
   /* Key of the single field being inline-edited, or null. */

@@ -35,6 +35,30 @@ describe('repo', () => {
     expect(again.application.id).toBe('BEW-46'); // counter, not MAX+1
   });
 
+  it('stores the dialog description and links the picked people', () => {
+    const people = repo.load().people.slice(0, 2).map((p) => p.id);
+    const res = repo.createApplication({
+      role: 'Designer',
+      company: 'Acme GmbH',
+      channel: null,
+      summary: 'Rolle mit Fokus auf Design-Systeme.',
+      people,
+    });
+    expect(res.application.summary).toBe('Rolle mit Fokus auf Design-Systeme.');
+
+    const byKind = (kind: LinkKind) =>
+      res.people.filter((l) => l.kind === kind).map((l) => l.person_id);
+    expect(byKind(LinkKind.CONTACT)).toEqual(people);
+    // The follow-up email starts with the same recipients, like a seeded card.
+    expect(byKind(LinkKind.EMAIL)).toEqual(people);
+  });
+
+  it('leaves summary and links empty when the dialog fields were', () => {
+    const res = repo.createApplication({ role: 'Designer', company: 'Acme GmbH', channel: null });
+    expect(res.application.summary).toBeNull();
+    expect(res.people).toEqual([]);
+  });
+
   it('cascade-deletes children but keeps people and companies', () => {
     const peopleBefore = count('SELECT COUNT(*) AS n FROM people');
     const companiesBefore = count('SELECT COUNT(*) AS n FROM companies');

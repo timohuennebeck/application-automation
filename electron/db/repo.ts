@@ -284,6 +284,10 @@ export function createRepo(
             role: string;
             company: string;
             channel: string | null;
+            /* The dialog's description; null when it was left empty. */
+            summary?: string | null;
+            /* People picked in the dialog, linked as the card's contacts. */
+            people?: number[];
         }): CreateApplicationResult {
             return tx(() => {
                 const now = nowFn();
@@ -305,8 +309,8 @@ export function createRepo(
                     "UPDATE applications SET stage_position = stage_position + 1 WHERE stage_id = ?",
                 ).run("interessiert");
                 db.prepare(
-                    `INSERT INTO applications (id, role, company_id, interest, channel, stage_id, stage_position, created_at, updated_at)
-           VALUES (?,?,?,?,?,?,?,?,?)`,
+                    `INSERT INTO applications (id, role, company_id, interest, channel, stage_id, stage_position, summary, created_at, updated_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?)`,
                 ).run(
                     id,
                     input.role,
@@ -315,15 +319,30 @@ export function createRepo(
                     input.channel,
                     "interessiert",
                     0,
+                    input.summary || null,
                     t,
                     t,
                 );
+
+                /* Contacts double as the follow-up email's recipients, the way
+                   seeded cards start out — that list is never derived later. */
+                const insLink = db.prepare(
+                    "INSERT INTO application_people (application_id, person_id, kind, position) VALUES (?,?,?,?)",
+                );
+                [...new Set(input.people ?? [])].forEach((pid, i) => {
+                    insLink.run(id, pid, LinkKind.CONTACT, i);
+                    insLink.run(id, pid, LinkKind.EMAIL, i);
+                });
 
                 const children = insertDefaultChildren(id, now);
                 return {
                     application: mustGetApplication(id),
                     company,
                     ...children,
+                    people: all<ApplicationPersonRow>(
+                        "SELECT * FROM application_people WHERE application_id = ? ORDER BY kind, position",
+                        id,
+                    ),
                     applications: all<ApplicationRow>(
                         "SELECT * FROM applications WHERE stage_id = 'interessiert'",
                     ),

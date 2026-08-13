@@ -165,6 +165,9 @@ export interface CreateApplicationResult {
     followups: FollowupRow[];
     documents: DocumentRow[];
     comments: CommentRow[];
+    /* Links for the people picked in the dialog — contacts and, mirrored onto
+       them, the follow-up email's recipients. */
+    people: ApplicationPersonRow[];
     /* Stage siblings whose position shifted to make room. */
     applications: ApplicationRow[];
 }
@@ -218,6 +221,8 @@ export interface DbApi {
             role: string;
             company: string;
             channel: string | null;
+            summary?: string | null;
+            people?: number[];
         }): Promise<CreateApplicationResult>;
         update(id: string, patch: ApplicationPatch): Promise<ApplicationRow>;
         move(

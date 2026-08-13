@@ -6,12 +6,16 @@ export function ModalShell({
   onClose,
   header,
   footer,
+  overflowVisible,
   children,
 }: {
   onClose: () => void;
   header: ReactNode;
   /* Omitted by dialogs that save as you go and have nothing to confirm. */
   footer?: ReactNode;
+  /* Set while a popover is open inside the body: the scroll container would
+     clip it at its bottom edge, where the footer then appears to cover it. */
+  overflowVisible?: boolean;
   children: ReactNode;
 }) {
   return (
@@ -45,7 +49,7 @@ export function ModalShell({
             display: 'flex',
             flexDirection: 'column',
             gap: 16,
-            overflowY: 'auto',
+            overflowY: overflowVisible ? 'visible' : 'auto',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

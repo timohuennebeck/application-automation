@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 
 /* Floating surfaces come in two flavours in the design:
@@ -24,6 +25,9 @@ export interface PopoverProps {
   zIndex?: number;
   /* Stack children in a column with the 1px gutter menus use. */
   stack?: boolean;
+  /* Scroll the popover into view on open — for anchors inside a scrolling
+     surface (the modal body) that would otherwise clip it at the bottom. */
+  revealOnMount?: boolean;
   padding?: number | string;
   style?: CSSProperties;
   children: ReactNode;
@@ -38,12 +42,18 @@ export function Popover({
   minWidth,
   zIndex = 40,
   stack = true,
+  revealOnMount,
   padding,
   style,
   children,
 }: PopoverProps) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (revealOnMount) ref.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [revealOnMount]);
   return (
     <div
+      ref={ref}
       style={{
         position: 'absolute',
         top,

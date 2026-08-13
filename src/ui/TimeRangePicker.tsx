@@ -149,7 +149,7 @@ export function TimeRangePopover({
   zIndex?: number;
 }) {
   return (
-    <Popover top={top} left={left} zIndex={zIndex} width={222} padding={10} stack={false}>
+    <Popover top={top} left={left} zIndex={zIndex} width={222} padding={10} stack={false} revealOnMount>
       <TimeRangePicker {...picker} />
     </Popover>
   );

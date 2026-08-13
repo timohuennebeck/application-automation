@@ -138,3 +138,28 @@ export function FieldHint({ children }: { children: ReactNode }) {
 export function FieldLabel({ children }: { children: ReactNode }) {
   return <div style={{ fontSize: 12, color: 'var(--c-8b8880)', fontWeight: 500 }}>{children}</div>;
 }
+
+/* One section of a dialog: a label, the hint explaining it, and the content.
+
+   The three are spaced 4 / 10 against the body's own 16 between sections, so a
+   label reads as belonging to the text under it rather than floating equally
+   far from everything. */
+export function FieldGroup({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: ReactNode;
+  children?: ReactNode;
+}) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <FieldLabel>{label}</FieldLabel>
+        {hint && <FieldHint>{hint}</FieldHint>}
+      </div>
+      {children}
+    </div>
+  );
+}

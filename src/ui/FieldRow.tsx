@@ -19,9 +19,11 @@ export function FieldRow({
 }: FieldRowProps) {
   return (
     <div style={{ display: 'flex', gap: 10, alignItems: align, minHeight, minWidth: 0, ...style }}>
+      {/* Labels wrap rather than truncate: a clipped "Berufsbezeich…" hides
+          which field the row belongs to, and fact labels are free text. */}
       <div style={{
         width: labelWidth, flexShrink: 0, fontSize: 12, color: 'var(--c-a5a29a)',
-        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+        lineHeight: 1.35, overflowWrap: 'break-word',
       }}>
         {label}
       </div>

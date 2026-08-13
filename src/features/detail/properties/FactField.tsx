@@ -85,9 +85,12 @@ export function FactField({ fact, cardId, locked }: { fact: FactView; cardId: st
           writeField(cardId, fact.label, st.editDraft.trim());
           set({ editing: null });
         }}
+        /* Fills the value column instead of a fixed width, which used to run
+           past the sidebar for long values. */
         style={{
           fontSize: 12.5, color: 'var(--c-28261f)', lineHeight: 1.45, border: '1px solid var(--c-cfccc3)',
-          borderRadius: 5, padding: '1px 5px', marginLeft: -6, background: 'var(--c-fff)', outline: 'none', width: 240,
+          borderRadius: 5, padding: '1px 5px', marginLeft: -6, background: 'var(--c-fff)', outline: 'none',
+          flex: '1 1 0', width: '100%', minWidth: 0,
         }}
       />
     );

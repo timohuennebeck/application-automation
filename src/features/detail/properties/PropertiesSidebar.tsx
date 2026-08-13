@@ -13,6 +13,10 @@ import { Chevron, ColumnIcon, PriorityBars } from '../../../ui/icons';
 import { ContactPicker } from '../../people/ContactPicker';
 import { FactField, type FactView } from './FactField';
 
+/* Wide enough for the longest catalog label ("Berufsbezeichnung"); anything
+   longer wraps instead of being clipped. */
+const SIDEBAR_LABEL_WIDTH = 118;
+
 const GroupTitle = ({ children }: { children: string }) => (
   <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--c-a8a49b)', paddingBottom: 5 }}>
     {children}
@@ -98,7 +102,7 @@ export function PropertiesSidebar({ cardId, role, company, columnIndex }: Proper
         <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
           <GroupTitle>Bewerbung</GroupTitle>
 
-          <FieldRow label="Status" labelWidth={104} minHeight={24}>
+          <FieldRow label="Status" labelWidth={SIDEBAR_LABEL_WIDTH} minHeight={24}>
             <PopoverAnchor style={{ marginLeft: -6 }}>
               <FieldChip
                 open={st.dropdown === 'status'}
@@ -130,7 +134,7 @@ export function PropertiesSidebar({ cardId, role, company, columnIndex }: Proper
             </PopoverAnchor>
           </FieldRow>
 
-          <FieldRow label="Interesse" labelWidth={104} minHeight={24}>
+          <FieldRow label="Interesse" labelWidth={SIDEBAR_LABEL_WIDTH} minHeight={24}>
             <PopoverAnchor style={{ marginLeft: -6 }}>
               <FieldChip
                 open={st.dropdown === 'interest'}
@@ -159,7 +163,7 @@ export function PropertiesSidebar({ cardId, role, company, columnIndex }: Proper
           </FieldRow>
 
           <PopoverAnchor style={{ display: 'flex', gap: 12, alignItems: 'center', minHeight: 24 }}>
-            <div style={{ width: 104, flexShrink: 0, fontSize: 12, color: 'var(--c-9a978f)' }}>Kontaktperson</div>
+            <div style={{ width: SIDEBAR_LABEL_WIDTH, flexShrink: 0, fontSize: 12, color: 'var(--c-9a978f)' }}>Kontaktperson</div>
             <div style={{ marginLeft: -6, minWidth: 0 }}>
               <ContactPicker
                 popKey={'fact:' + cardId}
@@ -175,7 +179,7 @@ export function PropertiesSidebar({ cardId, role, company, columnIndex }: Proper
           </PopoverAnchor>
 
           {SECTIONS[0][1].map(view).map((f) => (
-            <FieldRow key={f.label} label={f.label} labelWidth={104} minHeight={24}>
+            <FieldRow key={f.label} label={f.label} labelWidth={SIDEBAR_LABEL_WIDTH} minHeight={24}>
               <FactField fact={f} cardId={cardId} locked={locked} />
             </FieldRow>
           ))}
@@ -185,7 +189,7 @@ export function PropertiesSidebar({ cardId, role, company, columnIndex }: Proper
           <div key={g.title} style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
             <GroupTitle>{g.title}</GroupTitle>
             {g.items.map((f) => (
-              <FieldRow key={f.label} label={f.label} labelWidth={104} minHeight={24}>
+              <FieldRow key={f.label} label={f.label} labelWidth={SIDEBAR_LABEL_WIDTH} minHeight={24}>
                 <FactField fact={f} cardId={cardId} locked={locked} />
               </FieldRow>
             ))}

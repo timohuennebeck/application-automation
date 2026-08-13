@@ -153,7 +153,8 @@
 .pfield {
   font-size: 12px; line-height: 1.45; border-radius: 5px; padding: 2px 6px; margin-left: -6px;
   cursor: text; background: var(--c-f1efe9); max-width: 100%; min-width: 0;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  /* Wraps instead of clipping: a truncated address is not a usable one. */
+  overflow-wrap: anywhere;
 }
 .pfield:hover { background: var(--c-eae7df); }
 

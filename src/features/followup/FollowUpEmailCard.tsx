@@ -9,7 +9,8 @@ import { Caret, CopyGlyph, KeplerAvatar, RegenGlyph } from '../../ui/icons';
 import { ContactPicker } from '../people/ContactPicker';
 import { draftEmail, type FollowUpSlot } from './schedule';
 
-const LABEL = { fontSize: 11.5, color: 'var(--c-9a978f)', width: 76, flexShrink: 0 } as const;
+/* Wide enough for "Kontaktperson", the longest label in this card. */
+const LABEL = { fontSize: 11.5, color: 'var(--c-9a978f)', width: 88, flexShrink: 0, lineHeight: 1.35 } as const;
 
 function LoadingSkeleton() {
   return (
@@ -102,7 +103,8 @@ export function FollowUpEmailCard({ cardId, role, company, slots, sel }: {
               </FieldChip>
               {dueOpen && (
                 <CalendarPopover
-                  left={70}
+                  /* Lines the calendar up under the chip, past the label column. */
+                  left={97}
                   selectedISO={slot.iso}
                   fromYM={fromYM}
                   toYM={dueYM > toYM ? dueYM : toYM}

@@ -132,7 +132,7 @@ export function DetailView() {
             <Avatar bg={CHANNEL_BG[card.channel] || 'var(--c-8b8880)'} size={36} fontSize={15}>{card.company[0]}</Avatar>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0, flex: '1 1 0' }}>
               <RoleHeading cardId={cardId} role={card.role} locked={!!run} />
-              <div style={{ fontSize: 12.5, color: 'var(--c-8b8880)', lineHeight: 1.4 }}>
+              <div style={{ fontSize: 12.5, color: 'var(--c-8b8880)', lineHeight: 1.4, overflowWrap: 'anywhere' }}>
                 {card.companyFull.replace(/,\s*/g, ' · ')} ·{' '}
                 <a href="#" style={{ textDecoration: 'none' }}>
                   {card.website || 'karriere.' + card.company.toLowerCase().replace(/[^a-z]/g, '') + '.de'}

@@ -1,4 +1,5 @@
 import type { ColumnDef } from '../../data/config';
+import { visibleCards } from '../../state/selectors';
 import { useApp } from '../../state/store-context';
 import { CollapseGlyph, ColumnIcon } from '../../ui/icons';
 import { ApplicationCard } from './ApplicationCard';
@@ -10,7 +11,7 @@ export function BoardColumn({ col, ci }: { col: ColumnDef; ci: number }) {
   const { st, set } = store;
 
   const isOpen = st.colOpen[ci];
-  const cards = st.board[ci];
+  const cards = visibleCards(st, ci);
   const ring = st.dragId && st.overCol === ci
     ? 'inset 0 0 0 1.6px color-mix(in srgb, ' + col.accent + ' 55%, transparent)'
     : 'none';

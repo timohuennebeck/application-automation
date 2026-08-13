@@ -105,6 +105,33 @@ export function roundStage(index: number, total: number): ColumnDef {
   return COLUMNS[stage];
 }
 
+/* What the board can be sorted by. The board's own order (drag and drop) is
+   what SortKey.NONE means — no comparator, the stage positions decide. */
+export const SortKey = {
+  NONE: 'NONE',
+  SALARY: 'SALARY',
+  INTEREST: 'INTEREST',
+  COMPANY: 'COMPANY',
+  ROLE: 'ROLE',
+} as const;
+export type SortKey = (typeof SortKey)[keyof typeof SortKey];
+
+export const SortDir = {
+  ASC: 'ASC',
+  DESC: 'DESC',
+} as const;
+export type SortDir = (typeof SortDir)[keyof typeof SortDir];
+
+/* Menu label per sort key, plus the direction that reads as "best first" —
+   most money and most interest descend, names and roles run A→Z. */
+export const SORT_OPTIONS: [SortKey, string, SortDir][] = [
+  [SortKey.NONE, 'Eigene Reihenfolge', SortDir.ASC],
+  [SortKey.SALARY, 'Gehalt', SortDir.DESC],
+  [SortKey.INTEREST, 'Interesse', SortDir.DESC],
+  [SortKey.COMPANY, 'Firma', SortDir.ASC],
+  [SortKey.ROLE, 'Position', SortDir.ASC],
+];
+
 /* Sidebar field catalog. Most labels route to real DB columns; only the
    free-form POSITION fields are stored in the facts table. */
 export const SECTIONS: [string, string[]][] = [

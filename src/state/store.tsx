@@ -3,7 +3,7 @@
    in-memory view in sync and owns all transient UI state. */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { COLUMNS, STAGE_IDS } from '../data/config';
+import { COLUMNS, SortDir, SortKey, STAGE_IDS } from '../data/config';
 import { Author, FactKind, Interest, LinkKind, RoundState } from '../shared/enums';
 import type { ActivityRow, FollowupRow } from '../shared/db-types';
 import { CANONICAL_ROUNDS } from '../shared/domain';
@@ -13,7 +13,16 @@ import { dateToISO } from '../lib/date';
 import { initials } from '../lib/text';
 import { parsePosting } from '../features/create/parse-posting';
 import { Ctx } from './store-context';
-import type { AppState, AppStore, ContactEntry, Patch, Round } from './store-context';
+import type { AppState, AppStore, BoardFilter, ContactEntry, Patch, Round } from './store-context';
+
+/* An untouched board: every card, in the order the stages hold them. */
+export const EMPTY_FILTER: BoardFilter = {
+  sort: SortKey.NONE,
+  dir: SortDir.ASC,
+  people: [],
+  channels: [],
+  interests: [],
+};
 
 /* The create dialog's inputs. Kept as one object so "Erstelle mehrere" can
    reset the whole form after each card without listing the fields twice. */
@@ -39,6 +48,7 @@ const initialState = (): AppState => ({
   documentsByApp: {},
   activitiesByApp: {},
   board: STAGE_IDS.map(() => []),
+  boardFilter: EMPTY_FILTER,
 
   colOpen: COLUMNS.map((c) => c.open),
   secOpen: {},

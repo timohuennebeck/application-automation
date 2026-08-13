@@ -1,4 +1,5 @@
 import type { DragEvent } from 'react';
+import { isSorted } from '../../state/selectors';
 import type { AppStore } from '../../state/store-context';
 
 /* Card drag-and-drop. The board reorders live while dragging, so the card the
@@ -61,6 +62,15 @@ export function dragOverCol(store: AppStore, ci: number, e: DragEvent) {
   if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
   const dragId = store.st.dragId;
   if (!dragId) return;
+
+  // Under a sort the rendered order is not the stored one, so a drop index
+  // read off the screen would mean nothing. Cards can still change column —
+  // they just land at the end and the sort places them.
+  if (isSorted(store.st)) {
+    if (store.st.board[ci]?.includes(dragId)) return;
+    store.moveCard(dragId, ci, null, true);
+    return;
+  }
 
   const y = e.clientY;
   const last = store.dragPosRef.current;

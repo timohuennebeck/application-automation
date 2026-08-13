@@ -201,6 +201,19 @@ export function DotsGlyph() {
   );
 }
 
+/* Sliders, for the board's filter and sort control. */
+export function FilterGlyph() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 14 14" style={{ flexShrink: 0 }}>
+      <g fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
+        <path d="M2 4.2 H12 M2 9.8 H12" />
+        <circle cx="5.4" cy="4.2" r="1.5" fill="var(--c-fff)" />
+        <circle cx="9" cy="9.8" r="1.5" fill="var(--c-fff)" />
+      </g>
+    </svg>
+  );
+}
+
 /* Collapse arrow on board column headers. */
 export function CollapseGlyph() {
   return (

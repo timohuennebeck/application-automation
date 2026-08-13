@@ -1,5 +1,6 @@
 import { useApp } from '../../state/store-context';
 import { ThemeGlyph } from '../../ui/icons';
+import { BoardFilterBar } from '../board/BoardFilterBar';
 
 /* Sits behind the native macOS traffic lights (titleBarStyle: hiddenInset),
    so the left padding reserves room for them and the bar itself drags the window. */
@@ -30,6 +31,8 @@ export function TopBar() {
         <div>Theme wechseln</div>
         <div className="kbd">⌘T</div>
       </div>
+      {/* Only the board can be filtered, so the control goes with it. */}
+      {!st.openCardId && <BoardFilterBar />}
     </div>
   );
 }

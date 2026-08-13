@@ -1,9 +1,10 @@
 /* Derived views over the domain state. The board card's subtitle, interview
    chip and salary line were pre-rendered strings in the sample data; now they
    are computed from rounds, follow-ups and facts at render time. */
-import { roundStage, Urgency } from '../data/config';
-import { Interest, RoundState } from '../shared/enums';
+import { INTEREST, roundStage, SortDir, SortKey, Urgency } from '../data/config';
+import { Interest, LinkKind, RoundState } from '../shared/enums';
 import { MON_DE3, DOW_DE, dateToISO, dayDiff, todayISO } from '../lib/date';
+import { parseSalary } from '../lib/salary';
 import type { AppState } from './store-context';
 
 export function factOf(st: AppState, id: string, label: string): string {
@@ -41,6 +42,95 @@ export function cardView(st: AppState, id: string): CardView | null {
     summary: app.summary
       || app.role + ' bei ' + name + '. Stellenanzeige ist übernommen, Anforderungen und Unterlagen liegen strukturiert an der Karte.',
     website: company?.website || '',
+  };
+}
+
+/* How many filters (not the sort) are narrowing the board — the count on the
+   toolbar button. */
+export function activeFilterCount(st: AppState): number {
+  const f = st.boardFilter;
+  return f.people.length + f.channels.length + f.interests.length;
+}
+
+export function isFiltered(st: AppState): boolean {
+  return activeFilterCount(st) > 0;
+}
+
+/* A sort replaces the board's own order, so the columns can no longer be
+   reordered by hand while one is on. */
+export function isSorted(st: AppState): boolean {
+  return st.boardFilter.sort !== SortKey.NONE;
+}
+
+function matchesFilter(st: AppState, id: string): boolean {
+  const f = st.boardFilter;
+  const app = st.applications[id];
+  if (!app) return false;
+
+  if (f.channels.length && !f.channels.includes(app.channel || '')) return false;
+  if (f.interests.length && !f.interests.includes(app.interest)) return false;
+  if (f.people.length) {
+    const contacts = (st.linksByApp[id] || []).filter((l) => l.kind === LinkKind.CONTACT);
+    if (!contacts.some((l) => f.people.includes(l.person_id))) return false;
+  }
+  return true;
+}
+
+/* Ranks a card on the active sort key. Cards with nothing to compare (no
+   salary recorded, no company row) come back null and sink to the bottom
+   whichever way the sort runs. */
+function sortValue(st: AppState, id: string): number | string | null {
+  const app = st.applications[id];
+  if (!app) return null;
+  switch (st.boardFilter.sort) {
+    case SortKey.SALARY:
+      return parseSalary(factOf(st, id, 'Gehalt'));
+    case SortKey.INTEREST:
+      return INTEREST[app.interest][1];
+    case SortKey.COMPANY:
+      return st.companies[app.company_id]?.name || null;
+    case SortKey.ROLE:
+      return app.role;
+    default:
+      return null;
+  }
+}
+
+/* The cards of one column as the board should show them: filtered, then
+   ordered by the active sort (the stored order when there is none). */
+export function visibleCards(st: AppState, ci: number): string[] {
+  const cards = (st.board[ci] || []).filter((id) => matchesFilter(st, id));
+  if (!isSorted(st)) return cards;
+
+  const sign = st.boardFilter.dir === SortDir.DESC ? -1 : 1;
+  return cards
+    .map((id) => ({ id, value: sortValue(st, id) }))
+    .sort((a, b) => {
+      if (a.value === null || b.value === null) {
+        return a.value === b.value ? 0 : a.value === null ? 1 : -1;
+      }
+      if (typeof a.value === 'string' || typeof b.value === 'string') {
+        return sign * String(a.value).localeCompare(String(b.value), 'de');
+      }
+      return sign * (a.value - b.value);
+    })
+    .map((entry) => entry.id);
+}
+
+/* Every channel and person the board can be filtered by, drawn from the cards
+   themselves so the menu never offers an option that matches nothing. */
+export function filterOptions(st: AppState): { channels: string[]; people: number[] } {
+  const channels = new Set<string>();
+  const people = new Set<number>();
+  for (const app of Object.values(st.applications)) {
+    if (app.channel) channels.add(app.channel);
+    for (const link of st.linksByApp[app.id] || []) {
+      if (link.kind === LinkKind.CONTACT) people.add(link.person_id);
+    }
+  }
+  return {
+    channels: [...channels].sort((a, b) => a.localeCompare(b, 'de')),
+    people: [...people].filter((pid) => st.people[String(pid)]),
   };
 }
 

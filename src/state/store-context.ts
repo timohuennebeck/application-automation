@@ -6,6 +6,7 @@ import type {
   FactRow, FollowupRow,
 } from '../shared/db-types';
 import type { PersonView, RoundView } from './db-view';
+import type { SortDir, SortKey } from '../data/config';
 import type { Interest, LinkKind } from '../shared/enums';
 
 /* Components render rounds through this alias. */
@@ -33,6 +34,17 @@ export interface PersonEditState {
   /* Which link list that picker writes: the card's contacts or the follow-up
      email's recipients. */
   contactStore?: LinkKind;
+}
+
+/* What the board shows and in which order. Purely a view over the stored
+   board — nothing here is persisted. */
+export interface BoardFilter {
+  sort: SortKey;
+  dir: SortDir;
+  /* Person ids; a card passes when one of its contacts is among them. */
+  people: number[];
+  channels: string[];
+  interests: Interest[];
 }
 
 /* Position of the board context menu, in viewport coordinates. */
@@ -78,6 +90,7 @@ export interface AppState {
   activitiesByApp: Record<string, ActivityRow[]>;
   /* Card ids per stage column, index-aligned with config COLUMNS/STAGE_IDS. */
   board: string[][];
+  boardFilter: BoardFilter;
 
   /* Transient UI state. */
   colOpen: boolean[];

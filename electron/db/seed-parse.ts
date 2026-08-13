@@ -38,7 +38,10 @@ export function relativeToISO(val: string, now: Date): string {
 
 /* "'10:00 – 11:00'" → ['10:00', '11:00']; tolerates a single time or none. */
 export function splitTimeRange(val: string): [string | null, string | null] {
-  const parts = (val || '').split(/\s*[–-]\s*/).map((p) => p.trim()).filter(Boolean);
+  const parts = (val || '')
+    .split(/\s*[–-]\s*/)
+    .map((p) => p.trim())
+    .filter(Boolean);
   return [parts[0] || null, parts[1] || null];
 }
 

@@ -28,12 +28,19 @@ export function CommentsSection({ cardId }: { cardId: string }) {
 
         return (
           <div key={c.id} style={{ display: 'flex', gap: 9 }}>
-            <Avatar bg={c.author === Author.KEPLER ? 'var(--c-1b1a17)' : 'var(--c-5b7a5e)'} size={22} fontSize={9} style={{ marginTop: 1 }}>
+            <Avatar
+              bg={c.author === Author.KEPLER ? 'var(--c-1b1a17)' : 'var(--c-5b7a5e)'}
+              size={22}
+              fontSize={9}
+              style={{ marginTop: 1 }}
+            >
               {c.author === Author.KEPLER ? 'K' : AUTHOR_LABEL[c.author]}
             </Avatar>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0, flex: '1 1 auto' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--c-1b1a17)' }}>{AUTHOR_LABEL[c.author]}</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--c-1b1a17)' }}>
+                  {AUTHOR_LABEL[c.author]}
+                </div>
                 <div style={{ fontSize: 11, color: 'var(--c-a5a29a)' }}>{relTime(c.created_at)}</div>
                 {c.author === Author.DU && (
                   <PopoverAnchor style={{ marginLeft: 'auto' }}>
@@ -47,7 +54,11 @@ export function CommentsSection({ cardId }: { cardId: string }) {
                     </div>
                     {menuOpen && (
                       <Popover top={24} right={0} minWidth={150}>
-                        <MenuItem onClick={() => set({ commentEditing: ck, commentEditDraft: c.text, commentMenu: null })}>
+                        <MenuItem
+                          onClick={() =>
+                            set({ commentEditing: ck, commentEditDraft: c.text, commentMenu: null })
+                          }
+                        >
                           Bearbeiten
                         </MenuItem>
                         <MenuItem danger onClick={() => deleteComment(cardId, c.id)}>
@@ -66,18 +77,33 @@ export function CommentsSection({ cardId }: { cardId: string }) {
                     autoFocus
                     onChange={(e) => set({ commentEditDraft: e.target.value })}
                     onKeyDown={(e) => {
-                      if (e.key === 'Escape') { e.stopPropagation(); set({ commentEditing: null }); }
-                      else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) saveEdit();
+                      if (e.key === 'Escape') {
+                        e.stopPropagation();
+                        set({ commentEditing: null });
+                      } else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) saveEdit();
                     }}
                     style={{
-                      fontSize: 12.5, color: 'var(--c-28261f)', lineHeight: 1.6, background: 'var(--c-fff)',
-                      border: '1px solid var(--c-cfccc3)', borderRadius: 6, padding: '7px 9px', outline: 'none',
-                      resize: 'vertical', minHeight: 52, width: '100%', boxSizing: 'border-box',
+                      fontSize: 12.5,
+                      color: 'var(--c-28261f)',
+                      lineHeight: 1.6,
+                      background: 'var(--c-fff)',
+                      border: '1px solid var(--c-cfccc3)',
+                      borderRadius: 6,
+                      padding: '7px 9px',
+                      outline: 'none',
+                      resize: 'vertical',
+                      minHeight: 52,
+                      width: '100%',
+                      boxSizing: 'border-box',
                     }}
                   />
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 2 }}>
-                    <div className="btn-ghost" onClick={() => set({ commentEditing: null })}>Abbrechen</div>
-                    <div className="btn-dark" onClick={saveEdit}>Speichern</div>
+                    <div className="btn-ghost" onClick={() => set({ commentEditing: null })}>
+                      Abbrechen
+                    </div>
+                    <div className="btn-dark" onClick={saveEdit}>
+                      Speichern
+                    </div>
                   </div>
                 </>
               ) : (

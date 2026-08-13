@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
-  dayMonthToISO, germanDateToISO, looksLikePhone, relativeToISO, splitCompany, splitTimeRange,
+  dayMonthToISO,
+  germanDateToISO,
+  looksLikePhone,
+  relativeToISO,
+  splitCompany,
+  splitTimeRange,
 } from '../seed-parse.ts';
 
 /* Fixed reference instant so tests are deterministic. */

@@ -1,7 +1,20 @@
 /* Date and time helpers. The app speaks German dates (DD.MM.YYYY) at the UI
    layer and ISO (YYYY-MM-DD) internally; these convert between the two. */
 
-export const MONTHS_DE = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+export const MONTHS_DE = [
+  'Januar',
+  'Februar',
+  'März',
+  'April',
+  'Mai',
+  'Juni',
+  'Juli',
+  'August',
+  'September',
+  'Oktober',
+  'November',
+  'Dezember',
+];
 export const MON_DE3 = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
 export const DOW_DE = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
 /* Calendar grids start on Monday. */
@@ -26,9 +39,17 @@ export function dateToISO(val: string): string {
   let m = v.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
   if (m) return m[3] + '-' + pad2(+m[2]) + '-' + pad2(+m[1]);
   m = v.match(/^vor\s+(\d+)\s+Tag/i);
-  if (m) { const d = new Date(); d.setDate(d.getDate() - +m[1]); return toISO(d); }
+  if (m) {
+    const d = new Date();
+    d.setDate(d.getDate() - +m[1]);
+    return toISO(d);
+  }
   if (/^heute$/i.test(v)) return todayISO();
-  if (/^gestern$/i.test(v)) { const d = new Date(); d.setDate(d.getDate() - 1); return toISO(d); }
+  if (/^gestern$/i.test(v)) {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return toISO(d);
+  }
   return '';
 }
 

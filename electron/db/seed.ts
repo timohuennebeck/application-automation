@@ -5,14 +5,25 @@
    and covered by __tests__/seed.test.ts. */
 import type { DatabaseSync } from 'node:sqlite';
 import {
-  CARD_DEFS, DETAILS, HISTORY, INITIAL_BOARD, INITIAL_PEOPLE, INITIAL_PEOPLE_POOL,
-  INITIAL_ROUNDS, SALARY,
+  CARD_DEFS,
+  DETAILS,
+  HISTORY,
+  INITIAL_BOARD,
+  INITIAL_PEOPLE,
+  INITIAL_PEOPLE_POOL,
+  INITIAL_ROUNDS,
+  SALARY,
 } from '../../src/data/sample-data.ts';
 import { CANONICAL_ROUNDS, DEFAULT_COMMENT, DEFAULT_FOLLOWUPS } from '../../src/shared/domain.ts';
 import { Author, DocumentKind, FactKind, LinkKind, RoundState } from '../../src/shared/enums.ts';
 import { STAGES } from './schema.ts';
 import {
-  dayMonthToISO, germanDateToISO, looksLikePhone, relativeToISO, splitCompany, splitTimeRange,
+  dayMonthToISO,
+  germanDateToISO,
+  looksLikePhone,
+  relativeToISO,
+  splitCompany,
+  splitTimeRange,
 } from './seed-parse.ts';
 
 const SEED_YEAR = 2026;
@@ -20,16 +31,35 @@ const DAY = 86_400_000;
 
 /* Labels that route to real columns and must never become facts rows. */
 const ROUTED_LABELS = new Set([
-  'Berufsbezeichnung', 'Firma', 'Plattform', 'Beworben via', 'Beworben am', 'Letzter Kontakt',
-  'Branche', 'Mitarbeiterzahl', 'Karriereseite', 'E-Mail', 'Telefon',
-  'Kontaktperson', 'Kontaktperson E-Mail', 'Kontaktperson Telefon', 'Kontaktperson LinkedIn',
+  'Berufsbezeichnung',
+  'Firma',
+  'Plattform',
+  'Beworben via',
+  'Beworben am',
+  'Letzter Kontakt',
+  'Branche',
+  'Mitarbeiterzahl',
+  'Karriereseite',
+  'E-Mail',
+  'Telefon',
+  'Kontaktperson',
+  'Kontaktperson E-Mail',
+  'Kontaktperson Telefon',
+  'Kontaktperson LinkedIn',
 ]);
 
 const atNine = (isoDate: string) => `${isoDate}T09:00:00.000Z`;
 
 /* An unscheduled round in the sample-data shape the seed loop consumes. */
-const emptyRound = (title: string) =>
-  ({ state: RoundState.OPEN, title, date: '', time: '', where: '', people: [] as string[], link: '' });
+const emptyRound = (title: string) => ({
+  state: RoundState.OPEN,
+  title,
+  date: '',
+  time: '',
+  where: '',
+  people: [] as string[],
+  link: '',
+});
 
 /* Local calendar date — toISOString would shift the day for users west of UTC. */
 const localDay = (d: Date) =>
@@ -121,7 +151,8 @@ export function seedIfEmpty(db: DatabaseSync, now = new Date()): boolean {
         factValue(id, 'Karriereseite') ?? null,
         factValue(id, 'E-Mail') ?? null,
         factValue(id, 'Telefon') ?? null,
-        nowISO, nowISO,
+        nowISO,
+        nowISO,
       );
       companyIds.set(name, Number(res.lastInsertRowid));
     }
@@ -139,8 +170,13 @@ export function seedIfEmpty(db: DatabaseSync, now = new Date()): boolean {
         const lastContact = relativeToISO(factValue(id, 'Letzter Kontakt') ?? '', now);
         const updatedAt = relativeToISO(card[4], now) || createdAt;
         insApp.run(
-          id, card[0], companyIds.get(name)!, card[2], card[3],
-          STAGES[col][0], pos,
+          id,
+          card[0],
+          companyIds.get(name)!,
+          card[2],
+          card[3],
+          STAGES[col][0],
+          pos,
           DETAILS[id]?.summary ?? null,
           germanDateToISO(factValue(id, 'Beworben am') ?? '') || null,
           null,
@@ -169,15 +205,24 @@ export function seedIfEmpty(db: DatabaseSync, now = new Date()): boolean {
     const personIdByKey = new Map<string, number>();
     for (const [key, p] of Object.entries(INITIAL_PEOPLE)) {
       const res = insPerson.run(
-        p.name, p.role || null, p.initials || key, p.email || null, p.phone || null,
-        p.linkedin || null, p.bg, nowISO, nowISO,
+        p.name,
+        p.role || null,
+        p.initials || key,
+        p.email || null,
+        p.phone || null,
+        p.linkedin || null,
+        p.bg,
+        nowISO,
+        nowISO,
       );
       personIdByKey.set(key, Number(res.lastInsertRowid));
     }
 
     /* People pass 2: DETAILS.contacts. Merge only on exact name+role — the
        sample data has different people sharing a name (two Nadine Wolfs). */
-    const findPerson = db.prepare('SELECT id, email, phone, linkedin FROM people WHERE name = ? AND role IS ?');
+    const findPerson = db.prepare(
+      'SELECT id, email, phone, linkedin FROM people WHERE name = ? AND role IS ?',
+    );
     for (const [appId, det] of Object.entries(DETAILS)) {
       det.contacts.forEach(([name, role, val, bg], idx) => {
         const isPhone = looksLikePhone(val);
@@ -185,15 +230,33 @@ export function seedIfEmpty(db: DatabaseSync, now = new Date()): boolean {
           { id: number; email: string | null; phone: string | null; linkedin: string | null } | undefined;
         if (!row) {
           const res = insPerson.run(
-            name, role || null, name.split(/\s+/).map((w) => w[0]).join('').toUpperCase(),
-            isPhone ? null : val || null, isPhone ? val : null, null, bg, nowISO, nowISO,
+            name,
+            role || null,
+            name
+              .split(/\s+/)
+              .map((w) => w[0])
+              .join('')
+              .toUpperCase(),
+            isPhone ? null : val || null,
+            isPhone ? val : null,
+            null,
+            bg,
+            nowISO,
+            nowISO,
           );
-          row = { id: Number(res.lastInsertRowid), email: isPhone ? null : val, phone: isPhone ? val : null, linkedin: null };
+          row = {
+            id: Number(res.lastInsertRowid),
+            email: isPhone ? null : val,
+            phone: isPhone ? val : null,
+            linkedin: null,
+          };
         }
         /* Fold the Kontaktperson-* facts into this person's empty fields —
            the tuple itself lacks phone/linkedin. */
         if (factValue(appId, 'Kontaktperson') === name) {
-          const upd = db.prepare('UPDATE people SET email = COALESCE(email, ?), phone = COALESCE(phone, ?), linkedin = COALESCE(linkedin, ?) WHERE id = ?');
+          const upd = db.prepare(
+            'UPDATE people SET email = COALESCE(email, ?), phone = COALESCE(phone, ?), linkedin = COALESCE(linkedin, ?) WHERE id = ?',
+          );
           upd.run(
             factValue(appId, 'Kontaktperson E-Mail') ?? null,
             factValue(appId, 'Kontaktperson Telefon') ?? null,
@@ -237,10 +300,19 @@ export function seedIfEmpty(db: DatabaseSync, now = new Date()): boolean {
       rounds.forEach((r, pos) => {
         const [start, end] = splitTimeRange(r.time);
         const res = insRound.run(
-          id, pos, r.state, r.title,
-          germanDateToISO(r.date) || null, start, end, r.where || null, r.link || null,
+          id,
+          pos,
+          r.state,
+          r.title,
+          germanDateToISO(r.date) || null,
+          start,
+          end,
+          r.where || null,
+          r.link || null,
         );
-        r.people.forEach((key, pi) => insRoundPerson.run(Number(res.lastInsertRowid), personIdByKey.get(key)!, pi));
+        r.people.forEach((key, pi) =>
+          insRoundPerson.run(Number(res.lastInsertRowid), personIdByKey.get(key)!, pi),
+        );
       });
     }
 
@@ -255,7 +327,10 @@ export function seedIfEmpty(db: DatabaseSync, now = new Date()): boolean {
         ? upcoming.map((u) => [+(u[0].match(/\d+/) || ['0'])[0], u[1]])
         : DEFAULT_FOLLOWUPS.slice(1);
       slots.unshift([0, DEFAULT_FOLLOWUPS[0][1]]);
-      const dates = followupDates(now, slots.map((s) => s[0]));
+      const dates = followupDates(
+        now,
+        slots.map((s) => s[0]),
+      );
       const slot0 = card[5] ? dueDateFromSubtitle(card[4], now) : null;
       if (slot0) dates[0] = slot0;
       slots.forEach(([, label], pos) => insFollowup.run(id, label, dates[pos], pos));
@@ -264,8 +339,22 @@ export function seedIfEmpty(db: DatabaseSync, now = new Date()): boolean {
     /* Documents — the stub pair every card shows today; files come with the
        Agent SDK work. */
     for (const id of Object.keys(CARD_DEFS)) {
-      insDocument.run(id, DocumentKind.COVER_LETTER, 'Cover Letter', 'docx', atNine('2026-07-26'), atNine('2026-07-26'));
-      insDocument.run(id, DocumentKind.LEBENSLAUF, 'Lebenslauf', 'docx', atNine('2026-07-22'), atNine('2026-07-24'));
+      insDocument.run(
+        id,
+        DocumentKind.COVER_LETTER,
+        'Cover Letter',
+        'docx',
+        atNine('2026-07-26'),
+        atNine('2026-07-26'),
+      );
+      insDocument.run(
+        id,
+        DocumentKind.LEBENSLAUF,
+        'Lebenslauf',
+        'docx',
+        atNine('2026-07-22'),
+        atNine('2026-07-24'),
+      );
     }
 
     /* Activities — HISTORY's yearless dates, year 2026 assumed. */

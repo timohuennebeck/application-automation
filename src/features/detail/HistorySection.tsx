@@ -19,13 +19,37 @@ export function HistorySection({ cardId }: { cardId: string }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
         {entries.map((a) => (
           <div key={a.id} style={{ display: 'flex', gap: 9, alignItems: 'flex-start', minWidth: 0 }}>
-            <Avatar bg={a.author === Author.KEPLER ? 'var(--c-1b1a17)' : 'var(--c-5b7a5e)'} size={15} fontSize={7} style={{ marginTop: 1 }}>
+            <Avatar
+              bg={a.author === Author.KEPLER ? 'var(--c-1b1a17)' : 'var(--c-5b7a5e)'}
+              size={15}
+              fontSize={7}
+              style={{ marginTop: 1 }}
+            >
               {a.author === Author.KEPLER ? 'K' : 'Du'}
             </Avatar>
-            <div style={{ fontSize: 12, color: 'var(--c-77746d)', lineHeight: 1.5, minWidth: 0, textWrap: 'pretty' }}>
-              <span style={{ fontWeight: 600, color: 'var(--c-3d3a34)' }}>{AUTHOR_LABEL[a.author]}</span> {a.text}
+            <div
+              style={{
+                fontSize: 12,
+                color: 'var(--c-77746d)',
+                lineHeight: 1.5,
+                minWidth: 0,
+                textWrap: 'pretty',
+              }}
+            >
+              <span style={{ fontWeight: 600, color: 'var(--c-3d3a34)' }}>{AUTHOR_LABEL[a.author]}</span>{' '}
+              {a.text}
             </div>
-            <div style={{ fontSize: 11, color: 'var(--c-a5a29a)', marginLeft: 'auto', flexShrink: 0, whiteSpace: 'nowrap' }}>{actTime(a.created_at)}</div>
+            <div
+              style={{
+                fontSize: 11,
+                color: 'var(--c-a5a29a)',
+                marginLeft: 'auto',
+                flexShrink: 0,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {actTime(a.created_at)}
+            </div>
           </div>
         ))}
       </div>

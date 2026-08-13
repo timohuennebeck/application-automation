@@ -2,8 +2,14 @@
    Kept apart from the provider so the store module only exports a component. */
 import { createContext, useContext } from 'react';
 import type {
-  ActivityRow, ApplicationPersonRow, ApplicationRow, CommentRow, CompanyRow, DocumentRow,
-  FactRow, FollowupRow,
+  ActivityRow,
+  ApplicationPersonRow,
+  ApplicationRow,
+  CommentRow,
+  CompanyRow,
+  DocumentRow,
+  FactRow,
+  FollowupRow,
 } from '../shared/db-types';
 import type { PersonView, RoundView } from './db-view';
 import type { SortDir, SortKey } from '../data/config';

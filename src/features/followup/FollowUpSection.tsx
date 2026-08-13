@@ -8,7 +8,15 @@ import { FollowUpEmailCard } from './FollowUpEmailCard';
 import { followUpSlots, slotLabel } from './schedule';
 
 /* Follow-up planning: which one is being worked on, and its drafted email. */
-export function FollowUpSection({ cardId, role, company }: { cardId: string; role: string; company: string }) {
+export function FollowUpSection({
+  cardId,
+  role,
+  company,
+}: {
+  cardId: string;
+  role: string;
+  company: string;
+}) {
   const { st, set } = useApp();
   const slots = followUpSlots(st, cardId);
   if (!slots.length) return null;
@@ -42,7 +50,9 @@ export function FollowUpSection({ cardId, role, company }: { cardId: string; rol
                 <StatusDot kind={s.kind} accent={s.dot} frac={0.45} size={13} />
                 <span style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{slotLabel(s, role)}</span>
                 <span style={{ flex: '1 1 auto' }} />
-                <span style={{ fontSize: 11.5, color: 'var(--c-a5a29a)', whiteSpace: 'nowrap' }}>{s.meta}</span>
+                <span style={{ fontSize: 11.5, color: 'var(--c-a5a29a)', whiteSpace: 'nowrap' }}>
+                  {s.meta}
+                </span>
               </MenuItem>
             ))}
           </Popover>

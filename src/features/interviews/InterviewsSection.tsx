@@ -57,22 +57,42 @@ export function InterviewsSection({ cardId, company }: { cardId: string; company
                     <span style={{ whiteSpace: 'nowrap' }}>{r.title}</span>
                     <span style={{ color: 'var(--c-8d8a83)', whiteSpace: 'nowrap' }}>{shortDate(iso)}</span>
                     <span style={{ flex: '1 1 auto' }} />
-                    {iso && <span style={{ fontSize: 11.5, color: 'var(--c-a5a29a)', whiteSpace: 'nowrap' }}>{relLabel(dayDiff(iso))}</span>}
+                    {iso && (
+                      <span style={{ fontSize: 11.5, color: 'var(--c-a5a29a)', whiteSpace: 'nowrap' }}>
+                        {relLabel(dayDiff(iso))}
+                      </span>
+                    )}
                   </MenuItem>
                 );
               })}
               <MenuItem
                 style={{ color: 'var(--c-5f5c56)' }}
-                onClick={() => set({
-                  roundEdit: { id: cardId, ri: rounds.length, isNew: true },
-                  roundDraft: { title: 'Interview', date: '', time: '', where: '', link: '', people: [] },
-                  dropdown: null, editing: null, roundPop: null,
-                })}
+                onClick={() =>
+                  set({
+                    roundEdit: { id: cardId, ri: rounds.length, isNew: true },
+                    roundDraft: { title: 'Interview', date: '', time: '', where: '', link: '', people: [] },
+                    dropdown: null,
+                    editing: null,
+                    roundPop: null,
+                  })
+                }
               >
-                <div style={{
-                  width: 13, height: 13, borderRadius: '50%', border: '1px dashed var(--c-c9c5bb)', boxSizing: 'border-box',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: 'var(--c-9a978f)', lineHeight: 1, flexShrink: 0,
-                }}>
+                <div
+                  style={{
+                    width: 13,
+                    height: 13,
+                    borderRadius: '50%',
+                    border: '1px dashed var(--c-c9c5bb)',
+                    boxSizing: 'border-box',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: 9,
+                    color: 'var(--c-9a978f)',
+                    lineHeight: 1,
+                    flexShrink: 0,
+                  }}
+                >
                   +
                 </div>
                 <span style={{ whiteSpace: 'nowrap' }}>Interview hinzufügen</span>

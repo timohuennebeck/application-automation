@@ -39,8 +39,12 @@ export function cardView(st: AppState, id: string): CardView | null {
     interest: app.interest,
     channel: app.channel || '',
     salary: factOf(st, id, 'Gehalt'),
-    summary: app.summary
-      || app.role + ' bei ' + name + '. Stellenanzeige ist übernommen, Anforderungen und Unterlagen liegen strukturiert an der Karte.',
+    summary:
+      app.summary ||
+      app.role +
+        ' bei ' +
+        name +
+        '. Stellenanzeige ist übernommen, Anforderungen und Unterlagen liegen strukturiert an der Karte.',
     website: company?.website || '',
   };
 }
@@ -197,10 +201,16 @@ export function cardSubtitle(st: AppState, id: string): CardSubtitle {
   const upd = st.applications[id]?.updated_at;
   const days = upd ? -dayDiff(upd.slice(0, 10)) : 0;
   return {
-    text: days <= 0 ? 'gerade eben' : days === 1 ? 'vor 1 Tag'
-      : days < 14 ? 'vor ' + days + ' Tagen'
-        : days < 60 ? 'vor ' + Math.round(days / 7) + ' Wochen'
-          : 'vor ' + Math.round(days / 30) + ' Monaten',
+    text:
+      days <= 0
+        ? 'gerade eben'
+        : days === 1
+          ? 'vor 1 Tag'
+          : days < 14
+            ? 'vor ' + days + ' Tagen'
+            : days < 60
+              ? 'vor ' + Math.round(days / 7) + ' Wochen'
+              : 'vor ' + Math.round(days / 30) + ' Monaten',
     tone: Urgency.MUTED,
   };
 }

@@ -16,9 +16,9 @@ export const STAGES: [string, string][] = [
   ['zurueckgezogen', 'Bewerbung zurückgezogen'],
 ];
 
-const stageInserts = STAGES
-  .map(([id, title], i) => `INSERT INTO stages (id, title, position) VALUES ('${id}', '${title}', ${i});`)
-  .join('\n');
+const stageInserts = STAGES.map(
+  ([id, title], i) => `INSERT INTO stages (id, title, position) VALUES ('${id}', '${title}', ${i});`,
+).join('\n');
 
 export const MIGRATIONS: string[] = [
   /* Migration 1: the full initial schema. */

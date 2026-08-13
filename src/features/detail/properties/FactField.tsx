@@ -29,7 +29,9 @@ export function FactField({ fact, cardId, locked }: { fact: FactView; cardId: st
     writeField(cardId, fact.label, v);
     set({ dropdown: null });
   };
-  const toggle = () => { if (!locked) set((s) => ({ dropdown: s.dropdown === key ? null : key, editing: null })); };
+  const toggle = () => {
+    if (!locked) set((s) => ({ dropdown: s.dropdown === key ? null : key, editing: null }));
+  };
 
   if (fact.isSelect) {
     return (
@@ -78,19 +80,36 @@ export function FactField({ fact, cardId, locked }: { fact: FactView; cardId: st
         onChange={(e) => set({ editDraft: e.target.value })}
         onKeyDown={(e) => {
           if (e.key === 'Enter') e.currentTarget.blur();
-          else if (e.key === 'Escape') { e.stopPropagation(); cancelEditRef.current = true; e.currentTarget.blur(); }
+          else if (e.key === 'Escape') {
+            e.stopPropagation();
+            cancelEditRef.current = true;
+            e.currentTarget.blur();
+          }
         }}
         onBlur={() => {
-          if (cancelEditRef.current) { cancelEditRef.current = false; set({ editing: null }); return; }
+          if (cancelEditRef.current) {
+            cancelEditRef.current = false;
+            set({ editing: null });
+            return;
+          }
           writeField(cardId, fact.label, st.editDraft.trim());
           set({ editing: null });
         }}
         /* Fills the value column instead of a fixed width, which used to run
            past the sidebar for long values. */
         style={{
-          fontSize: 12.5, color: 'var(--c-28261f)', lineHeight: 1.45, border: '1px solid var(--c-cfccc3)',
-          borderRadius: 5, padding: '1px 5px', marginLeft: -6, background: 'var(--c-fff)', outline: 'none',
-          flex: '1 1 0', width: '100%', minWidth: 0,
+          fontSize: 12.5,
+          color: 'var(--c-28261f)',
+          lineHeight: 1.45,
+          border: '1px solid var(--c-cfccc3)',
+          borderRadius: 5,
+          padding: '1px 5px',
+          marginLeft: -6,
+          background: 'var(--c-fff)',
+          outline: 'none',
+          flex: '1 1 0',
+          width: '100%',
+          minWidth: 0,
         }}
       />
     );
@@ -101,7 +120,9 @@ export function FactField({ fact, cardId, locked }: { fact: FactView; cardId: st
       locked={locked}
       color={fact.link ? 'var(--c-3f6ea8)' : undefined}
       style={{ marginLeft: -6, cursor: locked ? 'not-allowed' : 'text' }}
-      onClick={() => { if (!locked) set({ editing: key, editDraft: fact.value === '—' ? '' : fact.value, dropdown: null }); }}
+      onClick={() => {
+        if (!locked) set({ editing: key, editDraft: fact.value === '—' ? '' : fact.value, dropdown: null });
+      }}
     >
       <span>{fact.value}</span>
     </FieldChip>

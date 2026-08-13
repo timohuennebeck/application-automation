@@ -14,25 +14,49 @@ export interface TimeRangePickerProps {
   hidePastForToday?: boolean;
 }
 
-const SlotGrid = ({ slots, current, onPick }: {
-  slots: string[]; current: string; onPick: (t: string) => void;
+const SlotGrid = ({
+  slots,
+  current,
+  onPick,
+}: {
+  slots: string[];
+  current: string;
+  onPick: (t: string) => void;
 }) => (
   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 3 }}>
     {slots.map((t) => (
-      <div key={t} className={'slot' + (t === current ? ' selected' : '')} onClick={() => onPick(t)}>{t}</div>
+      <div key={t} className={'slot' + (t === current ? ' selected' : '')} onClick={() => onPick(t)}>
+        {t}
+      </div>
     ))}
   </div>
 );
 
 const GroupLabel = ({ children, top = 0 }: { children: string; top?: number }) => (
-  <div style={{ fontSize: 9.5, fontWeight: 600, color: 'var(--c-a8a49b)', textTransform: 'uppercase', letterSpacing: '0.06em', padding: top + 'px 2px 6px' }}>
+  <div
+    style={{
+      fontSize: 9.5,
+      fontWeight: 600,
+      color: 'var(--c-a8a49b)',
+      textTransform: 'uppercase',
+      letterSpacing: '0.06em',
+      padding: top + 'px 2px 6px',
+    }}
+  >
     {children}
   </div>
 );
 
 /* Von/Bis picker: half-hour start slots, then 15-minute end slots capped at
    five hours after the start. */
-export function TimeRangePicker({ value, step, startOverride, onSetStep, onChange, hidePastForToday }: TimeRangePickerProps) {
+export function TimeRangePicker({
+  value,
+  step,
+  startOverride,
+  onSetStep,
+  onChange,
+  hidePastForToday,
+}: TimeRangePickerProps) {
   const parts = (value || '').split('–').map((x) => x.trim());
   const curStart = startOverride || (parts[0] || '').slice(0, 5);
   const curEnd = (parts[1] || '').slice(0, 5);
@@ -53,19 +77,35 @@ export function TimeRangePicker({ value, step, startOverride, onSetStep, onChang
 
   const endTimes: string[] = [];
   if (curStart) {
-    for (let m = minsOf(curStart) + 15; m <= Math.min(minsOf(curStart) + 300, 22 * 60); m += 15) endTimes.push(fmtMins(m));
+    for (let m = minsOf(curStart) + 15; m <= Math.min(minsOf(curStart) + 300, 22 * 60); m += 15)
+      endTimes.push(fmtMins(m));
   }
 
   const end = (label: string, v: string, active: boolean, onClick: () => void) => (
     <div
       onClick={onClick}
       style={{
-        flex: 1, display: 'flex', flexDirection: 'column', gap: 1,
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 1,
         background: active ? 'var(--c-e7e4dc)' : 'var(--c-f6f5f1)',
-        borderRadius: 5, padding: '4px 8px', cursor: 'pointer',
+        borderRadius: 5,
+        padding: '4px 8px',
+        cursor: 'pointer',
       }}
     >
-      <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--c-a8a49b)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</span>
+      <span
+        style={{
+          fontSize: 9,
+          fontWeight: 600,
+          color: 'var(--c-a8a49b)',
+          textTransform: 'uppercase',
+          letterSpacing: '0.06em',
+        }}
+      >
+        {label}
+      </span>
       <span style={{ fontSize: 12, color: v ? 'var(--c-28261f)' : 'var(--c-a5a29a)' }}>{v || '—'}</span>
     </div>
   );
@@ -74,7 +114,9 @@ export function TimeRangePicker({ value, step, startOverride, onSetStep, onChang
     <>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 0 9px' }}>
         {end('Von', curStart, !pickingEnd, () => onSetStep('start', null))}
-        {end('Bis', curEnd, pickingEnd, () => { if (curStart) onSetStep('end', curStart); })}
+        {end('Bis', curEnd, pickingEnd, () => {
+          if (curStart) onSetStep('end', curStart);
+        })}
       </div>
       {pickingEnd ? (
         <>
@@ -96,8 +138,15 @@ export function TimeRangePicker({ value, step, startOverride, onSetStep, onChang
 }
 
 /* Time picker in its standard 222px popover shell. */
-export function TimeRangePopover({ top = 26, left = 0, zIndex = 40, ...picker }: TimeRangePickerProps & {
-  top?: number; left?: number; zIndex?: number;
+export function TimeRangePopover({
+  top = 26,
+  left = 0,
+  zIndex = 40,
+  ...picker
+}: TimeRangePickerProps & {
+  top?: number;
+  left?: number;
+  zIndex?: number;
 }) {
   return (
     <Popover top={top} left={left} zIndex={zIndex} width={222} padding={10} stack={false}>

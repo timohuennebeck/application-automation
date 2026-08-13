@@ -3,7 +3,11 @@ import { splitMentions } from '../lib/mentions';
 
 /* Body text with its @-mentions rendered as chips. Shared by the card comment
    thread and the per-interview note thread. */
-export function MentionText({ text, names, style }: {
+export function MentionText({
+  text,
+  names,
+  style,
+}: {
   text: string;
   /* Only these names become chips; anything else stays plain text. */
   names: string[];
@@ -16,9 +20,14 @@ export function MentionText({ text, names, style }: {
           <span
             key={i}
             style={{
-              color: 'var(--c-3f6ea8)', fontWeight: 600, background: 'var(--c-e9eff8)',
-              padding: '1px 6px', borderRadius: 4, display: 'inline-block',
-              lineHeight: 1.35, verticalAlign: 'baseline',
+              color: 'var(--c-3f6ea8)',
+              fontWeight: 600,
+              background: 'var(--c-e9eff8)',
+              padding: '1px 6px',
+              borderRadius: 4,
+              display: 'inline-block',
+              lineHeight: 1.35,
+              verticalAlign: 'baseline',
             }}
           >
             {p.t}

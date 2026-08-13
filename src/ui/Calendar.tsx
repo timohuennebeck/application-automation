@@ -35,7 +35,10 @@ function buildMonths(fromYM: string, toYM: string): MonthCells[] {
     months.push({ ym, label: MONTHS_DE[m - 1] + ' ' + y, cells });
     if (ym >= toYM) break;
     m++;
-    if (m > 12) { m = 1; y++; }
+    if (m > 12) {
+      m = 1;
+      y++;
+    }
   }
   return months;
 }
@@ -58,7 +61,12 @@ export function Calendar({ selectedISO, fromYM, toYM, isDisabled, onPick, quick 
   const quickBtn = (label: string, iso: string) => {
     const disabled = isDisabled?.(iso) ?? false;
     return (
-      <div className={'cal-quick' + (disabled ? ' disabled' : '')} onClick={() => { if (!disabled) onPick(iso); }}>
+      <div
+        className={'cal-quick' + (disabled ? ' disabled' : '')}
+        onClick={() => {
+          if (!disabled) onPick(iso);
+        }}
+      >
         {label}
       </div>
     );
@@ -66,9 +74,28 @@ export function Calendar({ selectedISO, fromYM, toYM, isDisabled, onPick, quick 
 
   return (
     <>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,26px)', gap: 3, justifyContent: 'center', paddingBottom: 3 }}>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(7,26px)',
+          gap: 3,
+          justifyContent: 'center',
+          paddingBottom: 3,
+        }}
+      >
         {CAL_DOWS.map((dw) => (
-          <div key={dw} style={{ fontSize: 9.5, fontWeight: 600, color: 'var(--c-a8a49b)', width: 26, textAlign: 'center', textTransform: 'uppercase', padding: '2px 0' }}>
+          <div
+            key={dw}
+            style={{
+              fontSize: 9.5,
+              fontWeight: 600,
+              color: 'var(--c-a8a49b)',
+              width: 26,
+              textAlign: 'center',
+              textTransform: 'uppercase',
+              padding: '2px 0',
+            }}
+          >
             {dw}
           </div>
         ))}
@@ -77,17 +104,35 @@ export function Calendar({ selectedISO, fromYM, toYM, isDisabled, onPick, quick 
         ref={scrollRef}
         className="no-scrollbar"
         style={{
-          height: 216, overflowY: 'auto', overscrollBehavior: 'contain',
+          height: 216,
+          overflowY: 'auto',
+          overscrollBehavior: 'contain',
           WebkitMaskImage: 'linear-gradient(to bottom, transparent 0, var(--c-000) 22px)',
           maskImage: 'linear-gradient(to bottom, transparent 0, var(--c-000) 22px)',
         }}
       >
         {months.map((mn) => (
           <div key={mn.ym} data-cal-m={mn.ym}>
-            <div style={{ fontSize: 9.5, fontWeight: 600, color: 'var(--c-8a877f)', letterSpacing: '0.07em', textTransform: 'uppercase', padding: '16px 4px 4px' }}>
+            <div
+              style={{
+                fontSize: 9.5,
+                fontWeight: 600,
+                color: 'var(--c-8a877f)',
+                letterSpacing: '0.07em',
+                textTransform: 'uppercase',
+                padding: '16px 4px 4px',
+              }}
+            >
               {mn.label}
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,26px)', gap: 3, justifyContent: 'center' }}>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(7,26px)',
+                gap: 3,
+                justifyContent: 'center',
+              }}
+            >
               {mn.cells.map((c, i) => {
                 if (!c.iso) return <div key={i} className="cal-day" />;
                 const sel = c.iso === selectedISO;
@@ -96,7 +141,9 @@ export function Calendar({ selectedISO, fromYM, toYM, isDisabled, onPick, quick 
                   <div
                     key={i}
                     className={'cal-day' + (disabled ? '' : ' pickable') + (sel ? ' selected' : '')}
-                    onClick={() => { if (!disabled) onPick(c.iso!); }}
+                    onClick={() => {
+                      if (!disabled) onPick(c.iso!);
+                    }}
                     style={{
                       color: sel ? 'var(--c-fff)' : disabled ? 'var(--c-dcd9d1)' : 'var(--c-28261f)',
                       background: sel ? 'var(--c-1b1a17)' : 'transparent',
@@ -124,8 +171,15 @@ export function Calendar({ selectedISO, fromYM, toYM, isDisabled, onPick, quick 
 }
 
 /* Calendar in its standard 222px popover shell. */
-export function CalendarPopover({ top = 26, left = 0, zIndex = 40, ...cal }: CalendarProps & {
-  top?: number; left?: number; zIndex?: number;
+export function CalendarPopover({
+  top = 26,
+  left = 0,
+  zIndex = 40,
+  ...cal
+}: CalendarProps & {
+  top?: number;
+  left?: number;
+  zIndex?: number;
 }) {
   return (
     <Popover top={top} left={left} zIndex={zIndex} width={222} padding={10} stack={false}>

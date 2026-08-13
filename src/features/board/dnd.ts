@@ -19,7 +19,12 @@ export function makeGhost(store: AppStore, e: DragEvent) {
     const cs = getComputedStyle(el);
 
     const wrap = document.createElement('div');
-    wrap.style.cssText = 'position:fixed;top:0;left:-99999px;width:' + r.width + 'px;height:' + r.height + 'px;pointer-events:none;background:transparent;z-index:-1';
+    wrap.style.cssText =
+      'position:fixed;top:0;left:-99999px;width:' +
+      r.width +
+      'px;height:' +
+      r.height +
+      'px;pointer-events:none;background:transparent;z-index:-1';
     wrap.style.font = cs.font;
     wrap.style.color = cs.color;
     wrap.style.letterSpacing = cs.letterSpacing;
@@ -48,7 +53,9 @@ export function makeGhost(store: AppStore, e: DragEvent) {
     (el.parentNode || document.body).appendChild(wrap);
     store.ghostRef.current = wrap;
     e.dataTransfer.setDragImage(wrap, e.clientX - r.left, e.clientY - r.top);
-  } catch { /* a missing drag image is not worth breaking the drag over */ }
+  } catch {
+    /* a missing drag image is not worth breaking the drag over */
+  }
 }
 
 export function clearGhost(store: AppStore) {
@@ -110,7 +117,10 @@ export function dragOverCol(store: AppStore, ci: number, e: DragEvent) {
       idx = cards.length;
       for (let i = 0; i < cards.length; i++) {
         const r = cards[i].getBoundingClientRect();
-        if (y < r.top + r.height * 0.4) { idx = i; break; }
+        if (y < r.top + r.height * 0.4) {
+          idx = i;
+          break;
+        }
       }
     }
   }

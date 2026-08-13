@@ -20,15 +20,29 @@ import { PeoplePicker } from '../people/PeoplePicker';
 import { PersonEditCard } from '../people/PersonEditCard';
 
 /* One interview round: schedule, location, participants and its note thread. */
-export function InterviewCard({ cardId, ri, round, company }: {
+export function InterviewCard({
+  cardId,
+  ri,
+  round,
+  company,
+}: {
   cardId: string;
   ri: number;
   round: Round;
   company: string;
 }) {
   const {
-    st, set, mutateRounds, resetRound, addRoundNote, logAct, person, peopleForCard,
-    savePerson, deletePerson, createPersonForRound,
+    st,
+    set,
+    mutateRounds,
+    resetRound,
+    addRoundNote,
+    logAct,
+    person,
+    peopleForCard,
+    savePerson,
+    deletePerson,
+    createPersonForRound,
   } = useApp();
 
   // The note draft is local: a global editing key would be cleared by the
@@ -52,7 +66,9 @@ export function InterviewCard({ cardId, ri, round, company }: {
   /* Every edit on this card touches its own round; the row can be gone if the
      list changed underneath, so each write goes through the same guard. */
   const editRound = (fn: (r: Round) => void) =>
-    mutateRounds(cardId, (rs) => { if (rs[ri]) fn(rs[ri]); });
+    mutateRounds(cardId, (rs) => {
+      if (rs[ri]) fn(rs[ri]);
+    });
 
   const setDate = (date: string) => {
     editRound((r) => {
@@ -60,14 +76,19 @@ export function InterviewCard({ cardId, ri, round, company }: {
       if (!date) r.time = '';
       if (r.state !== RoundState.DONE) r.state = date ? RoundState.NEXT : RoundState.OPEN;
     });
-    logAct(cardId, date
-      ? 'hat den Termin für „' + round.title + '“ auf ' + date + ' gelegt'
-      : 'hat den Termin für „' + round.title + '“ entfernt');
+    logAct(
+      cardId,
+      date
+        ? 'hat den Termin für „' + round.title + '“ auf ' + date + ' gelegt'
+        : 'hat den Termin für „' + round.title + '“ entfernt',
+    );
     set({ dropdown: null });
   };
 
   const setTime = (time: string, close: boolean) => {
-    editRound((r) => { r.time = time; });
+    editRound((r) => {
+      r.time = time;
+    });
     if (close) set({ dropdown: null });
   };
 
@@ -76,9 +97,12 @@ export function InterviewCard({ cardId, ri, round, company }: {
       r.where = where;
       if (where !== 'Google Meet' && where !== 'Microsoft Teams') r.link = '';
     });
-    logAct(cardId, where
-      ? 'hat den Ort für „' + round.title + '“ auf ' + where + ' gesetzt'
-      : 'hat den Ort für „' + round.title + '“ entfernt');
+    logAct(
+      cardId,
+      where
+        ? 'hat den Ort für „' + round.title + '“ auf ' + where + ' gesetzt'
+        : 'hat den Ort für „' + round.title + '“ entfernt',
+    );
   };
 
   const togglePerson = (pk: string) => {
@@ -86,7 +110,14 @@ export function InterviewCard({ cardId, ri, round, company }: {
     editRound((r) => {
       r.people = has ? r.people.filter((k) => k !== pk) : [...r.people, pk];
     });
-    logAct(cardId, 'hat ' + person(pk).name + (has ? ' aus „' : ' zu „') + round.title + (has ? '“ entfernt' : '“ hinzugefügt'));
+    logAct(
+      cardId,
+      'hat ' +
+        person(pk).name +
+        (has ? ' aus „' : ' zu „') +
+        round.title +
+        (has ? '“ entfernt' : '“ hinzugefügt'),
+    );
   };
 
   const sendNote = () => {
@@ -108,10 +139,22 @@ export function InterviewCard({ cardId, ri, round, company }: {
   const menuOpen = isOpen('menu');
 
   return (
-    <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', border: '1px solid var(--c-e6e3dc)', background: 'var(--c-fff)', borderRadius: 10, padding: '15px 16px' }}>
+    <div
+      style={{
+        display: 'flex',
+        gap: 12,
+        alignItems: 'flex-start',
+        border: '1px solid var(--c-e6e3dc)',
+        background: 'var(--c-fff)',
+        borderRadius: 10,
+        padding: '15px 16px',
+      }}
+    >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 7, minWidth: 0, flex: '1 1 0' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
-          <div style={{ fontSize: 13.5, fontWeight: 600, color: sy.titleColor, lineHeight: 1.3 }}>{round.title}</div>
+          <div style={{ fontSize: 13.5, fontWeight: 600, color: sy.titleColor, lineHeight: 1.3 }}>
+            {round.title}
+          </div>
           {diff !== null && <div style={{ fontSize: 12, color: 'var(--c-a5a29a)' }}>{relLabel(diff)}</div>}
         </div>
 
@@ -131,7 +174,9 @@ export function InterviewCard({ cardId, ri, round, company }: {
             </FieldChip>
             {isOpen('date') && (
               <CalendarPopover
-                top={26} left={-7} zIndex={60}
+                top={26}
+                left={-7}
+                zIndex={60}
                 selectedISO={rISO}
                 fromYM={(rISO && rISO < today ? rISO : today).slice(0, 7)}
                 toYM={shiftYM((rISO && rISO < today ? rISO : today).slice(0, 7), 11)}
@@ -157,7 +202,9 @@ export function InterviewCard({ cardId, ri, round, company }: {
             </FieldChip>
             {isOpen('time') && (
               <TimeRangePopover
-                top={26} left={-7} zIndex={60}
+                top={26}
+                left={-7}
+                zIndex={60}
                 value={round.time}
                 step={st.cardTimeStep}
                 startOverride={st.cardTimeStart}
@@ -183,9 +230,23 @@ export function InterviewCard({ cardId, ri, round, company }: {
               <span>{round.where || 'Kein Ort ausgewählt'}</span>
             </FieldChip>
             {isOpen('where') && (
-              <Popover top={26} left={-7} zIndex={60} width={246} padding={8} stack={false} style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+              <Popover
+                top={26}
+                left={-7}
+                zIndex={60}
+                width={246}
+                padding={8}
+                stack={false}
+                style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}
+              >
                 {WHERE_OPTIONS.map((w) => (
-                  <ChipToggle key={w} label={w} size="sm" selected={round.where === w} onClick={() => setWhere(round.where === w ? '' : w)} />
+                  <ChipToggle
+                    key={w}
+                    label={w}
+                    size="sm"
+                    selected={round.where === w}
+                    onClick={() => setWhere(round.where === w ? '' : w)}
+                  />
                 ))}
               </Popover>
             )}
@@ -201,11 +262,24 @@ export function InterviewCard({ cardId, ri, round, company }: {
                 title={round.link}
                 style={{ padding: '2px 7px', marginLeft: -7 }}
                 onClick={() => toggle('link')}
-                onClear={round.link ? () => editRound((r) => { r.link = ''; }) : undefined}
+                onClear={
+                  round.link
+                    ? () =>
+                        editRound((r) => {
+                          r.link = '';
+                        })
+                    : undefined
+                }
                 clearTitle="Link entfernen"
               >
-                <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
-                  {round.link ? (round.link.length > 34 ? round.link.slice(0, 34) + '…' : round.link) : 'Kein Link hinterlegt'}
+                <span
+                  style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}
+                >
+                  {round.link
+                    ? round.link.length > 34
+                      ? round.link.slice(0, 34) + '…'
+                      : round.link
+                    : 'Kein Link hinterlegt'}
                 </span>
               </FieldChip>
               {isOpen('link') && (
@@ -213,19 +287,35 @@ export function InterviewCard({ cardId, ri, round, company }: {
                   <input
                     value={linkDraft ?? round.link ?? ''}
                     autoFocus
-                    placeholder={round.where === 'Microsoft Teams' ? 'https://teams.microsoft.com/l/meetup-join/…' : 'https://meet.google.com/…'}
+                    placeholder={
+                      round.where === 'Microsoft Teams'
+                        ? 'https://teams.microsoft.com/l/meetup-join/…'
+                        : 'https://meet.google.com/…'
+                    }
                     onChange={(e) => setLinkDraft(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') e.currentTarget.blur();
+                    }}
                     onBlur={() => {
                       if (linkDraft != null && linkDraft !== (round.link || '')) {
-                        editRound((r) => { r.link = linkDraft; });
+                        editRound((r) => {
+                          r.link = linkDraft;
+                        });
                       }
                       setLinkDraft(null);
                     }}
                     style={{
-                      fontSize: 12, color: 'var(--c-1b1a17)', lineHeight: 1.5, border: 'none', borderRadius: 5,
-                      padding: '6px 8px', background: 'var(--c-f6f5f1)', boxShadow: 'inset 0 0 0 1px var(--c-e6e3dc)',
-                      outline: 'none', width: '100%', boxSizing: 'border-box',
+                      fontSize: 12,
+                      color: 'var(--c-1b1a17)',
+                      lineHeight: 1.5,
+                      border: 'none',
+                      borderRadius: 5,
+                      padding: '6px 8px',
+                      background: 'var(--c-f6f5f1)',
+                      boxShadow: 'inset 0 0 0 1px var(--c-e6e3dc)',
+                      outline: 'none',
+                      width: '100%',
+                      boxSizing: 'border-box',
                     }}
                   />
                 </Popover>
@@ -240,19 +330,45 @@ export function InterviewCard({ cardId, ri, round, company }: {
               <div
                 className="add-row"
                 title="Alle anzeigen"
-                onClick={() => set((s) => ({ roundExpanded: { ...s.roundExpanded, [cardId + ':' + ri]: true } }))}
-                style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '2px 6px', marginLeft: -6, width: 'fit-content', boxSizing: 'content-box' }}
+                onClick={() =>
+                  set((s) => ({ roundExpanded: { ...s.roundExpanded, [cardId + ':' + ri]: true } }))
+                }
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 7,
+                  padding: '2px 6px',
+                  marginLeft: -6,
+                  width: 'fit-content',
+                  boxSizing: 'content-box',
+                }}
               >
                 <div style={{ display: 'flex', flexShrink: 0 }}>
                   {people.slice(0, 3).map((p, i) => (
-                    <Avatar key={p.key} bg={p.bg} style={{ boxShadow: '0 0 0 1.5px var(--c-fbfaf7)', marginLeft: i ? -6 : 0 }}>{p.initials}</Avatar>
+                    <Avatar
+                      key={p.key}
+                      bg={p.bg}
+                      style={{ boxShadow: '0 0 0 1.5px var(--c-fbfaf7)', marginLeft: i ? -6 : 0 }}
+                    >
+                      {p.initials}
+                    </Avatar>
                   ))}
-                  <Avatar bg="var(--c-f0eee8)" style={{ color: 'var(--c-5f5c56)', boxShadow: '0 0 0 1.5px var(--c-fbfaf7)', marginLeft: -6 }}>
+                  <Avatar
+                    bg="var(--c-f0eee8)"
+                    style={{
+                      color: 'var(--c-5f5c56)',
+                      boxShadow: '0 0 0 1.5px var(--c-fbfaf7)',
+                      marginLeft: -6,
+                    }}
+                  >
                     +{people.length - 3}
                   </Avatar>
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--c-8b8880)' }}>
-                  {people.map((p) => (p.role || '').split(',')[0]).filter(Boolean).join(', ')}
+                  {people
+                    .map((p) => (p.role || '').split(',')[0])
+                    .filter(Boolean)
+                    .join(', ')}
                 </div>
               </div>
             ) : (
@@ -265,21 +381,36 @@ export function InterviewCard({ cardId, ri, round, company }: {
                     <FieldChip
                       open={editing}
                       style={{ padding: '2px 6px', marginLeft: -6 }}
-                      onClick={() => set({
-                        personEdit: { id: cardId, ri, key: p.key, isNew: false },
-                        personDraft: { name: p.name, role: p.role, email: p.email || '', phone: p.phone || '', linkedin: p.linkedin || '' },
-                        dropdown: null, editing: null,
-                      })}
+                      onClick={() =>
+                        set({
+                          personEdit: { id: cardId, ri, key: p.key, isNew: false },
+                          personDraft: {
+                            name: p.name,
+                            role: p.role,
+                            email: p.email || '',
+                            phone: p.phone || '',
+                            linkedin: p.linkedin || '',
+                          },
+                          dropdown: null,
+                          editing: null,
+                        })
+                      }
                       onClear={() => {
-                        editRound((r) => { r.people = r.people.filter((k) => k !== p.key); });
+                        editRound((r) => {
+                          r.people = r.people.filter((k) => k !== p.key);
+                        });
                         logAct(cardId, 'hat ' + p.name + ' aus „' + round.title + '“ entfernt');
                         set({ personEdit: null, personDraft: null });
                       }}
                       clearTitle="Aus dieser Runde entfernen"
                     >
                       <Avatar bg={sy.muted ? 'var(--c-c9c5bb)' : p.bg}>{p.initials}</Avatar>
-                      <span style={{ color: sy.muted ? 'var(--c-8b8880)' : 'var(--c-28261f)' }}>{p.name}</span>
-                      <span style={{ color: p.role ? 'var(--c-a5a29a)' : 'var(--c-c3c0b8)' }}>{p.role || 'Position fehlt'}</span>
+                      <span style={{ color: sy.muted ? 'var(--c-8b8880)' : 'var(--c-28261f)' }}>
+                        {p.name}
+                      </span>
+                      <span style={{ color: p.role ? 'var(--c-a5a29a)' : 'var(--c-c3c0b8)' }}>
+                        {p.role || 'Position fehlt'}
+                      </span>
                     </FieldChip>
                     {editing && (
                       <Popover variant={PopoverVariant.PANEL} top={29} left={-6} width={312} padding={0}>
@@ -315,25 +446,50 @@ export function InterviewCard({ cardId, ri, round, company }: {
                 </Popover>
               </PopoverAnchor>
             ) : (
-              !done && <AddRow label="Person hinzufügen" onClick={() => set({ editing: key('person'), editDraft: '', dropdown: null })} />
+              !done && (
+                <AddRow
+                  label="Person hinzufügen"
+                  onClick={() => set({ editing: key('person'), editDraft: '', dropdown: null })}
+                />
+              )
             )}
           </div>
         </FieldRow>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 5, maxWidth: 430, width: '100%' }}>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 10,
+            marginTop: 5,
+            maxWidth: 430,
+            width: '100%',
+          }}
+        >
           {(round.notes || []).length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {(round.notes || []).map((n, i) => (
                 <div key={i} style={{ display: 'flex', gap: 9 }}>
-                  <Avatar bg={n.author === Author.KEPLER ? 'var(--c-1b1a17)' : 'var(--c-5b7a5e)'} size={20} fontSize={8.5} style={{ marginTop: 1 }}>
+                  <Avatar
+                    bg={n.author === Author.KEPLER ? 'var(--c-1b1a17)' : 'var(--c-5b7a5e)'}
+                    size={20}
+                    fontSize={8.5}
+                    style={{ marginTop: 1 }}
+                  >
                     {n.author === Author.KEPLER ? 'K' : AUTHOR_LABEL[n.author]}
                   </Avatar>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--c-1b1a17)' }}>{AUTHOR_LABEL[n.author]}</div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--c-1b1a17)' }}>
+                        {AUTHOR_LABEL[n.author]}
+                      </div>
                       <div style={{ fontSize: 11, color: 'var(--c-a5a29a)' }}>{n.time}</div>
                     </div>
-                    <MentionText text={n.text} names={mentionNames} style={{ lineHeight: 1.6, whiteSpace: 'pre-line' }} />
+                    <MentionText
+                      text={n.text}
+                      names={mentionNames}
+                      style={{ lineHeight: 1.6, whiteSpace: 'pre-line' }}
+                    />
                   </div>
                 </div>
               ))}
@@ -345,8 +501,13 @@ export function InterviewCard({ cardId, ri, round, company }: {
             onSend={sendNote}
             people={mentionable}
             onKeyDown={(e) => {
-              if (e.key === 'Escape') { e.stopPropagation(); setNote(''); }
-              else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); sendNote(); }
+              if (e.key === 'Escape') {
+                e.stopPropagation();
+                setNote('');
+              } else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
+                sendNote();
+              }
             }}
           />
         </div>
@@ -357,7 +518,10 @@ export function InterviewCard({ cardId, ri, round, company }: {
           className="dots-btn"
           title="Mehr"
           onClick={() => toggle('menu')}
-          style={{ background: menuOpen ? 'var(--c-e7e4dc)' : 'transparent', color: menuOpen ? 'var(--c-1b1a17)' : 'var(--c-c3c0b8)' }}
+          style={{
+            background: menuOpen ? 'var(--c-e7e4dc)' : 'transparent',
+            color: menuOpen ? 'var(--c-1b1a17)' : 'var(--c-c3c0b8)',
+          }}
         >
           <DotsGlyph />
         </div>
@@ -365,15 +529,30 @@ export function InterviewCard({ cardId, ri, round, company }: {
           <Popover top={29} right={0} zIndex={30} width={216}>
             <MenuItem
               style={{ padding: '6px 9px', whiteSpace: 'nowrap' }}
-              onClick={() => set({
-                roundEdit: { id: cardId, ri },
-                roundDraft: { title: round.title, date: round.date, time: round.time, where: round.where, link: round.link || '', people: round.people.slice() },
-                dropdown: null, editing: null, roundPop: null,
-              })}
+              onClick={() =>
+                set({
+                  roundEdit: { id: cardId, ri },
+                  roundDraft: {
+                    title: round.title,
+                    date: round.date,
+                    time: round.time,
+                    where: round.where,
+                    link: round.link || '',
+                    people: round.people.slice(),
+                  },
+                  dropdown: null,
+                  editing: null,
+                  roundPop: null,
+                })
+              }
             >
               Interview bearbeiten
             </MenuItem>
-            <MenuItem danger style={{ padding: '6px 9px', whiteSpace: 'nowrap' }} onClick={() => resetRound(cardId, ri)}>
+            <MenuItem
+              danger
+              style={{ padding: '6px 9px', whiteSpace: 'nowrap' }}
+              onClick={() => resetRound(cardId, ri)}
+            >
               Interview löschen
             </MenuItem>
           </Popover>

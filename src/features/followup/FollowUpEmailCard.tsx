@@ -10,24 +10,44 @@ import { ContactPicker } from '../people/ContactPicker';
 import { draftEmail, type FollowUpSlot } from './schedule';
 
 /* Wide enough for "Kontaktperson", the longest label in this card. */
-const LABEL = { fontSize: 11.5, color: 'var(--c-9a978f)', width: 88, flexShrink: 0, lineHeight: 1.35 } as const;
+const LABEL = {
+  fontSize: 11.5,
+  color: 'var(--c-9a978f)',
+  width: 88,
+  flexShrink: 0,
+  lineHeight: 1.35,
+} as const;
 
 function LoadingSkeleton() {
   return (
     <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <KeplerAvatar />
-        <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--c-1b1a17)', animation: 'om-pulse 1.4s ease-in-out infinite' }}>
+        <div
+          style={{
+            fontSize: 12.5,
+            fontWeight: 600,
+            color: 'var(--c-1b1a17)',
+            animation: 'om-pulse 1.4s ease-in-out infinite',
+          }}
+        >
           Kepler erstellt einen Follow up…
         </div>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
         {[38, 88, 76, 54].map((w) => (
-          <div key={w} style={{
-            height: 9, width: w + '%', borderRadius: 4,
-            background: 'linear-gradient(90deg,var(--c-f1efe9) 25%,var(--c-e4e1da) 50%,var(--c-f1efe9) 75%)',
-            backgroundSize: '200% 100%', animation: 'om-shimmer 1.3s linear infinite',
-          }} />
+          <div
+            key={w}
+            style={{
+              height: 9,
+              width: w + '%',
+              borderRadius: 4,
+              background:
+                'linear-gradient(90deg,var(--c-f1efe9) 25%,var(--c-e4e1da) 50%,var(--c-f1efe9) 75%)',
+              backgroundSize: '200% 100%',
+              animation: 'om-shimmer 1.3s linear infinite',
+            }}
+          />
         ))}
       </div>
     </div>
@@ -37,14 +57,21 @@ function LoadingSkeleton() {
 /* Kepler's drafted follow-up: due date, addressee, subject and collapsible body.
    The draft is generated exactly once, stored on the followups row, and read
    from there on every later open; only the regenerate button replaces it. */
-export function FollowUpEmailCard({ cardId, role, company, slots, sel }: {
+export function FollowUpEmailCard({
+  cardId,
+  role,
+  company,
+  slots,
+  sel,
+}: {
   cardId: string;
   role: string;
   company: string;
   slots: FollowUpSlot[];
   sel: number;
 }) {
-  const { st, set, emailContactsFor, setEmailContacts, setFollowupDue, saveEmailDraft, regenerateEmail } = useApp();
+  const { st, set, emailContactsFor, setEmailContacts, setFollowupDue, saveEmailDraft, regenerateEmail } =
+    useApp();
 
   const slot = slots[sel];
   const dueKey = 'due:' + cardId + ':' + sel;
@@ -73,21 +100,34 @@ export function FollowUpEmailCard({ cardId, role, company, slots, sel }: {
     if (!stored) saveEmailDraft(cardId, slot.id, subject, body);
   }, [stored, cardId, slot.id, subject, body, saveEmailDraft]);
 
-  const rel = slot.diff === 0 ? '· heute'
-    : slot.diff === 1 ? '· morgen'
-      : slot.diff > 0 ? '· in ' + slot.diff + ' Tagen'
-        : '· seit ' + -slot.diff + ' Tagen überfällig';
-  const relColor = slot.diff <= 0 ? 'var(--c-c2564c)' : slot.diff <= 2 ? 'var(--c-9a7218)' : 'var(--c-9a978f)';
+  const rel =
+    slot.diff === 0
+      ? '· heute'
+      : slot.diff === 1
+        ? '· morgen'
+        : slot.diff > 0
+          ? '· in ' + slot.diff + ' Tagen'
+          : '· seit ' + -slot.diff + ' Tagen überfällig';
+  const relColor =
+    slot.diff <= 0 ? 'var(--c-c2564c)' : slot.diff <= 2 ? 'var(--c-9a7218)' : 'var(--c-9a978f)';
 
   const preview = body.split('\n').filter(Boolean)[1] || body;
   const words = body.trim().split(/\s+/).length + ' Wörter';
 
   return (
-    <div style={{
-      width: '100%', background: 'var(--c-fff)', border: '1px solid var(--c-eae7e0)', borderRadius: 10,
-      overflow: dueOpen || st.contactEdit ? 'visible' : 'hidden', boxShadow: '0 1px 2px var(--s-7)',
-    }}>
-      {st.emailLoading ? <LoadingSkeleton /> : (
+    <div
+      style={{
+        width: '100%',
+        background: 'var(--c-fff)',
+        border: '1px solid var(--c-eae7e0)',
+        borderRadius: 10,
+        overflow: dueOpen || st.contactEdit ? 'visible' : 'hidden',
+        boxShadow: '0 1px 2px var(--s-7)',
+      }}
+    >
+      {st.emailLoading ? (
+        <LoadingSkeleton />
+      ) : (
         <div style={{ padding: '13px 14px 14px', display: 'flex', flexDirection: 'column', gap: 11 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <KeplerAvatar />
@@ -97,7 +137,13 @@ export function FollowUpEmailCard({ cardId, role, company, slots, sel }: {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
             <PopoverAnchor style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
               <div style={LABEL}>Fällig am</div>
-              <FieldChip open={dueOpen} gap={5} onClick={() => set((s) => ({ dropdown: s.dropdown === dueKey ? null : dueKey, editing: null }))}>
+              <FieldChip
+                open={dueOpen}
+                gap={5}
+                onClick={() =>
+                  set((s) => ({ dropdown: s.dropdown === dueKey ? null : dueKey, editing: null }))
+                }
+              >
                 <span style={{ fontSize: 12 }}>{isoToDate(slot.iso)}</span>
                 <span style={{ fontSize: 12, color: relColor }}>{rel}</span>
               </FieldChip>
@@ -134,7 +180,9 @@ export function FollowUpEmailCard({ cardId, role, company, slots, sel }: {
 
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 9 }}>
               <div style={LABEL}>Betreff</div>
-              <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--c-1b1a17)', lineHeight: 1.4 }}>{subject}</div>
+              <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--c-1b1a17)', lineHeight: 1.4 }}>
+                {subject}
+              </div>
             </div>
           </div>
 
@@ -142,29 +190,80 @@ export function FollowUpEmailCard({ cardId, role, company, slots, sel }: {
             <div
               className="email-collapse"
               onClick={() => set((s) => ({ emailExpanded: !s.emailExpanded }))}
-              style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer', padding: '5px 7px', margin: '0 -7px' }}
+              style={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 8,
+                cursor: 'pointer',
+                padding: '5px 7px',
+                margin: '0 -7px',
+              }}
             >
               <Caret open={st.emailExpanded} style={{ marginTop: 4 }} />
               {st.emailExpanded ? (
-                <div style={{ fontSize: 11.5, color: 'var(--c-9a978f)', lineHeight: 1.5, flex: '1 1 0', minWidth: 0 }}>Textnachricht</div>
+                <div
+                  style={{
+                    fontSize: 11.5,
+                    color: 'var(--c-9a978f)',
+                    lineHeight: 1.5,
+                    flex: '1 1 0',
+                    minWidth: 0,
+                  }}
+                >
+                  Textnachricht
+                </div>
               ) : (
                 <>
-                  <div style={{ fontSize: 12.5, color: 'var(--c-77746d)', lineHeight: 1.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, flex: '1 1 0' }}>
+                  <div
+                    style={{
+                      fontSize: 12.5,
+                      color: 'var(--c-77746d)',
+                      lineHeight: 1.5,
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      minWidth: 0,
+                      flex: '1 1 0',
+                    }}
+                  >
                     {preview}
                   </div>
-                  <div style={{ fontSize: 11, color: 'var(--c-a5a29a)', flexShrink: 0, marginTop: 1, fontVariantNumeric: 'tabular-nums' }}>{words}</div>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: 'var(--c-a5a29a)',
+                      flexShrink: 0,
+                      marginTop: 1,
+                      fontVariantNumeric: 'tabular-nums',
+                    }}
+                  >
+                    {words}
+                  </div>
                 </>
               )}
             </div>
             {st.emailExpanded && (
-              <div style={{ fontSize: 12.5, color: 'var(--c-3d3a34)', lineHeight: 1.65, whiteSpace: 'pre-line', textWrap: 'pretty', paddingLeft: 19 }}>
+              <div
+                style={{
+                  fontSize: 12.5,
+                  color: 'var(--c-3d3a34)',
+                  lineHeight: 1.65,
+                  whiteSpace: 'pre-line',
+                  textWrap: 'pretty',
+                  paddingLeft: 19,
+                }}
+              >
                 {body}
               </div>
             )}
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <div className="icon-btn" title="Kopieren" onClick={() => navigator.clipboard?.writeText(subject + '\n\n' + body)}>
+            <div
+              className="icon-btn"
+              title="Kopieren"
+              onClick={() => navigator.clipboard?.writeText(subject + '\n\n' + body)}
+            >
               <CopyGlyph />
             </div>
             <div

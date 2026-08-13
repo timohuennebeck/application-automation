@@ -31,13 +31,15 @@ function Highlighted({ parts }: { parts: { pre: string; mid: string; post: strin
 function buildGroups(store: AppStore, q: string, open: (id: string) => void) {
   const { st, roundsFor, contactsFor, emailContactsFor, person } = store;
 
-  const items = st.board.flatMap((ids, ci) => ids.flatMap((id) => {
-    const view = cardView(st, id);
-    if (!view) return [];
-    return [{ id, role: view.role, company: view.company, city: view.city, channel: view.channel, ci }];
-  }));
+  const items = st.board.flatMap((ids, ci) =>
+    ids.flatMap((id) => {
+      const view = cardView(st, id);
+      if (!view) return [];
+      return [{ id, role: view.role, company: view.company, city: view.city, channel: view.channel, ci }];
+    }),
+  );
 
-  const appRow = (it: typeof items[number]): Row => ({
+  const appRow = (it: (typeof items)[number]): Row => ({
     key: it.id,
     title: highlight(it.role, q),
     sub: highlight(it.company + (it.city ? ', ' + it.city : '') + ' · ' + it.id, q),
@@ -49,12 +51,17 @@ function buildGroups(store: AppStore, q: string, open: (id: string) => void) {
 
   if (!q) {
     // Idle state: whatever is currently in play.
-    const rows = items.filter((it) => it.ci >= 4 && it.ci <= 7).slice(0, 5).map(appRow);
+    const rows = items
+      .filter((it) => it.ci >= 4 && it.ci <= 7)
+      .slice(0, 5)
+      .map(appRow);
     return { groups: rows.length ? [{ key: 'akt', label: 'Läuft gerade', rows }] : [], empty: false };
   }
 
   const apps = items
-    .filter((it) => (it.role + ' ' + it.company + ' ' + it.city + ' ' + it.id + ' ' + it.channel).toLowerCase().includes(q))
+    .filter((it) =>
+      (it.role + ' ' + it.company + ' ' + it.city + ' ' + it.id + ' ' + it.channel).toLowerCase().includes(q),
+    )
     .map(appRow);
 
   const seenCompany = new Set<string>();
@@ -76,8 +83,11 @@ function buildGroups(store: AppStore, q: string, open: (id: string) => void) {
   const seenPerson = new Set<string>();
   const people: Row[] = [];
   items.forEach((it) => {
-    const fromContacts = [...contactsFor(it.id), ...emailContactsFor(it.id)]
-      .map((c) => ({ name: c.name, role: c.role || '', bg: c.bg || 'var(--c-7a5aa8)' }));
+    const fromContacts = [...contactsFor(it.id), ...emailContactsFor(it.id)].map((c) => ({
+      name: c.name,
+      role: c.role || '',
+      bg: c.bg || 'var(--c-7a5aa8)',
+    }));
     const fromRounds = roundsFor(it.id)
       .flatMap((r) => r.people)
       .filter((k) => st.people[k])
@@ -120,12 +130,33 @@ export function SearchPalette() {
   });
 
   return (
-    <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', zIndex: 60 }}>
-      <div onClick={() => set({ searchOpen: false })} style={{ position: 'absolute', inset: 0, background: 'var(--s-4)' }} />
-      <div data-dd="search" style={{
-        position: 'relative', marginTop: 92, width: 640, background: 'var(--c-fff)',
-        border: '1px solid var(--c-e0ddd5)', borderRadius: 12, boxShadow: '0 24px 70px var(--s-3)', overflow: 'hidden',
-      }}>
+    <div
+      style={{
+        position: 'absolute',
+        inset: 0,
+        display: 'flex',
+        alignItems: 'flex-start',
+        justifyContent: 'center',
+        zIndex: 60,
+      }}
+    >
+      <div
+        onClick={() => set({ searchOpen: false })}
+        style={{ position: 'absolute', inset: 0, background: 'var(--s-4)' }}
+      />
+      <div
+        data-dd="search"
+        style={{
+          position: 'relative',
+          marginTop: 92,
+          width: 640,
+          background: 'var(--c-fff)',
+          border: '1px solid var(--c-e0ddd5)',
+          borderRadius: 12,
+          boxShadow: '0 24px 70px var(--s-3)',
+          overflow: 'hidden',
+        }}
+      >
         <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '13px 15px 9px' }}>
           <SearchGlyph size={15} />
           <input
@@ -133,42 +164,125 @@ export function SearchPalette() {
             autoFocus
             placeholder="Bewerbung, Firma oder Person"
             onChange={(e) => set({ searchQ: e.target.value })}
-            style={{ fontSize: 15, color: 'var(--c-1b1a17)', border: 'none', outline: 'none', background: 'transparent', flex: 1, padding: 0 }}
+            style={{
+              fontSize: 15,
+              color: 'var(--c-1b1a17)',
+              border: 'none',
+              outline: 'none',
+              background: 'transparent',
+              flex: 1,
+              padding: 0,
+            }}
           />
-          <div style={{ fontSize: 10.5, color: 'var(--c-a8a49b)', background: 'var(--c-f2efe9)', borderRadius: 5, padding: '2px 6px', lineHeight: 1.4, flexShrink: 0 }}>
+          <div
+            style={{
+              fontSize: 10.5,
+              color: 'var(--c-a8a49b)',
+              background: 'var(--c-f2efe9)',
+              borderRadius: 5,
+              padding: '2px 6px',
+              lineHeight: 1.4,
+              flexShrink: 0,
+            }}
+          >
             esc
           </div>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', padding: '5px 5px 8px', maxHeight: 420, overflowY: 'auto' }}>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            padding: '5px 5px 8px',
+            maxHeight: 420,
+            overflowY: 'auto',
+          }}
+        >
           {groups.map((g) => (
             <div key={g.key} style={{ display: 'flex', flexDirection: 'column' }}>
-              <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--c-a8a49b)', padding: '9px 9px 4px' }}>
+              <div
+                style={{
+                  fontSize: 10,
+                  fontWeight: 600,
+                  letterSpacing: '0.07em',
+                  textTransform: 'uppercase',
+                  color: 'var(--c-a8a49b)',
+                  padding: '9px 9px 4px',
+                }}
+              >
                 {g.label}
               </div>
               {g.rows.map((row) => (
-                <div key={row.key} className="search-row" onClick={row.onOpen} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 9px' }}>
-                  <div style={{
-                    width: 26, height: 26, borderRadius: '50%', background: row.iconBg, color: 'var(--c-fff)',
-                    fontSize: 11, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                  }}>
+                <div
+                  key={row.key}
+                  className="search-row"
+                  onClick={row.onOpen}
+                  style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 9px' }}
+                >
+                  <div
+                    style={{
+                      width: 26,
+                      height: 26,
+                      borderRadius: '50%',
+                      background: row.iconBg,
+                      color: 'var(--c-fff)',
+                      fontSize: 11,
+                      fontWeight: 600,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                    }}
+                  >
                     {row.iconText}
                   </div>
                   <div style={{ minWidth: 0, flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-1b1a17)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <div
+                      style={{
+                        fontSize: 13,
+                        fontWeight: 600,
+                        color: 'var(--c-1b1a17)',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      }}
+                    >
                       <Highlighted parts={row.title} />
                     </div>
-                    <div style={{ fontSize: 11.5, color: 'var(--c-8b8880)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <div
+                      style={{
+                        fontSize: 11.5,
+                        color: 'var(--c-8b8880)',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      }}
+                    >
                       <Highlighted parts={row.sub} />
                     </div>
                   </div>
                   {row.stage !== undefined && (
-                    <div style={{
-                      display: 'flex', alignItems: 'center', gap: 6, background: COLUMNS[row.stage].tint,
-                      borderRadius: 7, padding: '4px 9px 4px 7px', flexShrink: 0,
-                    }}>
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        background: COLUMNS[row.stage].tint,
+                        borderRadius: 7,
+                        padding: '4px 9px 4px 7px',
+                        flexShrink: 0,
+                      }}
+                    >
                       <ColumnIcon col={COLUMNS[row.stage]} />
-                      <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--c-28261f)', lineHeight: 1.3, whiteSpace: 'nowrap' }}>
+                      <div
+                        style={{
+                          fontSize: 11.5,
+                          fontWeight: 600,
+                          color: 'var(--c-28261f)',
+                          lineHeight: 1.3,
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
                         {COLUMNS[row.stage].name}
                       </div>
                     </div>

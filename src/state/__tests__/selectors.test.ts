@@ -27,12 +27,26 @@ const application = (
   updated_at: 't',
 });
 
-const salary = (id: string, value: string): FactRow =>
-  ({ id: 1, application_id: id, label: 'Gehalt', value, kind: null, position: 0 });
+const salary = (id: string, value: string): FactRow => ({
+  id: 1,
+  application_id: id,
+  label: 'Gehalt',
+  value,
+  kind: null,
+  position: 0,
+});
 
 const company = (id: number, name: string): CompanyRow => ({
-  id, name, sector: null, headcount: null, website: null, email: null, phone: null,
-  notes: null, created_at: 't', updated_at: 't',
+  id,
+  name,
+  sector: null,
+  headcount: null,
+  website: null,
+  email: null,
+  phone: null,
+  notes: null,
+  created_at: 't',
+  updated_at: 't',
 });
 
 /* Three cards in one column: the board's own order is A, B, C. */
@@ -52,7 +66,12 @@ function state(filter: Partial<BoardFilter> = {}): AppState {
     },
     board: [['A', 'B', 'C']],
     boardFilter: {
-      sort: SortKey.NONE, dir: SortDir.ASC, people: [], channels: [], interests: [], ...filter,
+      sort: SortKey.NONE,
+      dir: SortDir.ASC,
+      people: [],
+      channels: [],
+      interests: [],
+      ...filter,
     },
   } as unknown as AppState;
 }

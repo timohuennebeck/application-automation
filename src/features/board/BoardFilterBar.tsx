@@ -19,22 +19,22 @@ export function BoardFilterBar() {
   const count = activeFilterCount(st);
   const options = filterOptions(st);
 
-  const patch = (p: Partial<BoardFilter>) =>
-    set((s) => ({ boardFilter: { ...s.boardFilter, ...p } }));
+  const patch = (p: Partial<BoardFilter>) => set((s) => ({ boardFilter: { ...s.boardFilter, ...p } }));
 
   /* Picking a key adopts the direction that reads as "best first"; picking the
      same key again flips it. */
-  const pickSort = (key: SortKey, preferred: SortDir) => patch(
-    key === filter.sort && key !== SortKey.NONE
-      ? { dir: filter.dir === SortDir.ASC ? SortDir.DESC : SortDir.ASC }
-      : { sort: key, dir: preferred },
-  );
+  const pickSort = (key: SortKey, preferred: SortDir) =>
+    patch(
+      key === filter.sort && key !== SortKey.NONE
+        ? { dir: filter.dir === SortDir.ASC ? SortDir.DESC : SortDir.ASC }
+        : { sort: key, dir: preferred },
+    );
 
   const toggle = <T,>(list: T[], value: T): T[] =>
-    (list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
+    list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
 
   const label = isSorted(st)
-    ? SORT_OPTIONS.find(([key]) => key === filter.sort)?.[1] ?? 'Sortiert'
+    ? (SORT_OPTIONS.find(([key]) => key === filter.sort)?.[1] ?? 'Sortiert')
     : 'Filtern';
 
   return (
@@ -42,16 +42,28 @@ export function BoardFilterBar() {
       <div
         className="top-btn no-drag"
         title="Filtern und sortieren"
-        onClick={() => set((s) => ({ dropdown: s.dropdown === DROPDOWN_KEY ? null : DROPDOWN_KEY, editing: null }))}
-        style={{ background: open ? 'var(--s-14)' : undefined, color: open || count || isSorted(st) ? 'var(--c-1b1a17)' : undefined }}
+        onClick={() =>
+          set((s) => ({ dropdown: s.dropdown === DROPDOWN_KEY ? null : DROPDOWN_KEY, editing: null }))
+        }
+        style={{
+          background: open ? 'var(--s-14)' : undefined,
+          color: open || count || isSorted(st) ? 'var(--c-1b1a17)' : undefined,
+        }}
       >
         <FilterGlyph />
         <div>{label}</div>
         {count > 0 && (
-          <div style={{
-            background: 'var(--c-1b1a17)', color: 'var(--c-fff)', borderRadius: 999,
-            fontSize: 9.5, fontWeight: 600, padding: '0 5px', lineHeight: 1.5,
-          }}>
+          <div
+            style={{
+              background: 'var(--c-1b1a17)',
+              color: 'var(--c-fff)',
+              borderRadius: 999,
+              fontSize: 9.5,
+              fontWeight: 600,
+              padding: '0 5px',
+              lineHeight: 1.5,
+            }}
+          >
             {count}
           </div>
         )}
@@ -59,7 +71,14 @@ export function BoardFilterBar() {
       </div>
 
       {open && (
-        <Popover variant={PopoverVariant.PANEL} top={30} right={0} width={276} zIndex={50} style={{ maxWidth: 'calc(100vw - 32px)' }}>
+        <Popover
+          variant={PopoverVariant.PANEL}
+          top={30}
+          right={0}
+          width={276}
+          zIndex={50}
+          style={{ maxWidth: 'calc(100vw - 32px)' }}
+        >
           <MenuLabel>Sortieren</MenuLabel>
           {SORT_OPTIONS.map(([key, text, preferred]) => (
             <MenuItem key={key} selected={key === filter.sort} onClick={() => pickSort(key, preferred)}>
@@ -105,7 +124,16 @@ export function BoardFilterBar() {
           {options.people.length > 0 && (
             <>
               <MenuLabel style={{ paddingTop: 8 }}>Kontaktperson</MenuLabel>
-              <div className="no-scrollbar" style={{ maxHeight: 176, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 1 }}>
+              <div
+                className="no-scrollbar"
+                style={{
+                  maxHeight: 176,
+                  overflowY: 'auto',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 1,
+                }}
+              >
                 {options.people.map((pid) => {
                   const p = person(String(pid));
                   return (
@@ -114,8 +142,18 @@ export function BoardFilterBar() {
                       selected={filter.people.includes(pid)}
                       onClick={() => patch({ people: toggle(filter.people, pid) })}
                     >
-                      <Avatar bg={p.bg} size={20} fontSize={8.5}>{p.initials}</Avatar>
-                      <span style={{ flex: '1 1 auto', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <Avatar bg={p.bg} size={20} fontSize={8.5}>
+                        {p.initials}
+                      </Avatar>
+                      <span
+                        style={{
+                          flex: '1 1 auto',
+                          minWidth: 0,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
                         {p.name}
                       </span>
                     </MenuItem>

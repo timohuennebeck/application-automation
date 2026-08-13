@@ -23,9 +23,11 @@
 ### Task 1: Tooling — vitest
 
 **Files:**
+
 - Modify: `package.json` (add `"test": "vitest run"`, devDep `vitest`)
 
 **Steps:**
+
 - [ ] `npm i -D vitest`
 - [ ] Add `"test": "vitest run"` to scripts
 - [ ] Smoke test `electron/db/__tests__/smoke.test.ts` asserting `new DatabaseSync(':memory:')` works (deleted in Task 3 when real tests exist)
@@ -34,55 +36,145 @@
 ### Task 2: Shared row types
 
 **Files:**
+
 - Create: `src/shared/db-types.ts`
 
 **Produces (consumed by every later task):**
 
 ```ts
 export type Author = 'Du' | 'Kepler';
-export interface StageRow { id: string; title: string; position: number }
+export interface StageRow {
+  id: string;
+  title: string;
+  position: number;
+}
 export interface CompanyRow {
-  id: number; name: string; sector: string | null; headcount: string | null;
-  website: string | null; email: string | null; phone: string | null;
-  notes: string | null; created_at: string; updated_at: string;
+  id: number;
+  name: string;
+  sector: string | null;
+  headcount: string | null;
+  website: string | null;
+  email: string | null;
+  phone: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
 }
 export interface ApplicationRow {
-  id: string; role: string; company_id: number; interest: string; channel: string | null;
-  stage_id: string; stage_position: number; summary: string | null;
-  applied_at: string | null; applied_via: string | null; last_contact_at: string | null;
-  created_at: string; updated_at: string;
+  id: string;
+  role: string;
+  company_id: number;
+  interest: string;
+  channel: string | null;
+  stage_id: string;
+  stage_position: number;
+  summary: string | null;
+  applied_at: string | null;
+  applied_via: string | null;
+  last_contact_at: string | null;
+  created_at: string;
+  updated_at: string;
 }
-export interface FactRow { id: number; application_id: string; label: string; value: string; kind: 'select' | 'link' | null; position: number }
+export interface FactRow {
+  id: number;
+  application_id: string;
+  label: string;
+  value: string;
+  kind: 'select' | 'link' | null;
+  position: number;
+}
 export interface PersonRow {
-  id: number; name: string; role: string | null; initials: string | null;
-  email: string | null; phone: string | null; linkedin: string | null;
-  color: string; created_at: string; updated_at: string;
+  id: number;
+  name: string;
+  role: string | null;
+  initials: string | null;
+  email: string | null;
+  phone: string | null;
+  linkedin: string | null;
+  color: string;
+  created_at: string;
+  updated_at: string;
 }
 export type LinkKind = 'contact' | 'pool' | 'email';
-export interface ApplicationPersonRow { application_id: string; person_id: number; kind: LinkKind; position: number }
-export interface CommentRow { id: number; application_id: string; author: Author; text: string; created_at: string; edited_at: string | null }
+export interface ApplicationPersonRow {
+  application_id: string;
+  person_id: number;
+  kind: LinkKind;
+  position: number;
+}
+export interface CommentRow {
+  id: number;
+  application_id: string;
+  author: Author;
+  text: string;
+  created_at: string;
+  edited_at: string | null;
+}
 export type RoundState = 'done' | 'next' | 'open';
 export interface RoundRow {
-  id: number; application_id: string; position: number; state: RoundState; title: string;
-  scheduled_date: string | null; start_time: string | null; end_time: string | null;
-  location: string | null; link: string | null;
+  id: number;
+  application_id: string;
+  position: number;
+  state: RoundState;
+  title: string;
+  scheduled_date: string | null;
+  start_time: string | null;
+  end_time: string | null;
+  location: string | null;
+  link: string | null;
 }
-export interface RoundPersonRow { round_id: number; person_id: number; position: number }
-export interface RoundNoteRow { id: number; round_id: number; author: Author; text: string; created_at: string }
+export interface RoundPersonRow {
+  round_id: number;
+  person_id: number;
+  position: number;
+}
+export interface RoundNoteRow {
+  id: number;
+  round_id: number;
+  author: Author;
+  text: string;
+  created_at: string;
+}
 export interface FollowupRow {
-  id: number; application_id: string; label: string; due_at: string; position: number;
-  email_subject: string | null; email_text: string | null; generated_at: string | null;
+  id: number;
+  application_id: string;
+  label: string;
+  due_at: string;
+  position: number;
+  email_subject: string | null;
+  email_text: string | null;
+  generated_at: string | null;
 }
 export interface DocumentRow {
-  id: number; application_id: string; kind: 'cover-letter' | 'lebenslauf' | 'other';
-  title: string; format: string; file_path: string | null; created_at: string; updated_at: string;
+  id: number;
+  application_id: string;
+  kind: 'cover-letter' | 'lebenslauf' | 'other';
+  title: string;
+  format: string;
+  file_path: string | null;
+  created_at: string;
+  updated_at: string;
 }
-export interface ActivityRow { id: number; application_id: string; author: Author; text: string; created_at: string }
+export interface ActivityRow {
+  id: number;
+  application_id: string;
+  author: Author;
+  text: string;
+  created_at: string;
+}
 export interface DbSnapshot {
-  stages: StageRow[]; companies: CompanyRow[]; applications: ApplicationRow[];
-  facts: FactRow[]; people: PersonRow[]; applicationPeople: ApplicationPersonRow[];
-  comments: CommentRow[]; rounds: RoundRow[]; roundPeople: RoundPersonRow[];
-  roundNotes: RoundNoteRow[]; followups: FollowupRow[]; documents: DocumentRow[];
+  stages: StageRow[];
+  companies: CompanyRow[];
+  applications: ApplicationRow[];
+  facts: FactRow[];
+  people: PersonRow[];
+  applicationPeople: ApplicationPersonRow[];
+  comments: CommentRow[];
+  rounds: RoundRow[];
+  roundPeople: RoundPersonRow[];
+  roundNotes: RoundNoteRow[];
+  followups: FollowupRow[];
+  documents: DocumentRow[];
   activities: ActivityRow[];
 }
 ```
@@ -92,18 +184,21 @@ export interface DbSnapshot {
 ### Task 3: Schema + migrations (`electron/db/`)
 
 **Files:**
+
 - Create: `electron/db/schema.ts` (exports `MIGRATIONS: string[]` — index 0 is migration 1: all `CREATE TABLE`/`CREATE INDEX` statements exactly as in the spec's Schema section, plus `meta`)
 - Create: `electron/db/migrate.ts`
 - Create: `electron/db/open.ts`
 - Test: `electron/db/__tests__/migrate.test.ts`
 
 **Interfaces produced:**
+
 - `migrate(db: DatabaseSync): void` — applies `MIGRATIONS[user_version..]` each in a transaction, bumping `PRAGMA user_version`
 - `openDb(filePath: string): DatabaseSync` — opens, sets `journal_mode=WAL` (skip for `:memory:`), `foreign_keys=ON`, runs `migrate`
 
 **Stage ids (fixed order, index = today's COLUMNS index):** `interessiert, in-bearbeitung, eingereicht, screening, interview, interview-2, finale, gehaltsverhandlung, korb, zurueckgezogen` — inserted by migration 1 itself (stages are schema-level constants).
 
 **Tests:**
+
 - [ ] fresh `:memory:` db → `migrate` → all 14 tables exist (query `sqlite_master`), `user_version === 1`, 10 stage rows in order
 - [ ] `migrate` twice → idempotent (no throw, still `user_version 1`)
 - [ ] `foreign_keys` pragma is ON via `openDb` (insert violating row → throws)
@@ -112,18 +207,19 @@ export interface DbSnapshot {
 ### Task 4: Seed parsers
 
 **Files:**
+
 - Create: `electron/db/seed-parse.ts`
 - Test: `electron/db/__tests__/seed-parse.test.ts`
 
 **Interfaces produced (all pure; `now: Date` injected — never call `new Date()` inside):**
 
 ```ts
-germanDateToISO('24.07.2026') === '2026-07-24'                    // '' if unparseable
-dayMonthToISO('24.07.', 2026) === '2026-07-24'                    // HISTORY's yearless dates
-relativeToISO('vor 12 Tagen', now)   // ISO datetime now minus 12d; handles Tag/Tagen/Woche(n)/Monat(en), 'gerade eben', 'heute', 'gestern'; '' otherwise
-splitTimeRange('10:00 – 11:00') === ['10:00', '11:00']            // '' time → [null, null]; single time → ['10:00', null]
-splitCompany('Vector Labs, Zürich') === { name: 'Vector Labs', city: 'Zürich' }  // no comma → city null; split on LAST ', '
-looksLikePhone('+49 341 55 20 118') === true                      // ^[+0-9][0-9 /()-]{5,}$
+germanDateToISO('24.07.2026') === '2026-07-24'; // '' if unparseable
+dayMonthToISO('24.07.', 2026) === '2026-07-24'; // HISTORY's yearless dates
+relativeToISO('vor 12 Tagen', now); // ISO datetime now minus 12d; handles Tag/Tagen/Woche(n)/Monat(en), 'gerade eben', 'heute', 'gestern'; '' otherwise
+splitTimeRange('10:00 – 11:00') === ['10:00', '11:00']; // '' time → [null, null]; single time → ['10:00', null]
+splitCompany('Vector Labs, Zürich') === { name: 'Vector Labs', city: 'Zürich' }; // no comma → city null; split on LAST ', '
+looksLikePhone('+49 341 55 20 118') === true; // ^[+0-9][0-9 /()-]{5,}$
 ```
 
 - [ ] Failing tests first with the real sample values above (incl. `'Kessler & Roth, Berlin'`, `'in 5 Tagen fällig'` → `''` for relativeToISO)
@@ -132,12 +228,14 @@ looksLikePhone('+49 341 55 20 118') === true                      // ^[+0-9][0-9
 ### Task 5: Seed transform
 
 **Files:**
+
 - Create: `electron/db/seed.ts`
 - Test: `electron/db/__tests__/seed.test.ts`
 
 **Interface produced:** `seedIfEmpty(db: DatabaseSync, now?: Date): boolean` (true = seeded; no-op when `applications` has rows). One transaction. Imports `CARD_DEFS, INITIAL_BOARD, DETAILS, HISTORY, INITIAL_ROUNDS, INITIAL_PEOPLE, INITIAL_PEOPLE_POOL, SALARY` from `../../src/data/sample-data`.
 
 **Rules (spec steps 1–11, concretized):**
+
 - Companies: `splitCompany(card[1])`; one row per distinct name; timestamps = now.
 - Applications: id from CARD_DEFS key; `stage_id`/`stage_position` from INITIAL_BOARD; `interest = card[2]`, `channel = card[3]`; `updated_at` from `relativeToISO(card[4])` when it parses, else `created_at`; `created_at` from the card's earliest HISTORY date (else now − 21d); `applied_at`/`last_contact_at` from DETAILS facts (`germanDateToISO` / `relativeToISO`); `applied_via` NULL; summary from DETAILS else NULL.
 - Facts: DETAILS facts minus routed labels (routing table in Global Constraints, plus `Kontaktperson`, `Kontaktperson E-Mail/Telefon/LinkedIn`, `Standort` handling below); `kind`: `'s'`→`'select'`, `'l'`→`'link'`. Standort: from DETAILS fact if present, else `splitCompany().city`. Gehalt: from DETAILS fact if present else `SALARY[id]`. Position = insertion order.
@@ -150,6 +248,7 @@ looksLikePhone('+49 341 55 20 118') === true                      // ^[+0-9][0-9
 - Meta: `next_bew_num = 45`.
 
 **Tests (the audit's traps):**
+
 - [ ] runs once, second call returns false
 - [ ] two Nadine Wolfs = 2 person rows (pool 'Geschäftsführung' vs BEW-33 contact 'Recruiterin'); exactly one Lea Brinkmann row (pool role 'Talent Acquisition' equals BEW-35 contact role → merge, email folded in)
 - [ ] BEW-29 Ines Faber: 2 rows (pool 'HR' vs contact 'HR Business Partner'); the contact row has the number in `phone` and `email` NULL
@@ -162,6 +261,7 @@ looksLikePhone('+49 341 55 20 118') === true                      // ^[+0-9][0-9
 ### Task 6: Repo
 
 **Files:**
+
 - Create: `electron/db/repo.ts`
 - Test: `electron/db/__tests__/repo.test.ts`
 
@@ -195,6 +295,7 @@ addActivity(applicationId, author, text): ActivityRow
 ```
 
 **Tests:**
+
 - [ ] seeded `:memory:` db; `createApplication` → id `BEW-45`, 4 rounds, followups, documents; `next_bew_num` now 46; delete it → recreate → `BEW-46` (no reuse)
 - [ ] cascade: `deleteApplication('BEW-33')` removes its facts/comments/rounds/round_notes/followups/documents/activities/links but not people/companies
 - [ ] `moveCard` reindexes: move BEW-41 to `eingereicht` index 1 → positions contiguous in both stages
@@ -207,6 +308,7 @@ addActivity(applicationId, author, text): ActivityRow
 ### Task 7: IPC + preload + main wiring
 
 **Files:**
+
 - Create: `electron/db/ipc.ts` — `registerDbIpc(repoFactory)`: one `ipcMain.handle('db:<name>', …)` per repo function above, name-mapped 1:1 (`db:load`, `db:applications.create`, `db:applications.update`, `db:applications.move`, `db:applications.delete`, `db:applications.relinkCompany`, `db:companies.update`, `db:facts.upsert`, `db:facts.delete`, `db:comments.add|update|delete`, `db:rounds.set`, `db:roundNotes.add`, `db:people.create|update|delete`, `db:applicationPeople.set`, `db:followups.setDue`, `db:followups.saveEmail`, `db:activities.add`)
 - Modify: `electron/main.ts` — on `app.whenReady`: `openDb(path.join(app.getPath('userData'),'bewerbungen.db'))` + `seedIfEmpty` in try/catch → `dialog.showErrorBox` + `app.quit()` on failure; `registerDbIpc`
 - Modify: `electron/preload.ts` — add `db` object: one `(…args) => ipcRenderer.invoke(channel, …args)` per channel, typed as `DbApi`
@@ -217,6 +319,7 @@ addActivity(applicationId, author, text): ActivityRow
 ### Task 8: Renderer boot — snapshot load + domain state
 
 **Files:**
+
 - Modify: `src/state/store-context.ts` — add domain fields to `AppState`: `loaded: boolean`, `stages: StageRow[]`, `applications: Record<string, ApplicationRow>`, `companies: Record<number, CompanyRow>`, `factsByApp: Record<string, FactRow[]>`, `people: Record<string, PersonRow>` (keyed by `String(id)`), `linksByApp: Record<string, ApplicationPersonRow[]>`, `commentsByApp`, `roundsByApp: Record<string, RoundRow[]>`, `roundPeopleByRound: Record<number, RoundPersonRow[]>`, `roundNotesByRound`, `followupsByApp`, `documentsByApp`, `activitiesByApp`, `board: string[][]` (derived, kept in state for drag)
 - Modify: `src/state/store.tsx` — `useEffect` on mount: `window.desktop.db.load()` → index arrays into the records above; render `null` (splash) until `loaded`
 - Create: `src/state/db-index.ts` — pure `indexSnapshot(s: DbSnapshot): DomainState` + `boardFrom(applications, stages)` (sort by `stage_position`), unit-testable
@@ -227,6 +330,7 @@ addActivity(applicationId, author, text): ActivityRow
 ### Task 9: Applications on the board
 
 **Files:**
+
 - Modify: `src/state/store.tsx` — `moveCard`/`createCard`/`deleteCard` now: optimistic local board update as today, then `await db.applications.move|create|delete`, reconciling from returned rows; `logAct` → `db.activities.add`
 - Modify: `src/features/board/ApplicationCard.tsx` — drop `CARD_DEFS/SALARY/INTERVIEWS` imports; new selectors from `src/state/selectors.ts`
 - Create: `src/state/selectors.ts`:
@@ -247,6 +351,7 @@ cardView(st, id): { role; companyLine /* name + ', ' + Standort fact when presen
 ### Task 10: Detail sidebar — facts, routing, Beworben via
 
 **Files:**
+
 - Modify: `src/features/detail/properties/PropertiesSidebar.tsx`, `src/features/detail/properties/FactField.tsx`
 - Modify: `src/data/sample-data.ts` SECTIONS (moves in Task 15): Bewerbung section = `['Plattform', 'Beworben via', 'Beworben am', 'Letzter Kontakt']` ← **adds the Beworben-via row**; add `FACT_OPTIONS['Beworben via'] = ['Karriereseite', 'E-Mail', 'LinkedIn', 'Xing', 'StepStone', 'Recruiter']`
 - Create: `src/state/fact-routing.ts` — `readField(st, id, label): string` and `writeField(store, id, label, value): Promise<void>` implementing the routing table (application columns ↔ German date conversion via `isoToDate`/`dateToISO`; company columns via `db.companies.update`; `Firma` via `db.applications.relinkCompany`; everything else `db.facts.upsert`)
@@ -256,6 +361,7 @@ cardView(st, id): { role; companyLine /* name + ', ' + Standort fact when presen
 ### Task 11: Comments
 
 **Files:**
+
 - Modify: `src/features/detail/CommentsSection.tsx` — render `commentsByApp[id]` (`CommentRow`), relative time from `created_at` via `dayDiff`/`relLabel`, avatar color by author as today; edit/delete gated on `author === 'Du'` and keyed by `comment.id`
 - Modify: `src/state/store.tsx` — `addComment` → `db.comments.add`; edit/save → `db.comments.update`; delete → `db.comments.delete`; delete `addedComments/commentEdits/commentDeletes` state
 
@@ -264,6 +370,7 @@ cardView(st, id): { role; companyLine /* name + ', ' + Standort fact when presen
 ### Task 12: Rounds + notes
 
 **Files:**
+
 - Modify: `src/state/store.tsx` — `roundsFor(id)` returns the **view mapping** of `roundsByApp` rows to the existing `Round` shape components expect: `date = isoToDate(scheduled_date)`, `time = start–end join`, `when` derived (`'Termin offen'` / `shortDate + ', HH:MM'` / `'gelaufen'` styles as today via `syncRoundSchedule` logic moved into the selector), `people = round_people person ids as strings`, `notes` from `roundNotesByRound`. `mutateRounds`/`saveRound`/`resetRound` translate back and call `db.rounds.set`; note add → `db.roundNotes.add`
 - Modify: `src/features/interviews/*` only where the `Round` view shape changed (people keys are now person-id strings)
 
@@ -272,6 +379,7 @@ cardView(st, id): { role; companyLine /* name + ', ' + Standort fact when presen
 ### Task 13: People + contacts
 
 **Files:**
+
 - Modify: `src/state/store.tsx` — `person(key)` reads `people[key]` (id-keyed, `color` → `bg`); `peopleForCard` = pool links else all people; `contactsFor`/`emailContactsFor` from `linksByApp` (email kind falls back to contact list when no email links exist — preserves today's fallback); `savePerson`/`deletePerson`/`createPersonForRound`/`setContacts`/`setEmailContacts` → `db.people.*` + `db.applicationPeople.set`
 - Modify: `src/features/people/*`, `src/features/detail/properties/*` (contact picker) for id-keyed people
 - Delete state: `contactOverrides`, `emailContactOverrides`, `peoplePool` (links live in `linksByApp`)
@@ -281,6 +389,7 @@ cardView(st, id): { role; companyLine /* name + ', ' + Standort fact when presen
 ### Task 14: Follow-ups + stored email drafts
 
 **Files:**
+
 - Modify: `src/features/followup/schedule.ts` — `followUpSlots` reads `followupsByApp[id]` rows (`iso = due_at`), keeps diff/meta/dot derivation; drop the anchor recomputation and `dueOverrides`
 - Modify: `src/features/followup/FollowUpEmailCard.tsx` + `src/state/store.tsx` — on first open of a slot without `email_text`: generate via existing `draftEmail`, then `db.followups.saveEmail`; render from row afterwards; regenerate button re-runs generator + `saveEmail`; due-date picker → `db.followups.setDue`
 - Delete state: `dueOverrides`
@@ -290,6 +399,7 @@ cardView(st, id): { role; companyLine /* name + ', ' + Standort fact when presen
 ### Task 15: Activities, summary, documents + config split
 
 **Files:**
+
 - Modify: `src/features/detail/HistorySection.tsx` → `activitiesByApp`, date rendered `DD.MM.` from `created_at`
 - Modify: `src/features/detail/SummaryField.tsx` → `application.summary` with generated fallback; save → `db.applications.update`
 - Modify: `src/features/detail/DocumentsSection.tsx` → `documentsByApp[id]`; caption `format.toUpperCase() + ' · erstellt/aktualisiert am ' + isoToDate(...)`; click keeps stub `download()` while `file_path` is null

@@ -11,54 +11,54 @@
    next to the component that owns them. */
 
 export const Author = {
-    DU: "DU",
-    KEPLER: "KEPLER",
+  DU: 'DU',
+  KEPLER: 'KEPLER',
 } as const;
 export type Author = (typeof Author)[keyof typeof Author];
 
 /* What the UI calls each author. The stored value is an identifier; these are
    the German names shown in comments, notes and the history. */
 export const AUTHOR_LABEL: Record<Author, string> = {
-    [Author.DU]: "Du",
-    [Author.KEPLER]: "Kepler",
+  [Author.DU]: 'Du',
+  [Author.KEPLER]: 'Kepler',
 };
 
 export const RoundState = {
-    DONE: "DONE",
-    NEXT: "NEXT",
-    OPEN: "OPEN",
+  DONE: 'DONE',
+  NEXT: 'NEXT',
+  OPEN: 'OPEN',
 } as const;
 export type RoundState = (typeof RoundState)[keyof typeof RoundState];
 
 /* How a person is attached to an application: the card's contacts, its
    suggestion pool for interviews, or the follow-up email's recipients. */
 export const LinkKind = {
-    CONTACT: "CONTACT",
-    POOL: "POOL",
-    EMAIL: "EMAIL",
+  CONTACT: 'CONTACT',
+  POOL: 'POOL',
+  EMAIL: 'EMAIL',
 } as const;
 export type LinkKind = (typeof LinkKind)[keyof typeof LinkKind];
 
 /* How a facts row is rendered. The column stays nullable — plain text has no
    kind at all. */
 export const FactKind = {
-    SELECT: "SELECT",
-    LINK: "LINK",
+  SELECT: 'SELECT',
+  LINK: 'LINK',
 } as const;
 export type FactKind = (typeof FactKind)[keyof typeof FactKind];
 
 export const DocumentKind = {
-    COVER_LETTER: "COVER_LETTER",
-    LEBENSLAUF: "LEBENSLAUF",
-    OTHER: "OTHER",
+  COVER_LETTER: 'COVER_LETTER',
+  LEBENSLAUF: 'LEBENSLAUF',
+  OTHER: 'OTHER',
 } as const;
 export type DocumentKind = (typeof DocumentKind)[keyof typeof DocumentKind];
 
 export const Interest = {
-    URGENT: "URGENT",
-    HIGH: "HIGH",
-    MEDIUM: "MEDIUM",
-    LOW: "LOW",
-    NONE: "NONE",
+  URGENT: 'URGENT',
+  HIGH: 'HIGH',
+  MEDIUM: 'MEDIUM',
+  LOW: 'LOW',
+  NONE: 'NONE',
 } as const;
 export type Interest = (typeof Interest)[keyof typeof Interest];

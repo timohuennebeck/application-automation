@@ -30,8 +30,17 @@ export interface PopoverProps {
 }
 
 export function Popover({
-  variant = PopoverVariant.MENU, top = 26, left, right, width, minWidth, zIndex = 40,
-  stack = true, padding, style, children,
+  variant = PopoverVariant.MENU,
+  top = 26,
+  left,
+  right,
+  width,
+  minWidth,
+  zIndex = 40,
+  stack = true,
+  padding,
+  style,
+  children,
 }: PopoverProps) {
   return (
     <div

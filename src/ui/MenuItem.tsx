@@ -15,17 +15,20 @@ export interface MenuItemProps {
 }
 
 export function MenuItem({
-  onClick, onMouseDown, selected, hideCheck, danger, dim, style, children,
+  onClick,
+  onMouseDown,
+  selected,
+  hideCheck,
+  danger,
+  dim,
+  style,
+  children,
 }: MenuItemProps) {
   return (
     <div
       /* The selected tint is a class, not an inline style: an inline background
          would outrank the :hover rule and swallow the hover feedback. */
-      className={
-        'menu-item'
-        + (selected ? ' menu-item-selected' : '')
-        + (danger ? ' menu-item-danger' : '')
-      }
+      className={'menu-item' + (selected ? ' menu-item-selected' : '') + (danger ? ' menu-item-danger' : '')}
       onClick={onClick}
       onMouseDown={onMouseDown}
       style={{
@@ -48,11 +51,20 @@ export function MenuItem({
 /* Uppercase group label inside a menu or a properties group. */
 export function MenuLabel({ children, style }: { children: ReactNode; style?: CSSProperties }) {
   return (
-    <div style={{
-      fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
-      color: 'var(--c-a8a49b)', padding: '3px 8px 4px',
-      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', ...style,
-    }}>
+    <div
+      style={{
+        fontSize: 10.5,
+        fontWeight: 600,
+        letterSpacing: '0.06em',
+        textTransform: 'uppercase',
+        color: 'var(--c-a8a49b)',
+        padding: '3px 8px 4px',
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        ...style,
+      }}
+    >
       {children}
     </div>
   );

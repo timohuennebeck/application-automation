@@ -1,7 +1,5 @@
 import { AGENT_RUNS } from '../../../data/sample-data';
-import {
-  COLUMNS, DATE_FIELDS, FACT_OPTIONS, INTEREST, INTEREST_ORDER, SECTIONS,
-} from '../../../data/config';
+import { COLUMNS, DATE_FIELDS, FACT_OPTIONS, INTEREST, INTEREST_ORDER, SECTIONS } from '../../../data/config';
 import { FactKind, Interest, LinkKind } from '../../../shared/enums';
 import { isoToDate } from '../../../lib/date';
 import { useApp } from '../../../state/store-context';
@@ -18,7 +16,16 @@ import { FactField, type FactView } from './FactField';
 const SIDEBAR_LABEL_WIDTH = 118;
 
 const GroupTitle = ({ children }: { children: string }) => (
-  <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--c-a8a49b)', paddingBottom: 5 }}>
+  <div
+    style={{
+      fontSize: 10.5,
+      fontWeight: 600,
+      letterSpacing: '0.07em',
+      textTransform: 'uppercase',
+      color: 'var(--c-a8a49b)',
+      paddingBottom: 5,
+    }}
+  >
     {children}
   </div>
 );
@@ -78,27 +85,70 @@ export function PropertiesSidebar({ cardId, role, company, columnIndex }: Proper
   const interest = app?.interest || Interest.NONE;
   const open = st.secOpen.props !== false;
 
-  const toggleSection = () => set((s) => {
-    const m = { ...s.secOpen, props: s.secOpen.props === false };
-    try { localStorage.setItem('kb-sections', JSON.stringify(m)); } catch { /* ignore */ }
-    return { secOpen: m };
-  });
+  const toggleSection = () =>
+    set((s) => {
+      const m = { ...s.secOpen, props: s.secOpen.props === false };
+      try {
+        localStorage.setItem('kb-sections', JSON.stringify(m));
+      } catch {
+        /* ignore */
+      }
+      return { secOpen: m };
+    });
 
   return (
-    <div className="no-scrollbar" style={{
-      width: 392, flexShrink: 0, marginLeft: 'auto', overflowY: 'auto',
-      padding: '12px 22px 28px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: 24,
-    }}>
-      <div onClick={toggleSection} style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', userSelect: 'none', width: 'fit-content' }}>
-        <Chevron size={10} style={{ transform: open ? 'none' : 'rotate(-90deg)', transition: 'transform 140ms ease' }} />
+    <div
+      className="no-scrollbar"
+      style={{
+        width: 392,
+        flexShrink: 0,
+        marginLeft: 'auto',
+        overflowY: 'auto',
+        padding: '12px 22px 28px',
+        boxSizing: 'border-box',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 24,
+      }}
+    >
+      <div
+        onClick={toggleSection}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 5,
+          cursor: 'pointer',
+          userSelect: 'none',
+          width: 'fit-content',
+        }}
+      >
+        <Chevron
+          size={10}
+          style={{ transform: open ? 'none' : 'rotate(-90deg)', transition: 'transform 140ms ease' }}
+        />
         <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--c-1b1a17)' }}>Eigenschaften</div>
-        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--c-a5a29a)', fontVariantNumeric: 'tabular-nums' }}>({1 + groups.length})</div>
+        <div
+          style={{
+            fontSize: 12,
+            fontWeight: 600,
+            color: 'var(--c-a5a29a)',
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
+          ({1 + groups.length})
+        </div>
       </div>
 
-      <div style={{
-        display: 'flex', flexDirection: 'column', gap: 24, flexShrink: 0,
-        overflow: open ? 'visible' : 'hidden', maxHeight: open ? 'none' : 0,
-      }}>
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 24,
+          flexShrink: 0,
+          overflow: open ? 'visible' : 'hidden',
+          maxHeight: open ? 'none' : 0,
+        }}
+      >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
           <GroupTitle>Bewerbung</GroupTitle>
 
@@ -108,7 +158,9 @@ export function PropertiesSidebar({ cardId, role, company, columnIndex }: Proper
                 open={st.dropdown === 'status'}
                 chevron
                 style={{ background: col.tint }}
-                onClick={() => set((s) => ({ dropdown: s.dropdown === 'status' ? null : 'status', editing: null }))}
+                onClick={() =>
+                  set((s) => ({ dropdown: s.dropdown === 'status' ? null : 'status', editing: null }))
+                }
               >
                 <ColumnIcon col={col} size={13} />
                 <span>{col.name}</span>
@@ -140,7 +192,9 @@ export function PropertiesSidebar({ cardId, role, company, columnIndex }: Proper
                 open={st.dropdown === 'interest'}
                 gap={7}
                 chevron
-                onClick={() => set((s) => ({ dropdown: s.dropdown === 'interest' ? null : 'interest', editing: null }))}
+                onClick={() =>
+                  set((s) => ({ dropdown: s.dropdown === 'interest' ? null : 'interest', editing: null }))
+                }
               >
                 <PriorityBars level={INTEREST[interest][1]} />
                 <span>{INTEREST[interest][0]}</span>
@@ -151,7 +205,10 @@ export function PropertiesSidebar({ cardId, role, company, columnIndex }: Proper
                     <MenuItem
                       key={k}
                       selected={k === interest}
-                      onClick={() => { setInterest(cardId, k); set({ dropdown: null }); }}
+                      onClick={() => {
+                        setInterest(cardId, k);
+                        set({ dropdown: null });
+                      }}
                     >
                       <PriorityBars level={INTEREST[k][1]} />
                       <span style={{ flex: '1 1 auto', whiteSpace: 'nowrap' }}>{INTEREST[k][0]}</span>
@@ -163,7 +220,11 @@ export function PropertiesSidebar({ cardId, role, company, columnIndex }: Proper
           </FieldRow>
 
           <PopoverAnchor style={{ display: 'flex', gap: 12, alignItems: 'center', minHeight: 24 }}>
-            <div style={{ width: SIDEBAR_LABEL_WIDTH, flexShrink: 0, fontSize: 12, color: 'var(--c-9a978f)' }}>Kontaktperson</div>
+            <div
+              style={{ width: SIDEBAR_LABEL_WIDTH, flexShrink: 0, fontSize: 12, color: 'var(--c-9a978f)' }}
+            >
+              Kontaktperson
+            </div>
             <div style={{ marginLeft: -6, minWidth: 0 }}>
               <ContactPicker
                 popKey={'fact:' + cardId}

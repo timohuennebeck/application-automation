@@ -15,7 +15,11 @@ export interface Mentionable {
 
 /* The assistant is mentionable in every thread, alongside the card's people. */
 export const KEPLER_ENTRY: Mentionable = {
-  key: KEPLER, name: KEPLER, role: 'KI-Assistent', bg: 'var(--c-1b1a17)', initials: 'K',
+  key: KEPLER,
+  name: KEPLER,
+  role: 'KI-Assistent',
+  bg: 'var(--c-1b1a17)',
+  initials: 'K',
 };
 
 export interface TextPart {
@@ -74,7 +78,12 @@ export function mentionQuery(value: string, caret: number): MentionQuery | null 
 
 /* Replaces the in-progress query with the chosen name, leaving a trailing space
    and reporting where the caret should land. */
-export function applyMention(value: string, query: MentionQuery, caret: number, name: string): {
+export function applyMention(
+  value: string,
+  query: MentionQuery,
+  caret: number,
+  name: string,
+): {
   text: string;
   caret: number;
 } {

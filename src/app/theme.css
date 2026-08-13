@@ -1,62 +1,262 @@
 /* Design tokens ported from the Claude Design project "Kanban Board".
    Same variable names as the design doc so styles can be carried over 1:1. */
 :root {
-  --c-fff:#fff;--c-fbfaf7:#fbfaf7;--c-f7f5f0:#f7f5f0;--c-f6f5f1:#f6f5f1;--c-f4f2ed:#f4f2ed;--c-f3f2f0:#f3f2f0;
-  --c-f2efe9:#f2efe9;--c-f1efe9:#f1efe9;--c-f0eee8:#f0eee8;--c-efe9e4:#efe9e4;--c-eceae4:#eceae4;--c-eae7e0:#eae7e0;
-  --c-eae7df:#eae7df;--c-e7e4dc:#e7e4dc;--c-e6e3dc:#e6e3dc;--c-e4e1da:#e4e1da;--c-e0ded8:#e0ded8;--c-e0ddd5:#e0ddd5;
-  --c-ddd9d0:#ddd9d0;--c-dcd9d1:#dcd9d1;--c-dedbd3:#dedbd3;--c-dedbd4:#dedbd4;--c-d8d4ca:#d8d4ca;--c-d6d3cb:#d6d3cb;
-  --c-d5d1c7:#d5d1c7;--c-cfccc3:#cfccc3;--c-c9c5bb:#c9c5bb;--c-c6c3ba:#c6c3ba;--c-c3c0b8:#c3c0b8;--c-bdb9b0:#bdb9b0;
-  --c-b9b5ab:#b9b5ab;--c-b3b0a8:#b3b0a8;--c-a8a49b:#a8a49b;--c-a5a29a:#a5a29a;--c-9a978f:#9a978f;--c-8d8a83:#8d8a83;
-  --c-8b8880:#8b8880;--c-8a877f:#8a877f;--c-77746d:#77746d;--c-5f5c56:#5f5c56;--c-4d4a44:#4d4a44;--c-3d3a34:#3d3a34;
-  --c-33302a:#33302a;--c-28261f:#28261f;--c-1b1a17:#1b1a17;--c-000:#000;
-  --c-3f6ea8:#3f6ea8;--c-2f5d8a:#2f5d8a;--c-6d8cc0:#6d8cc0;--c-5f6fae:#5f6fae;--c-b9cbe2:#b9cbe2;--c-4a5a7a:#4a5a7a;
-  --c-2f3c55:#2f3c55;--c-e9eff8:#e9eff8;--c-edf1fa:#edf1fa;--c-f2f5fa:#f2f5fa;--c-f1f3f9:#f1f3f9;--c-e6eef7:#e6eef7;
-  --c-f4f7fb:#f4f7fb;--c-e4e9f7:#e4e9f7;--c-7a5aa8:#7a5aa8;--c-9078b8:#9078b8;--c-f4eefa:#f4eefa;--c-f6f3fa:#f6f3fa;
-  --c-4f8f6a:#4f8f6a;--c-5b7a5e:#5b7a5e;--c-3f8f5a:#3f8f5a;--c-2f7d49:#2f7d49;--c-7fa389:#7fa389;--c-eef6ef:#eef6ef;
-  --c-eff6f2:#eff6f2;--c-eef7f0:#eef7f0;--c-f0f6f4:#f0f6f4;--c-a8523f:#a8523f;--c-c2564c:#c2564c;--c-a8463d:#a8463d;
-  --c-fdeeea:#fdeeea;--c-fbf1f0:#fbf1f0;--c-faf0ee:#faf0ee;--c-a4762f:#a4762f;--c-9a7218:#9a7218;--c-d0a03f:#d0a03f;
-  --c-d9a437:#d9a437;--c-fcf4e6:#fcf4e6;--c-fdf7ea:#fdf7ea;--c-f7e9b8:#f7e9b8;--c-5b9083:#5b9083;--c-2f7a72:#2f7a72;
-  --c-3d6b60:#3d6b60;
-  --s-0:rgba(40,34,22,0.16);--s-1:rgba(40,34,22,0.18);--s-2:rgba(40,34,22,0.22);--s-3:rgba(40,34,22,0.26);
-  --s-4:rgba(40,36,28,0.28);--s-5:rgba(40,36,28,0.32);--s-6:rgba(255,255,255,0.16);--s-7:rgba(60,50,35,0.05);
-  --s-8:rgba(60,50,35,0.04);--s-9:rgba(60,50,35,0.10);--s-10:rgba(60,50,35,0.12);--s-11:rgba(60,50,35,0.14);
-  --s-12:rgba(60,50,35,0.18);--s-13:rgba(0,0,0,0.07);--s-14:rgba(0,0,0,0.06);--s-15:rgba(0,0,0,0.18);
-  --g-1:#fdeeea;--g-2:#fcf4e6;--g-3:#eef6ef;--g-4:#edf1fa;--g-5:#f4eefa;
-  --colt-1:#f4f2ed;--colt-2:#fdf7ea;--colt-3:#f2f5fa;--colt-4:#f6f3fa;--colt-5:#f0f6f4;--colt-6:#eff6f2;
-  --colt-7:#f1f3f9;--colt-8:#eef7f0;--colt-9:#fbf1f0;--colt-10:#f3f2f0;
-  --run:#e0186c;
+  --c-fff: #fff;
+  --c-fbfaf7: #fbfaf7;
+  --c-f7f5f0: #f7f5f0;
+  --c-f6f5f1: #f6f5f1;
+  --c-f4f2ed: #f4f2ed;
+  --c-f3f2f0: #f3f2f0;
+  --c-f2efe9: #f2efe9;
+  --c-f1efe9: #f1efe9;
+  --c-f0eee8: #f0eee8;
+  --c-efe9e4: #efe9e4;
+  --c-eceae4: #eceae4;
+  --c-eae7e0: #eae7e0;
+  --c-eae7df: #eae7df;
+  --c-e7e4dc: #e7e4dc;
+  --c-e6e3dc: #e6e3dc;
+  --c-e4e1da: #e4e1da;
+  --c-e0ded8: #e0ded8;
+  --c-e0ddd5: #e0ddd5;
+  --c-ddd9d0: #ddd9d0;
+  --c-dcd9d1: #dcd9d1;
+  --c-dedbd3: #dedbd3;
+  --c-dedbd4: #dedbd4;
+  --c-d8d4ca: #d8d4ca;
+  --c-d6d3cb: #d6d3cb;
+  --c-d5d1c7: #d5d1c7;
+  --c-cfccc3: #cfccc3;
+  --c-c9c5bb: #c9c5bb;
+  --c-c6c3ba: #c6c3ba;
+  --c-c3c0b8: #c3c0b8;
+  --c-bdb9b0: #bdb9b0;
+  --c-b9b5ab: #b9b5ab;
+  --c-b3b0a8: #b3b0a8;
+  --c-a8a49b: #a8a49b;
+  --c-a5a29a: #a5a29a;
+  --c-9a978f: #9a978f;
+  --c-8d8a83: #8d8a83;
+  --c-8b8880: #8b8880;
+  --c-8a877f: #8a877f;
+  --c-77746d: #77746d;
+  --c-5f5c56: #5f5c56;
+  --c-4d4a44: #4d4a44;
+  --c-3d3a34: #3d3a34;
+  --c-33302a: #33302a;
+  --c-28261f: #28261f;
+  --c-1b1a17: #1b1a17;
+  --c-000: #000;
+  --c-3f6ea8: #3f6ea8;
+  --c-2f5d8a: #2f5d8a;
+  --c-6d8cc0: #6d8cc0;
+  --c-5f6fae: #5f6fae;
+  --c-b9cbe2: #b9cbe2;
+  --c-4a5a7a: #4a5a7a;
+  --c-2f3c55: #2f3c55;
+  --c-e9eff8: #e9eff8;
+  --c-edf1fa: #edf1fa;
+  --c-f2f5fa: #f2f5fa;
+  --c-f1f3f9: #f1f3f9;
+  --c-e6eef7: #e6eef7;
+  --c-f4f7fb: #f4f7fb;
+  --c-e4e9f7: #e4e9f7;
+  --c-7a5aa8: #7a5aa8;
+  --c-9078b8: #9078b8;
+  --c-f4eefa: #f4eefa;
+  --c-f6f3fa: #f6f3fa;
+  --c-4f8f6a: #4f8f6a;
+  --c-5b7a5e: #5b7a5e;
+  --c-3f8f5a: #3f8f5a;
+  --c-2f7d49: #2f7d49;
+  --c-7fa389: #7fa389;
+  --c-eef6ef: #eef6ef;
+  --c-eff6f2: #eff6f2;
+  --c-eef7f0: #eef7f0;
+  --c-f0f6f4: #f0f6f4;
+  --c-a8523f: #a8523f;
+  --c-c2564c: #c2564c;
+  --c-a8463d: #a8463d;
+  --c-fdeeea: #fdeeea;
+  --c-fbf1f0: #fbf1f0;
+  --c-faf0ee: #faf0ee;
+  --c-a4762f: #a4762f;
+  --c-9a7218: #9a7218;
+  --c-d0a03f: #d0a03f;
+  --c-d9a437: #d9a437;
+  --c-fcf4e6: #fcf4e6;
+  --c-fdf7ea: #fdf7ea;
+  --c-f7e9b8: #f7e9b8;
+  --c-5b9083: #5b9083;
+  --c-2f7a72: #2f7a72;
+  --c-3d6b60: #3d6b60;
+  --s-0: rgba(40, 34, 22, 0.16);
+  --s-1: rgba(40, 34, 22, 0.18);
+  --s-2: rgba(40, 34, 22, 0.22);
+  --s-3: rgba(40, 34, 22, 0.26);
+  --s-4: rgba(40, 36, 28, 0.28);
+  --s-5: rgba(40, 36, 28, 0.32);
+  --s-6: rgba(255, 255, 255, 0.16);
+  --s-7: rgba(60, 50, 35, 0.05);
+  --s-8: rgba(60, 50, 35, 0.04);
+  --s-9: rgba(60, 50, 35, 0.1);
+  --s-10: rgba(60, 50, 35, 0.12);
+  --s-11: rgba(60, 50, 35, 0.14);
+  --s-12: rgba(60, 50, 35, 0.18);
+  --s-13: rgba(0, 0, 0, 0.07);
+  --s-14: rgba(0, 0, 0, 0.06);
+  --s-15: rgba(0, 0, 0, 0.18);
+  --g-1: #fdeeea;
+  --g-2: #fcf4e6;
+  --g-3: #eef6ef;
+  --g-4: #edf1fa;
+  --g-5: #f4eefa;
+  --colt-1: #f4f2ed;
+  --colt-2: #fdf7ea;
+  --colt-3: #f2f5fa;
+  --colt-4: #f6f3fa;
+  --colt-5: #f0f6f4;
+  --colt-6: #eff6f2;
+  --colt-7: #f1f3f9;
+  --colt-8: #eef7f0;
+  --colt-9: #fbf1f0;
+  --colt-10: #f3f2f0;
+  --run: #e0186c;
   color-scheme: light;
 }
-:root[data-theme="dark"] {
-  --c-fff:#1e1f23;--c-fbfaf7:#0f1012;--c-f7f5f0:#1b1c1f;--c-f6f5f1:#1a1b1e;--c-f4f2ed:#1a1b1e;--c-f3f2f0:#1a1b1e;
-  --c-f2efe9:#17181b;--c-f1efe9:#17181b;--c-f0eee8:#17181b;--c-efe9e4:#202126;--c-eceae4:#08090a;--c-eae7e0:#212227;
-  --c-eae7df:#212227;--c-e7e4dc:#26272c;--c-e6e3dc:#26272c;--c-e4e1da:#2a2b30;--c-e0ded8:#2a2b30;--c-e0ddd5:#2a2b30;
-  --c-ddd9d0:#303136;--c-dcd9d1:#303136;--c-dedbd3:#303136;--c-dedbd4:#303136;--c-d8d4ca:#35363c;--c-d6d3cb:#35363c;
-  --c-d5d1c7:#35363c;--c-cfccc3:#3b3c42;--c-c9c5bb:#43444a;--c-c6c3ba:#4a4b51;--c-c3c0b8:#4a4b51;--c-bdb9b0:#55565d;
-  --c-b9b5ab:#55565d;--c-b3b0a8:#5c5d64;--c-a8a49b:#6b6d74;--c-a5a29a:#6f7178;--c-9a978f:#7c7e85;--c-8d8a83:#8a8c93;
-  --c-8b8880:#8a8c93;--c-8a877f:#8a8c93;--c-77746d:#9ba0a6;--c-5f5c56:#b1b4ba;--c-4d4a44:#c3c5c9;--c-3d3a34:#d4d6d9;
-  --c-33302a:#dfe0e3;--c-28261f:#ecedee;--c-1b1a17:#f7f8f8;--c-000:#000;
-  --c-3f6ea8:#7f8cf0;--c-2f5d8a:#6d7ce6;--c-6d8cc0:#98a2f2;--c-5f6fae:#8b95ee;--c-b9cbe2:#454d78;--c-4a5a7a:#8b95ee;
-  --c-2f3c55:#aab2f5;--c-e9eff8:#171b2a;--c-edf1fa:#171b2a;--c-f2f5fa:#161924;--c-f1f3f9:#161924;--c-e6eef7:#1a1f31;
-  --c-f4f7fb:#161924;--c-e4e9f7:#1a1f31;--c-7a5aa8:#a78bfa;--c-9078b8:#b8a2fb;--c-f4eefa:#1c182a;--c-f6f3fa:#1a1726;
-  --c-4f8f6a:#4cc38a;--c-5b7a5e:#6bbd80;--c-3f8f5a:#45c07f;--c-2f7d49:#3fbb76;--c-7fa389:#78c497;--c-eef6ef:#141d18;
-  --c-eff6f2:#141d18;--c-eef7f0:#141d18;--c-f0f6f4:#131f1e;--c-a8523f:#f0685c;--c-c2564c:#f2695f;--c-a8463d:#ee6257;
-  --c-fdeeea:#1f1517;--c-fbf1f0:#1f1517;--c-faf0ee:#1f1517;--c-a4762f:#dda13c;--c-9a7218:#d99a24;--c-d0a03f:#e9b04c;
-  --c-d9a437:#eab442;--c-fcf4e6:#1e1a14;--c-fdf7ea:#1e1a14;--c-f7e9b8:#3a3018;--c-5b9083:#3fb8a8;--c-2f7a72:#35b0a0;
-  --c-3d6b60:#35a294;
-  --s-0:rgba(0,0,0,0.42);--s-1:rgba(0,0,0,0.44);--s-2:rgba(0,0,0,0.46);--s-3:rgba(0,0,0,0.48);--s-4:rgba(0,0,0,0.50);
-  --s-5:rgba(0,0,0,0.52);--s-6:rgba(255,255,255,0.08);--s-7:rgba(0,0,0,0.45);--s-8:rgba(0,0,0,0.4);--s-9:rgba(0,0,0,0.5);
-  --s-10:rgba(0,0,0,0.55);--s-11:rgba(0,0,0,0.6);--s-12:rgba(0,0,0,0.65);--s-13:rgba(255,255,255,0.09);
-  --s-14:rgba(255,255,255,0.07);--s-15:rgba(0,0,0,0.55);
-  --g-1:#3a1f1c;--g-2:#332916;--g-3:#153524;--g-4:#1c2450;--g-5:#2b1f4a;
-  --colt-1:#1a1b1e;--colt-2:#1a1b1e;--colt-3:#1a1b1e;--colt-4:#1a1b1e;--colt-5:#1a1b1e;--colt-6:#1a1b1e;
-  --colt-7:#1a1b1e;--colt-8:#1a1b1e;--colt-9:#1a1b1e;--colt-10:#1a1b1e;
-  --run:#a9f0c8;
+:root[data-theme='dark'] {
+  --c-fff: #1e1f23;
+  --c-fbfaf7: #0f1012;
+  --c-f7f5f0: #1b1c1f;
+  --c-f6f5f1: #1a1b1e;
+  --c-f4f2ed: #1a1b1e;
+  --c-f3f2f0: #1a1b1e;
+  --c-f2efe9: #17181b;
+  --c-f1efe9: #17181b;
+  --c-f0eee8: #17181b;
+  --c-efe9e4: #202126;
+  --c-eceae4: #08090a;
+  --c-eae7e0: #212227;
+  --c-eae7df: #212227;
+  --c-e7e4dc: #26272c;
+  --c-e6e3dc: #26272c;
+  --c-e4e1da: #2a2b30;
+  --c-e0ded8: #2a2b30;
+  --c-e0ddd5: #2a2b30;
+  --c-ddd9d0: #303136;
+  --c-dcd9d1: #303136;
+  --c-dedbd3: #303136;
+  --c-dedbd4: #303136;
+  --c-d8d4ca: #35363c;
+  --c-d6d3cb: #35363c;
+  --c-d5d1c7: #35363c;
+  --c-cfccc3: #3b3c42;
+  --c-c9c5bb: #43444a;
+  --c-c6c3ba: #4a4b51;
+  --c-c3c0b8: #4a4b51;
+  --c-bdb9b0: #55565d;
+  --c-b9b5ab: #55565d;
+  --c-b3b0a8: #5c5d64;
+  --c-a8a49b: #6b6d74;
+  --c-a5a29a: #6f7178;
+  --c-9a978f: #7c7e85;
+  --c-8d8a83: #8a8c93;
+  --c-8b8880: #8a8c93;
+  --c-8a877f: #8a8c93;
+  --c-77746d: #9ba0a6;
+  --c-5f5c56: #b1b4ba;
+  --c-4d4a44: #c3c5c9;
+  --c-3d3a34: #d4d6d9;
+  --c-33302a: #dfe0e3;
+  --c-28261f: #ecedee;
+  --c-1b1a17: #f7f8f8;
+  --c-000: #000;
+  --c-3f6ea8: #7f8cf0;
+  --c-2f5d8a: #6d7ce6;
+  --c-6d8cc0: #98a2f2;
+  --c-5f6fae: #8b95ee;
+  --c-b9cbe2: #454d78;
+  --c-4a5a7a: #8b95ee;
+  --c-2f3c55: #aab2f5;
+  --c-e9eff8: #171b2a;
+  --c-edf1fa: #171b2a;
+  --c-f2f5fa: #161924;
+  --c-f1f3f9: #161924;
+  --c-e6eef7: #1a1f31;
+  --c-f4f7fb: #161924;
+  --c-e4e9f7: #1a1f31;
+  --c-7a5aa8: #a78bfa;
+  --c-9078b8: #b8a2fb;
+  --c-f4eefa: #1c182a;
+  --c-f6f3fa: #1a1726;
+  --c-4f8f6a: #4cc38a;
+  --c-5b7a5e: #6bbd80;
+  --c-3f8f5a: #45c07f;
+  --c-2f7d49: #3fbb76;
+  --c-7fa389: #78c497;
+  --c-eef6ef: #141d18;
+  --c-eff6f2: #141d18;
+  --c-eef7f0: #141d18;
+  --c-f0f6f4: #131f1e;
+  --c-a8523f: #f0685c;
+  --c-c2564c: #f2695f;
+  --c-a8463d: #ee6257;
+  --c-fdeeea: #1f1517;
+  --c-fbf1f0: #1f1517;
+  --c-faf0ee: #1f1517;
+  --c-a4762f: #dda13c;
+  --c-9a7218: #d99a24;
+  --c-d0a03f: #e9b04c;
+  --c-d9a437: #eab442;
+  --c-fcf4e6: #1e1a14;
+  --c-fdf7ea: #1e1a14;
+  --c-f7e9b8: #3a3018;
+  --c-5b9083: #3fb8a8;
+  --c-2f7a72: #35b0a0;
+  --c-3d6b60: #35a294;
+  --s-0: rgba(0, 0, 0, 0.42);
+  --s-1: rgba(0, 0, 0, 0.44);
+  --s-2: rgba(0, 0, 0, 0.46);
+  --s-3: rgba(0, 0, 0, 0.48);
+  --s-4: rgba(0, 0, 0, 0.5);
+  --s-5: rgba(0, 0, 0, 0.52);
+  --s-6: rgba(255, 255, 255, 0.08);
+  --s-7: rgba(0, 0, 0, 0.45);
+  --s-8: rgba(0, 0, 0, 0.4);
+  --s-9: rgba(0, 0, 0, 0.5);
+  --s-10: rgba(0, 0, 0, 0.55);
+  --s-11: rgba(0, 0, 0, 0.6);
+  --s-12: rgba(0, 0, 0, 0.65);
+  --s-13: rgba(255, 255, 255, 0.09);
+  --s-14: rgba(255, 255, 255, 0.07);
+  --s-15: rgba(0, 0, 0, 0.55);
+  --g-1: #3a1f1c;
+  --g-2: #332916;
+  --g-3: #153524;
+  --g-4: #1c2450;
+  --g-5: #2b1f4a;
+  --colt-1: #1a1b1e;
+  --colt-2: #1a1b1e;
+  --colt-3: #1a1b1e;
+  --colt-4: #1a1b1e;
+  --colt-5: #1a1b1e;
+  --colt-6: #1a1b1e;
+  --colt-7: #1a1b1e;
+  --colt-8: #1a1b1e;
+  --colt-9: #1a1b1e;
+  --colt-10: #1a1b1e;
+  --run: #a9f0c8;
   color-scheme: dark;
 }
 
-* { box-sizing: border-box; }
-html, body, #root { height: 100%; }
+* {
+  box-sizing: border-box;
+}
+html,
+body,
+#root {
+  height: 100%;
+}
 body {
   margin: 0;
   background: var(--c-eceae4);
@@ -64,12 +264,50 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   color: var(--c-1b1a17);
 }
-a { color: var(--c-4a5a7a); }
-a:hover { color: var(--c-2f3c55); }
+a {
+  color: var(--c-4a5a7a);
+}
+a:hover {
+  color: var(--c-2f3c55);
+}
 
-@keyframes om-shimmer { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
-@keyframes om-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.45; } }
-@keyframes om-spin { to { transform: rotate(360deg); } }
-@property --oa { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
-@keyframes om-ang { to { --oa: 360deg; } }
-@keyframes om-rainbow { 0% { background-position: 0% 50%; } 100% { background-position: 300% 50%; } }
+@keyframes om-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+@keyframes om-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+@keyframes om-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@property --oa {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+@keyframes om-ang {
+  to {
+    --oa: 360deg;
+  }
+}
+@keyframes om-rainbow {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 300% 50%;
+  }
+}

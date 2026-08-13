@@ -36,7 +36,10 @@ describe('repo', () => {
   });
 
   it('stores the dialog description and links the picked people', () => {
-    const people = repo.load().people.slice(0, 2).map((p) => p.id);
+    const people = repo
+      .load()
+      .people.slice(0, 2)
+      .map((p) => p.id);
     const res = repo.createApplication({
       role: 'Designer',
       company: 'Acme GmbH',
@@ -46,8 +49,7 @@ describe('repo', () => {
     });
     expect(res.application.summary).toBe('Rolle mit Fokus auf Design-Systeme.');
 
-    const byKind = (kind: LinkKind) =>
-      res.people.filter((l) => l.kind === kind).map((l) => l.person_id);
+    const byKind = (kind: LinkKind) => res.people.filter((l) => l.kind === kind).map((l) => l.person_id);
     expect(byKind(LinkKind.CONTACT)).toEqual(people);
     // The follow-up email starts with the same recipients, like a seeded card.
     expect(byKind(LinkKind.EMAIL)).toEqual(people);
@@ -63,7 +65,15 @@ describe('repo', () => {
     const peopleBefore = count('SELECT COUNT(*) AS n FROM people');
     const companiesBefore = count('SELECT COUNT(*) AS n FROM companies');
     repo.deleteApplication('BEW-33');
-    for (const table of ['facts', 'comments', 'rounds', 'followups', 'documents', 'activities', 'application_people']) {
+    for (const table of [
+      'facts',
+      'comments',
+      'rounds',
+      'followups',
+      'documents',
+      'activities',
+      'application_people',
+    ]) {
       expect(count(`SELECT COUNT(*) AS n FROM ${table} WHERE application_id = 'BEW-33'`), table).toBe(0);
     }
     expect(count('SELECT COUNT(*) AS n FROM people')).toBe(peopleBefore);
@@ -73,14 +83,18 @@ describe('repo', () => {
   it('moves cards with contiguous reindexing', () => {
     // BEW-41 sits in interessiert[0]; move it to eingereicht index 1.
     repo.moveCard('BEW-41', 'eingereicht', 1);
-    const target = db.prepare(
-      "SELECT id, stage_position FROM applications WHERE stage_id = 'eingereicht' ORDER BY stage_position",
-    ).all() as { id: string; stage_position: number }[];
+    const target = db
+      .prepare(
+        "SELECT id, stage_position FROM applications WHERE stage_id = 'eingereicht' ORDER BY stage_position",
+      )
+      .all() as { id: string; stage_position: number }[];
     expect(target.map((r) => r.id)).toEqual(['BEW-33', 'BEW-41', 'BEW-35']);
     expect(target.map((r) => r.stage_position)).toEqual([0, 1, 2]);
-    const source = db.prepare(
-      "SELECT stage_position FROM applications WHERE stage_id = 'interessiert' ORDER BY stage_position",
-    ).all() as { stage_position: number }[];
+    const source = db
+      .prepare(
+        "SELECT stage_position FROM applications WHERE stage_id = 'interessiert' ORDER BY stage_position",
+      )
+      .all() as { stage_position: number }[];
     expect(source.map((r) => r.stage_position)).toEqual([0]);
   });
 
@@ -117,12 +131,24 @@ describe('repo', () => {
     const updated = repo.setRounds('BEW-24', [
       { ...rounds[1], people: [1] },
       { ...rounds[3], people: [] },
-      { id: undefined, state: RoundState.OPEN, title: 'Extra', scheduled_date: null, start_time: null, end_time: null, location: null, link: null, people: [] },
+      {
+        id: undefined,
+        state: RoundState.OPEN,
+        title: 'Extra',
+        scheduled_date: null,
+        start_time: null,
+        end_time: null,
+        location: null,
+        link: null,
+        people: [],
+      },
     ]);
     expect(updated.rounds.map((r) => r.title)).toEqual(['Runde 1', 'Finales Gespräch', 'Extra']);
     expect(count('SELECT COUNT(*) AS n FROM round_notes WHERE id = ?', note.id)).toBe(1);
     expect(count('SELECT COUNT(*) AS n FROM rounds WHERE id = ?', rounds[0].id)).toBe(0);
-    expect(updated.roundPeople.filter((rp) => rp.round_id === rounds[1].id).map((rp) => rp.person_id)).toEqual([1]);
+    expect(
+      updated.roundPeople.filter((rp) => rp.round_id === rounds[1].id).map((rp) => rp.person_id),
+    ).toEqual([1]);
   });
 
   it('creates people with cycling colors and kind-scoped link replace', () => {
@@ -132,7 +158,9 @@ describe('repo', () => {
     const links = repo.setApplicationPeople('BEW-24', LinkKind.EMAIL, [p.id]);
     expect(links).toEqual([{ application_id: 'BEW-24', person_id: p.id, kind: LinkKind.EMAIL, position: 0 }]);
     // contact links untouched
-    expect(count("SELECT COUNT(*) AS n FROM application_people WHERE application_id = 'BEW-24' AND kind = 'POOL'")).toBe(4);
+    expect(
+      count("SELECT COUNT(*) AS n FROM application_people WHERE application_id = 'BEW-24' AND kind = 'POOL'"),
+    ).toBe(4);
     repo.deletePerson(p.id);
     expect(count('SELECT COUNT(*) AS n FROM application_people WHERE person_id = ?', p.id)).toBe(0);
   });

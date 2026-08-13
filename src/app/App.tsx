@@ -13,12 +13,27 @@ function Shell() {
   // flash an empty pipeline.
   if (!st.loaded) {
     return (
-      <div style={{
-        height: '100vh', background: 'var(--c-fbfaf7)', display: 'flex',
-        alignItems: 'center', justifyContent: 'center', padding: 24, boxSizing: 'border-box',
-      }}>
+      <div
+        style={{
+          height: '100vh',
+          background: 'var(--c-fbfaf7)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 24,
+          boxSizing: 'border-box',
+        }}
+      >
         {st.loadError && (
-          <div style={{ fontSize: 13, color: 'var(--c-c2564c)', textAlign: 'center', maxWidth: 420, lineHeight: 1.6 }}>
+          <div
+            style={{
+              fontSize: 13,
+              color: 'var(--c-c2564c)',
+              textAlign: 'center',
+              maxWidth: 420,
+              lineHeight: 1.6,
+            }}
+          >
             Die Datenbank konnte nicht geladen werden.
             <div style={{ fontSize: 11.5, color: 'var(--c-9a978f)', marginTop: 6 }}>{st.loadError}</div>
           </div>
@@ -27,10 +42,17 @@ function Shell() {
     );
   }
   return (
-    <div style={{
-      height: '100vh', display: 'flex', flexDirection: 'column', position: 'relative',
-      background: 'var(--c-fbfaf7)', color: 'var(--c-1b1a17)', overflow: 'hidden',
-    }}>
+    <div
+      style={{
+        height: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        position: 'relative',
+        background: 'var(--c-fbfaf7)',
+        color: 'var(--c-1b1a17)',
+        overflow: 'hidden',
+      }}
+    >
       <TopBar />
       {st.openCardId ? <DetailView /> : <Board />}
       <CardMenu />

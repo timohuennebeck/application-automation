@@ -22,8 +22,18 @@ export interface FieldChipProps {
 /* The grey pill used for every inline-editable value in the detail view:
    dates, times, locations, links, status, contacts. */
 export function FieldChip({
-  open, empty, locked, chevron, onClick, onClear, clearTitle,
-  title, color, gap = 6, style, children,
+  open,
+  empty,
+  locked,
+  chevron,
+  onClick,
+  onClear,
+  clearTitle,
+  title,
+  color,
+  gap = 6,
+  style,
+  children,
 }: FieldChipProps) {
   const clear = (e: MouseEvent) => {
     e.stopPropagation();

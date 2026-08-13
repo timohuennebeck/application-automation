@@ -22,7 +22,9 @@ export function parsePosting(url: string): Posting {
     if (host) posting.company = host.split('-').map(cap).join(' ');
     const slug = (u.pathname.split('/').filter(Boolean).pop() || '').replace(/[-_]?\d+$/, '');
     if (slug) posting.role = slug.split(/[-_]/).filter(Boolean).map(cap).join(' ');
-  } catch { /* keep the generic defaults */ }
+  } catch {
+    /* keep the generic defaults */
+  }
 
   return posting;
 }

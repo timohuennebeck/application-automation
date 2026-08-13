@@ -8,11 +8,18 @@ export function TopBar() {
   const { st, set, toggleTheme } = useApp();
   return (
     <div
-      style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 3,
-        padding: '7px 16px 7px 84px', flexShrink: 0, position: 'relative',
-        WebkitAppRegion: 'drag',
-      } as React.CSSProperties}
+      style={
+        {
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'flex-start',
+          gap: 3,
+          padding: '7px 16px 7px 84px',
+          flexShrink: 0,
+          position: 'relative',
+          WebkitAppRegion: 'drag',
+        } as React.CSSProperties
+      }
     >
       <div className="top-btn no-drag" title="Suchen" onClick={() => set({ searchOpen: true, searchQ: '' })}>
         <div>Suchen</div>

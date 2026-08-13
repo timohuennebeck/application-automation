@@ -2,8 +2,20 @@
    components render: German dates, "10:00 – 11:00" ranges, relative times.
    The DB stores ISO; everything display-flavoured is derived here. */
 import type {
-  ActivityRow, ApplicationPersonRow, ApplicationRow, CommentRow, CompanyRow, DbSnapshot,
-  DocumentRow, FactRow, FollowupRow, PersonRow, RoundInput, RoundNoteRow, RoundPersonRow, RoundRow,
+  ActivityRow,
+  ApplicationPersonRow,
+  ApplicationRow,
+  CommentRow,
+  CompanyRow,
+  DbSnapshot,
+  DocumentRow,
+  FactRow,
+  FollowupRow,
+  PersonRow,
+  RoundInput,
+  RoundNoteRow,
+  RoundPersonRow,
+  RoundRow,
 } from '../shared/db-types';
 import { STAGE_IDS } from '../data/config';
 import type { Author, RoundState } from '../shared/enums';
@@ -145,7 +157,8 @@ export function indexSnapshot(snap: DbSnapshot, now = new Date()): DomainState {
   const roundsState: Record<string, RoundView[]> = {};
   for (const [appId, rows] of Object.entries(roundRowsByApp)) {
     roundsState[appId] = rows.map((r) =>
-      roundView(r, peopleByRound[String(r.id)] ?? [], notesByRound[String(r.id)] ?? [], now));
+      roundView(r, peopleByRound[String(r.id)] ?? [], notesByRound[String(r.id)] ?? [], now),
+    );
   }
 
   return {

@@ -47,7 +47,7 @@ Conventions:
 - **Appointments** (interview rounds) are **local wall-clock**, stored as a date
   plus optional start/end times — a UTC instant would shift the displayed hour
   across DST changes, and interview times are ranges in both the data and the
-  editor (`TimeRangePicker` picks start *and* end).
+  editor (`TimeRangePicker` picks start _and_ end).
 - **`facts.value` is renderer-owned display text**, exempt from the ISO rule
   (`FactField`'s date picker writes German `DD.MM.YYYY` strings today). Date-like
   labels with semantics (`Beworben am`, `Letzter Kontakt`) are NOT facts — they
@@ -121,7 +121,7 @@ CREATE TABLE applications (
 Two columns from revision 1 are **gone**:
 
 - ~~`priority`~~ — the `st.priority[id]` map in AppState is not a separate field;
-  it is the *interest override* (`ApplicationCard.tsx:27`, `PropertiesSidebar.tsx:140`
+  it is the _interest override_ (`ApplicationCard.tsx:27`, `PropertiesSidebar.tsx:140`
   both read/write it as interest). One `interest` column, `NOT NULL` because the
   code always resolves a value.
 - ~~`followup_state`~~ — `'soon' | 'due'` is time-derived (`schedule.ts` computes it
@@ -323,12 +323,12 @@ maps** that this design deletes. The renderer must derive them:
 
 ## Main-Process Data Layer (`electron/db/`)
 
-| File | Responsibility |
-| --- | --- |
-| `db.ts` | Open the database, set `journal_mode = WAL` and `foreign_keys = ON`, run migrations, run seed if empty. |
-| `migrations.ts` | Ordered migration list tracked via `PRAGMA user_version`. Migration 1 creates the schema above. Every future shape change is a new numbered entry — upgrades run automatically at startup. |
-| `seed.ts` | First run only. See "Seed transform" below — it is the fiddliest part and is speced against the real sample values. |
-| `repo.ts` | Plain functions per operation (`createApplication`, `moveCard`, `addComment`, `upsertFact`, `setRoundState`, …). Each is one synchronous transaction and returns the affected row(s). Owns the fact-label routing rule and the default-rounds invariant. |
+| File            | Responsibility                                                                                                                                                                                                                                           |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `db.ts`         | Open the database, set `journal_mode = WAL` and `foreign_keys = ON`, run migrations, run seed if empty.                                                                                                                                                  |
+| `migrations.ts` | Ordered migration list tracked via `PRAGMA user_version`. Migration 1 creates the schema above. Every future shape change is a new numbered entry — upgrades run automatically at startup.                                                               |
+| `seed.ts`       | First run only. See "Seed transform" below — it is the fiddliest part and is speced against the real sample values.                                                                                                                                      |
+| `repo.ts`       | Plain functions per operation (`createApplication`, `moveCard`, `addComment`, `upsertFact`, `setRoundState`, …). Each is one synchronous transaction and returns the affected row(s). Owns the fact-label routing rule and the default-rounds invariant. |
 
 **Error handling:**
 
@@ -359,7 +359,7 @@ values, which are messier than "German date → ISO":
      seeded colors; `peoplePool` becomes `kind='pool'` join rows.
    - Pass 2: `DETAILS.contacts` name-tuples merge into an existing person **only on
      exact name + role match**; otherwise they insert a new row. This is load-bearing:
-     the sample data contains *different* people sharing a name — 'Nadine Wolf'
+     the sample data contains _different_ people sharing a name — 'Nadine Wolf'
      (Geschäftsführung, Orbis pool) vs. 'Nadine Wolf' (Recruiterin,
      `n.wolf@vectorlabs.ch`, BEW-33 contact). Dedupe-by-name-only would
      cross-contaminate companies.
@@ -411,7 +411,7 @@ Exposed as `window.desktop.db`, typed in `src/desktop.d.ts`:
 - **One channel per mutation**, mirroring `repo.ts`: `db:applications.create`,
   `db:applications.update`, `db:applications.move`, `db:applications.delete`,
   `db:companies.update`, `db:facts.upsert` (conflict target: `application_id +
-  label`; routed labels update the application/company row instead),
+label`; routed labels update the application/company row instead),
   `db:facts.delete`, `db:comments.add` / `.update` / `.delete`, `db:rounds.*`,
   `db:roundNotes.*`, `db:people.*`, `db:applicationPeople.set` (kind-scoped list
   replace), `db:followups.setDue`, `db:followups.saveEmail`, `db:activities.add`,

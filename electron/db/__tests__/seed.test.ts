@@ -55,14 +55,19 @@ describe('seedIfEmpty', () => {
     expect(app.applied_at).toBe('2026-07-24');
     expect(app.last_contact_at).toBe('2026-07-31'); // now − 12d
     expect(app.channel).toBe('StepStone');
-    const labels = all<{ label: string }>("SELECT label FROM facts WHERE application_id = 'BEW-33'").map((r) => r.label);
+    const labels = all<{ label: string }>("SELECT label FROM facts WHERE application_id = 'BEW-33'").map(
+      (r) => r.label,
+    );
     expect(labels.sort()).toEqual(['Erfahrung', 'Gehalt', 'Standort']);
     const company = one<{ sector: string; headcount: string; website: string; email: string; phone: string }>(
       "SELECT c.sector, c.headcount, c.website, c.email, c.phone FROM companies c JOIN applications a ON a.company_id = c.id WHERE a.id = 'BEW-33'",
     );
     expect(company).toEqual({
-      sector: 'Software', headcount: '201–500', website: 'vectorlabs.ch/karriere',
-      email: 'jobs@vectorlabs.ch', phone: '+41 44 512 90 30',
+      sector: 'Software',
+      headcount: '201–500',
+      website: 'vectorlabs.ch/karriere',
+      email: 'jobs@vectorlabs.ch',
+      phone: '+41 44 512 90 30',
     });
     // Kontaktperson data folded into the Recruiterin Nadine.
     const nadine = one<{ phone: string; linkedin: string }>(
@@ -74,13 +79,30 @@ describe('seedIfEmpty', () => {
 
   it('gives every application rounds ending in Finales Gespräch, a slot-0 followup, a comment, 2 documents, Gehalt+Standort facts', () => {
     for (const { id } of all<{ id: string }>('SELECT id FROM applications')) {
-      const rounds = all<{ title: string }>('SELECT title FROM rounds WHERE application_id = ? ORDER BY position', id);
+      const rounds = all<{ title: string }>(
+        'SELECT title FROM rounds WHERE application_id = ? ORDER BY position',
+        id,
+      );
       expect(rounds.length, id).toBeGreaterThanOrEqual(3);
       expect(rounds[rounds.length - 1].title, id).toBe('Finales Gespräch');
-      expect(one<{ n: number }>("SELECT COUNT(*) AS n FROM followups WHERE application_id = ? AND position = 0", id).n, id).toBe(1);
-      expect(one<{ n: number }>('SELECT COUNT(*) AS n FROM comments WHERE application_id = ?', id).n, id).toBeGreaterThanOrEqual(1);
-      expect(one<{ n: number }>('SELECT COUNT(*) AS n FROM documents WHERE application_id = ?', id).n, id).toBe(2);
-      const labels = all<{ label: string }>('SELECT label FROM facts WHERE application_id = ?', id).map((r) => r.label);
+      expect(
+        one<{ n: number }>(
+          'SELECT COUNT(*) AS n FROM followups WHERE application_id = ? AND position = 0',
+          id,
+        ).n,
+        id,
+      ).toBe(1);
+      expect(
+        one<{ n: number }>('SELECT COUNT(*) AS n FROM comments WHERE application_id = ?', id).n,
+        id,
+      ).toBeGreaterThanOrEqual(1);
+      expect(
+        one<{ n: number }>('SELECT COUNT(*) AS n FROM documents WHERE application_id = ?', id).n,
+        id,
+      ).toBe(2);
+      const labels = all<{ label: string }>('SELECT label FROM facts WHERE application_id = ?', id).map(
+        (r) => r.label,
+      );
       expect(labels, id).toContain('Gehalt');
       expect(labels, id).toContain('Standort');
     }
@@ -90,7 +112,12 @@ describe('seedIfEmpty', () => {
     const r1 = one<{ scheduled_date: string; start_time: string; end_time: string; location: string }>(
       "SELECT scheduled_date, start_time, end_time, location FROM rounds WHERE application_id = 'BEW-24' AND title = 'Runde 1'",
     );
-    expect(r1).toEqual({ scheduled_date: '2026-08-12', start_time: '10:00', end_time: '11:00', location: 'In Person' });
+    expect(r1).toEqual({
+      scheduled_date: '2026-08-12',
+      start_time: '10:00',
+      end_time: '11:00',
+      location: 'In Person',
+    });
     // BEW-24's seed lacks a final round — it must be appended.
     expect(all("SELECT title FROM rounds WHERE application_id = 'BEW-24'")).toHaveLength(4);
   });
@@ -101,9 +128,12 @@ describe('seedIfEmpty', () => {
     );
     expect(acts).toHaveLength(3);
     expect(acts[0].created_at).toBe('2026-07-24T09:00:00.000Z');
-    const finale = one<{ id: number }>("SELECT id FROM rounds WHERE application_id = 'BEW-15' AND title = 'Finales Gespräch'");
+    const finale = one<{ id: number }>(
+      "SELECT id FROM rounds WHERE application_id = 'BEW-15' AND title = 'Finales Gespräch'",
+    );
     const people = all<{ name: string }>(
-      'SELECT p.name FROM round_people rp JOIN people p ON p.id = rp.person_id WHERE rp.round_id = ? ORDER BY rp.position', finale.id,
+      'SELECT p.name FROM round_people rp JOIN people p ON p.id = rp.person_id WHERE rp.round_id = ? ORDER BY rp.position',
+      finale.id,
     ).map((r) => r.name);
     expect(people).toEqual(['Nadine Wolf', 'Tim Bergk', 'Jonas Reiter', 'Ines Faber']);
   });
@@ -112,11 +142,16 @@ describe('seedIfEmpty', () => {
     const slots = all<{ label: string; due_at: string; position: number }>(
       "SELECT label, due_at, position FROM followups WHERE application_id = 'BEW-35' ORDER BY position",
     );
-    expect(slots.map((s) => s.label)).toEqual(['Follow up zur Bewerbung', 'Erneutes Follow up', 'Letztes Follow up']);
+    expect(slots.map((s) => s.label)).toEqual([
+      'Follow up zur Bewerbung',
+      'Erneutes Follow up',
+      'Letztes Follow up',
+    ]);
     expect(slots[0].due_at).toBe('2026-08-14'); // 'in 2 Tagen fällig'
     expect(slots[1].due_at).toBe('2026-09-10'); // anchor (Sep 1) + 9
     const due = (id: string) =>
-      one<{ due_at: string }>('SELECT due_at FROM followups WHERE application_id = ? AND position = 0', id).due_at;
+      one<{ due_at: string }>('SELECT due_at FROM followups WHERE application_id = ? AND position = 0', id)
+        .due_at;
     expect(due('BEW-33')).toBe('2026-08-09'); // '3 Tage überfällig'
     expect(due('BEW-29')).toBe('2026-08-12'); // 'heute fällig'
     expect(due('BEW-24')).toBe('2026-09-01'); // no followup subtitle → anchor
@@ -127,8 +162,9 @@ describe('seedIfEmpty', () => {
     const kinds = all<{ kind: string; person_id: number }>(
       "SELECT kind, person_id FROM application_people WHERE application_id = 'BEW-33' AND kind IN ('CONTACT','EMAIL') ORDER BY kind",
     );
-    expect(kinds.filter((k) => k.kind === 'EMAIL').map((k) => k.person_id))
-      .toEqual(kinds.filter((k) => k.kind === 'CONTACT').map((k) => k.person_id));
+    expect(kinds.filter((k) => k.kind === 'EMAIL').map((k) => k.person_id)).toEqual(
+      kinds.filter((k) => k.kind === 'CONTACT').map((k) => k.person_id),
+    );
     // BEW-02: 'vor 1 Monat' would back-date updated_at before created_at.
     const app = one<{ created_at: string; updated_at: string }>(
       "SELECT created_at, updated_at FROM applications WHERE id = 'BEW-02'",

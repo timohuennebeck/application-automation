@@ -4,7 +4,13 @@ import { PaperclipGlyph } from './icons';
 /* The bordered "Kommentar schreiben…" box, shared by the card comment thread
    and the per-interview note thread. `children` hosts the mention popover. */
 export function Composer({
-  value, onChange, onKeyDown, onSend, placeholder = 'Kommentar schreiben…', ref, children,
+  value,
+  onChange,
+  onKeyDown,
+  onSend,
+  placeholder = 'Kommentar schreiben…',
+  ref,
+  children,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -17,10 +23,16 @@ export function Composer({
 }) {
   const ready = !!value.trim();
   return (
-    <div className="composer" style={{
-      padding: '12px 12px 10px', display: 'flex', flexDirection: 'column', gap: 10,
-      position: 'relative',
-    }}>
+    <div
+      className="composer"
+      style={{
+        padding: '12px 12px 10px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 10,
+        position: 'relative',
+      }}
+    >
       {children}
       <textarea
         ref={ref}
@@ -30,9 +42,17 @@ export function Composer({
         onKeyDown={onKeyDown}
         onSelect={() => onChange(value)}
         style={{
-          fontSize: 12.5, color: 'var(--c-28261f)', lineHeight: 1.55, border: 'none', outline: 'none',
-          resize: 'none', background: 'transparent', minHeight: 36, width: '100%',
-          boxSizing: 'border-box', padding: 0,
+          fontSize: 12.5,
+          color: 'var(--c-28261f)',
+          lineHeight: 1.55,
+          border: 'none',
+          outline: 'none',
+          resize: 'none',
+          background: 'transparent',
+          minHeight: 36,
+          width: '100%',
+          boxSizing: 'border-box',
+          padding: 0,
         }}
       />
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'flex-end' }}>
@@ -43,10 +63,17 @@ export function Composer({
         <div
           onClick={onSend}
           style={{
-            width: 26, height: 26, borderRadius: '50%',
+            width: 26,
+            height: 26,
+            borderRadius: '50%',
             background: ready ? 'var(--c-1b1a17)' : 'var(--c-d6d3cb)',
-            color: 'var(--c-fbfaf7)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 13, flexShrink: 0, cursor: ready ? 'pointer' : 'default',
+            color: 'var(--c-fbfaf7)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 13,
+            flexShrink: 0,
+            cursor: ready ? 'pointer' : 'default',
           }}
         >
           ↑

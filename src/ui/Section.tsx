@@ -87,7 +87,7 @@ export function Section({
               fontVariantNumeric: 'tabular-nums',
             }}
           >
-            {count}
+            ({count})
           </div>
         )}
       </div>

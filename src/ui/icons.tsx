@@ -415,6 +415,21 @@ export function PaperclipGlyph() {
   );
 }
 
+/* Two columns of dots — the conventional "drag me" grip. Drawn in currentColor
+   so the row can fade it in on hover. */
+export function GripGlyph() {
+  return (
+    <svg width="10" height="14" viewBox="0 0 10 14" style={{ flexShrink: 0 }}>
+      {[2, 7, 12].map((cy) => (
+        <g key={cy} fill="currentColor">
+          <circle cx="2" cy={cy} r="1.1" />
+          <circle cx="8" cy={cy} r="1.1" />
+        </g>
+      ))}
+    </svg>
+  );
+}
+
 export function DotsGlyph() {
   return (
     <svg width="13" height="13" viewBox="0 0 14 14">

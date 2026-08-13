@@ -10,6 +10,7 @@ import type {
   DocumentRow,
   FactRow,
   FollowupRow,
+  ProfileFactRow,
 } from '../shared/db-types';
 import type { PersonView, RoundView } from './db-view';
 import type { SortDir, SortKey } from '../data/config';
@@ -93,6 +94,8 @@ export interface AppState {
   followupsByApp: Record<string, FollowupRow[]>;
   documentsByApp: Record<string, DocumentRow[]>;
   activitiesByApp: Record<string, ActivityRow[]>;
+  /* The profile's facts, in the order they are shown and handed over. */
+  profileFacts: ProfileFactRow[];
   /* Card ids per stage column, index-aligned with config COLUMNS/STAGE_IDS. */
   board: string[][];
   boardFilter: BoardFilter;
@@ -144,11 +147,25 @@ export interface AppState {
   followupSel: number;
   searchOpen: boolean;
   searchQ: string;
-  /* The profile dialog with the two document templates. */
+  /* The profile dialog with the two document templates and the facts below. */
   profileOpen: boolean;
+  /* Draft for the fact being appended, or null when the composer is closed. */
+  profileFactDraft: string | null;
+  /* Id of the fact being dragged in the profile list, or null. */
+  profileDragId: number | null;
 }
 
 export type Patch = Partial<AppState> | ((s: AppState) => Partial<AppState>);
+
+/* Everything the profile dialog owns, cleared together. Closing it has to drop
+   the half-typed fact and the inline edit with it, or reopening resumes a
+   composer the user already walked away from. */
+export const CLOSED_PROFILE = {
+  profileOpen: false,
+  profileFactDraft: null,
+  profileDragId: null,
+  editing: null,
+} satisfies Partial<AppState>;
 
 export interface AppStore {
   st: AppState;
@@ -195,6 +212,16 @@ export interface AppStore {
   saveEmailDraft: (id: string, followupId: number, subject: string, body: string) => void;
   /* Persist a re-generated draft behind the loading skeleton. */
   regenerateEmail: (id: string, followupId: number, subject: string, body: string) => void;
+  /* The profile's own facts. Every one of these writes optimistically and
+     resyncs from the database if the write fails, as the card actions do. */
+  addProfileFact: (text: string) => void;
+  updateProfileFact: (factId: number, text: string) => void;
+  deleteProfileFact: (factId: number) => void;
+  /* Moves a fact to an index in the list, in memory only — this runs on every
+     dragover, so it must not touch the database. commitProfileOrder writes the
+     order that was landed on, once. */
+  moveProfileFact: (factId: number, toIdx: number) => void;
+  commitProfileOrder: () => void;
   cancelEditRef: { current: boolean };
   dragPosRef: { current: { col: number; y: number } | null };
   swapLockRef: { current: { col: number; dir: number; y: number } | null };

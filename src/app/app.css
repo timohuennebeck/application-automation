@@ -300,6 +300,43 @@
   color: var(--c-5f5c56);
 }
 
+/* A personal fact in the profile dialog. Both controls stay visible and the row
+   itself does not react to hover: what a row can do is on show from the start,
+   rather than appearing under the cursor. */
+.fact-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  /* Fixed, and equal to ROW_HEIGHT in FactList.tsx: clicking a row swaps it for
+     an input, and any difference between the two shows up as a jump. Change
+     one and you must change the other. */
+  height: 32px;
+  box-sizing: border-box;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--c-c9c5bb);
+}
+.fact-row > svg {
+  cursor: grab;
+}
+.fact-row:active > svg {
+  cursor: grabbing;
+}
+.fact-x {
+  flex-shrink: 0;
+  font-size: 11px;
+  line-height: 1;
+  padding: 3px 4px;
+  border-radius: 4px;
+  color: var(--c-9a978f);
+}
+.fact-x:hover {
+  background: var(--c-e7e4dc);
+  color: var(--c-5f5c56);
+}
+
 /* Editable fact value */
 .fact-val:hover {
   background: var(--c-e7e4dc) !important;

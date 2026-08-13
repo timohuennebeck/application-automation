@@ -13,7 +13,7 @@ import { dateToISO } from '../lib/date';
 import { isInFocusedField } from '../lib/dom';
 import { initials } from '../lib/text';
 import { parsePosting } from '../features/create/parse-posting';
-import { Ctx } from './store-context';
+import { CLOSED_PROFILE, Ctx } from './store-context';
 import type { AppState, AppStore, BoardFilter, ContactEntry, Patch, Round } from './store-context';
 
 /* An untouched board: every card, in the order the stages hold them. */
@@ -46,6 +46,7 @@ const initialState = (): AppState => ({
   followupsByApp: {},
   documentsByApp: {},
   activitiesByApp: {},
+  profileFacts: [],
   board: STAGE_IDS.map(() => []),
   boardFilter: EMPTY_FILTER,
 
@@ -88,6 +89,8 @@ const initialState = (): AppState => ({
   searchOpen: false,
   searchQ: '',
   profileOpen: false,
+  profileFactDraft: null,
+  profileDragId: null,
 });
 
 const CANONICAL_TITLES = new Set(CANONICAL_ROUNDS);
@@ -922,6 +925,77 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [set],
   );
 
+  /* ── Profile facts ──────────────────────────────────────────────────────
+     A flat list, not keyed by card: these belong to the applicant. The row the
+     database hands back replaces the optimistic one, so ids and timestamps are
+     the real ones by the time anything edits them again. */
+
+  const addProfileFact = useCallback(
+    (text: string) => {
+      const body = text.trim();
+      if (!body) return;
+      set({ profileFactDraft: null });
+      persist(
+        db()
+          ?.profileFacts.add(body)
+          .then((row) => set((s) => ({ profileFacts: [...s.profileFacts, row] }))),
+      );
+    },
+    [set, persist],
+  );
+
+  const deleteProfileFact = useCallback(
+    (factId: number) => {
+      set((s) => ({
+        profileFacts: s.profileFacts.filter((f) => f.id !== factId),
+        editing: null,
+      }));
+      persist(db()?.profileFacts.delete(factId));
+    },
+    [set, persist],
+  );
+
+  const updateProfileFact = useCallback(
+    (factId: number, text: string) => {
+      const body = text.trim();
+      /* An emptied fact is a deleted one: there is nothing a blank line could
+         tell the agent, and it would sit in the list unreadable. */
+      if (!body) {
+        deleteProfileFact(factId);
+        return;
+      }
+      set((s) => ({
+        profileFacts: s.profileFacts.map((f) => (f.id === factId ? { ...f, text: body } : f)),
+        editing: null,
+      }));
+      persist(db()?.profileFacts.update(factId, body));
+    },
+    [set, persist, deleteProfileFact],
+  );
+
+  /* Splices the fact into its new slot. Called from dragover, which fires
+     continuously, so this stays in memory — the list rearranges under the
+     cursor and nothing is written until the drag ends. */
+  const moveProfileFact = useCallback(
+    (factId: number, toIdx: number) => {
+      const cur = stRef.current.profileFacts;
+      const from = cur.findIndex((f) => f.id === factId);
+      if (from < 0 || from === toIdx) return;
+      const next = cur.slice();
+      const [moved] = next.splice(from, 1);
+      next.splice(toIdx, 0, moved);
+      set({ profileFacts: next });
+    },
+    [set],
+  );
+
+  /* Writes the order the drag landed on, as one call. Sends every id rather
+     than what moved, so the database never has to work that out. */
+  const commitProfileOrder = useCallback(() => {
+    const ids = stRef.current.profileFacts.map((f) => f.id);
+    if (ids.length) persist(db()?.profileFacts.reorder(ids));
+  }, [persist]);
+
   const patchFollowup = useCallback(
     (id: string, row: FollowupRow) => {
       set((s) => ({
@@ -1026,7 +1100,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         else if (s.personEdit) savePerson();
         else if (s.cardContact) set({ cardContact: null, contactDraft: '' });
         else if (s.searchOpen) set({ searchOpen: false });
-        else if (s.profileOpen) set({ profileOpen: false });
+        else if (s.profileOpen) set(CLOSED_PROFILE);
         else if (s.contactEdit) set({ contactEdit: null });
         else if (s.roundPop) set({ roundPop: null });
         else if (s.roundEdit) set({ roundEdit: null, roundDraft: null, roundPop: null });
@@ -1051,7 +1125,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       } else if (k === 'p') {
         // Chromium's own print dialog would otherwise open over the board.
         e.preventDefault();
-        set((s2) => ({ profileOpen: !s2.profileOpen }));
+        set((s2) => (s2.profileOpen ? CLOSED_PROFILE : { profileOpen: true }));
       } else if (k === 'c') {
         // Never steal ⌘C from a real copy: text fields own their own selection,
         // and Chromium does not report it through window.getSelection().
@@ -1130,6 +1204,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setFollowupCompleted,
       saveEmailDraft,
       regenerateEmail,
+      addProfileFact,
+      updateProfileFact,
+      deleteProfileFact,
+      moveProfileFact,
+      commitProfileOrder,
       cancelEditRef,
       dragPosRef,
       swapLockRef,
@@ -1167,6 +1246,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setFollowupDue,
       saveEmailDraft,
       regenerateEmail,
+      addProfileFact,
+      updateProfileFact,
+      deleteProfileFact,
+      moveProfileFact,
+      commitProfileOrder,
     ],
   );
 

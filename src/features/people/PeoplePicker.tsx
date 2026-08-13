@@ -1,3 +1,4 @@
+import { DashedPlus } from '../../ui/AddRow';
 import { MenuItem, MenuLabel } from '../../ui/MenuItem';
 import { Avatar, PencilGlyph, SearchGlyph } from '../../ui/icons';
 import type { PersonView } from '../../state/db-view';
@@ -123,24 +124,7 @@ export function PeoplePicker({
           );
         })}
         <MenuItem onClick={() => onCreate(draft.trim())} style={{ color: 'var(--c-8b8880)' }}>
-          <div
-            style={{
-              width: 20,
-              height: 20,
-              borderRadius: '50%',
-              border: '1px dashed var(--c-c9c5bb)',
-              boxSizing: 'border-box',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: 11,
-              color: 'var(--c-9a978f)',
-              lineHeight: 1,
-              flexShrink: 0,
-            }}
-          >
-            +
-          </div>
+          <DashedPlus size={20} />
           <span>{q ? '„' + draft.trim() + '“ neu anlegen' : 'Person hinzufügen'}</span>
         </MenuItem>
       </div>

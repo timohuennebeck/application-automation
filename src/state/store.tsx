@@ -10,6 +10,7 @@ import { CANONICAL_ROUNDS } from '../shared/domain';
 import { indexSnapshot, roundInput, personView } from './db-view';
 import type { RoundView } from './db-view';
 import { dateToISO } from '../lib/date';
+import { isInFocusedField } from '../lib/dom';
 import { initials } from '../lib/text';
 import { parsePosting } from '../features/create/parse-posting';
 import { Ctx } from './store-context';
@@ -1032,9 +1033,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const target = e.target as HTMLElement | null;
       const inDd = !!target?.closest?.('[data-dd]');
       if (inDd) return;
+      const ae = document.activeElement as HTMLElement | null;
+      // Clicking inside the field being edited is not clicking away from it.
+      // The second mousedown of a double click lands here, and blurring would
+      // discard the word the double click just selected.
+      if (isInFocusedField(ae, target)) return;
       // mousedown runs before focus moves, so flush the focused field first —
       // otherwise the value being typed is dropped.
-      const ae = document.activeElement as HTMLElement | null;
       if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA')) ae.blur();
       if (s.dropdown) set({ dropdown: null });
       if (s.cardMenu) set({ cardMenu: null });

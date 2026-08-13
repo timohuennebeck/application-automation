@@ -9,11 +9,11 @@ export const SALARY: Record<string, string> = {
   'BEW-41': '78–92k €',
   'BEW-44': '85–100k €',
   'BEW-38': '70–84k €',
-  'BEW-33': 'CHF 120–135k',
+  'BEW-33': '120–135k €',
   'BEW-29': '58–70k €',
   'BEW-35': '65–78k €',
   'BEW-24': '95–110k €',
-  'BEW-19': '€ 88–102k',
+  'BEW-19': '88–102k €',
   'BEW-15': '110–125k €',
   'BEW-11': '92–105k €',
   'BEW-07': '80–95k €',
@@ -364,7 +364,7 @@ export const DETAILS: Record<string, DetailDef> = {
   'BEW-33': {
     facts: [
       ['Standort', 'Zürich'],
-      ['Gehalt', 'CHF 120–135k', FactKind.SELECT],
+      ['Gehalt', '120–135k €', FactKind.SELECT],
       ['Erfahrung', '5–8', FactKind.SELECT],
       ['Plattform', 'StepStone', FactKind.SELECT],
       ['Branche', 'Software', FactKind.SELECT],

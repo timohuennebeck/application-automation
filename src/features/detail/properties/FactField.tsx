@@ -5,6 +5,7 @@ import { CalendarPopover } from '../../../ui/Calendar';
 import { FieldChip } from '../../../ui/FieldChip';
 import { MenuItem } from '../../../ui/MenuItem';
 import { Popover, PopoverAnchor } from '../../../ui/Popover';
+import { SalaryField } from './SalaryField';
 
 /* What the sidebar renders for one property row. Routed labels are windows
    onto application/company columns; the rest come from facts rows. */
@@ -15,10 +16,13 @@ export interface FactView {
   link?: boolean;
   isSelect: boolean;
   isDate: boolean;
+  /* The salary range, edited by its own pair of dropdowns. */
+  isSalary: boolean;
 }
 
-/* One editable property value: select, date picker or free text. Writes go
-   through store.writeField, which routes the label to its real column. */
+/* One editable property value: salary range, select, date picker or free text.
+   Writes go through store.writeField, which routes the label to its real
+   column. */
 export function FactField({ fact, cardId, locked }: { fact: FactView; cardId: string; locked: boolean }) {
   const { st, set, writeField, cancelEditRef } = useApp();
   const key = 'fact:' + fact.label;
@@ -32,6 +36,10 @@ export function FactField({ fact, cardId, locked }: { fact: FactView; cardId: st
   const toggle = () => {
     if (!locked) set((s) => ({ dropdown: s.dropdown === key ? null : key, editing: null }));
   };
+
+  if (fact.isSalary) {
+    return <SalaryField value={fact.value} cardId={cardId} locked={locked} />;
+  }
 
   if (fact.isSelect) {
     return (

@@ -62,7 +62,8 @@ export function PropertiesSidebar({ cardId, role, company, columnIndex }: Proper
     'E-Mail': { value: comp?.email || '—', link: true },
     Telefon: { value: comp?.phone || '—' },
   };
-  const factDefaults: Record<string, string> = { Gehalt: 'nicht angegeben', Erfahrung: 'nicht angegeben' };
+  /* Gehalt has no placeholder: its two dropdowns say "von"/"bis" themselves. */
+  const factDefaults: Record<string, string> = { Erfahrung: 'nicht angegeben' };
 
   const view = (label: string): FactView => {
     const r = routed[label];
@@ -73,6 +74,7 @@ export function PropertiesSidebar({ cardId, role, company, columnIndex }: Proper
       link: r?.link || fact?.kind === FactKind.LINK,
       isSelect: !!FACT_OPTIONS[label],
       isDate: !!DATE_FIELDS[label],
+      isSalary: label === 'Gehalt',
     };
   };
 

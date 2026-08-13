@@ -111,6 +111,27 @@ describe('migrations', () => {
     expect(row.completed_at).toBeNull();
   });
 
+  /* Migration 4 drops applications.last_contact_at, which nothing derived
+     anything from — the column and its data go for good. */
+  it('drops last_contact_at and leaves the rest of the row intact', () => {
+    const db = dbAtVersion(3);
+    db.exec(`
+      INSERT INTO companies (id, name, created_at, updated_at) VALUES (1, 'Acme', 't', 't');
+      INSERT INTO applications (id, role, company_id, interest, stage_id, stage_position, applied_at, last_contact_at, created_at, updated_at)
+        VALUES ('BEW-1', 'Designer', 1, 'HIGH', 'interessiert', 0, '2026-07-19', '2026-07-31', 't', 't');
+    `);
+
+    migrate(db);
+
+    const columns = (db.prepare('PRAGMA table_info(applications)').all() as { name: string }[]).map(
+      (c) => c.name,
+    );
+    expect(columns).not.toContain('last_contact_at');
+    expect(columns).toContain('applied_at');
+    const row = db.prepare('SELECT * FROM applications').get() as { applied_at: string; role: string };
+    expect(row).toMatchObject({ role: 'Designer', applied_at: '2026-07-19' });
+  });
+
   it('enforces foreign keys', () => {
     const db = openDb(':memory:');
     expect(() =>

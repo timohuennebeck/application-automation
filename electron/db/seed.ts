@@ -36,7 +36,6 @@ const ROUTED_LABELS = new Set([
   'Plattform',
   'Beworben via',
   'Beworben am',
-  'Letzter Kontakt',
   'Branche',
   'Mitarbeiterzahl',
   'Karriereseite',
@@ -106,8 +105,8 @@ export function seedIfEmpty(db: DatabaseSync, now = new Date()): boolean {
     );
     const insApp = db.prepare(
       `INSERT INTO applications (id, role, company_id, interest, channel, stage_id, stage_position,
-        summary, applied_at, applied_via, last_contact_at, created_at, updated_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        summary, applied_at, applied_via, created_at, updated_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
     );
     const insFact = db.prepare(
       'INSERT INTO facts (application_id, label, value, kind, position) VALUES (?,?,?,?,?)',
@@ -167,7 +166,6 @@ export function seedIfEmpty(db: DatabaseSync, now = new Date()): boolean {
         const createdAt = firstHistory
           ? atNine(dayMonthToISO(firstHistory, SEED_YEAR))
           : new Date(now.getTime() - 21 * DAY).toISOString();
-        const lastContact = relativeToISO(factValue(id, 'Letzter Kontakt') ?? '', now);
         const updatedAt = relativeToISO(card[4], now) || createdAt;
         insApp.run(
           id,
@@ -180,7 +178,6 @@ export function seedIfEmpty(db: DatabaseSync, now = new Date()): boolean {
           DETAILS[id]?.summary ?? null,
           germanDateToISO(factValue(id, 'Beworben am') ?? '') || null,
           null,
-          lastContact ? localDay(new Date(lastContact)) : null,
           createdAt,
           updatedAt < createdAt ? createdAt : updatedAt,
         );

@@ -23,7 +23,6 @@ const application = (
   summary: null,
   applied_at: null,
   applied_via: null,
-  last_contact_at: null,
   created_at: 't',
   updated_at: 't',
 });

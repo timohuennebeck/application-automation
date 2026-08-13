@@ -35,7 +35,6 @@ export interface ApplicationRow {
   summary: string | null;
   applied_at: string | null;
   applied_via: string | null;
-  last_contact_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -170,10 +169,7 @@ export interface CreateApplicationResult {
 /* stage_id is not patchable — stage changes go through applications.move,
    which keeps stage_position contiguous. */
 export type ApplicationPatch = Partial<
-  Pick<
-    ApplicationRow,
-    'role' | 'interest' | 'channel' | 'summary' | 'applied_at' | 'applied_via' | 'last_contact_at'
-  >
+  Pick<ApplicationRow, 'role' | 'interest' | 'channel' | 'summary' | 'applied_at' | 'applied_via'>
 >;
 export type CompanyPatch = Partial<
   Pick<CompanyRow, 'name' | 'sector' | 'headcount' | 'website' | 'email' | 'phone' | 'notes'>

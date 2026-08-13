@@ -49,11 +49,10 @@ describe('seedIfEmpty', () => {
   });
 
   it('routes BEW-33 sidebar fields to columns, not facts', () => {
-    const app = one<{ applied_at: string; last_contact_at: string; channel: string; summary: string | null }>(
-      "SELECT applied_at, last_contact_at, channel, summary FROM applications WHERE id = 'BEW-33'",
+    const app = one<{ applied_at: string; channel: string; summary: string | null }>(
+      "SELECT applied_at, channel, summary FROM applications WHERE id = 'BEW-33'",
     );
     expect(app.applied_at).toBe('2026-07-24');
-    expect(app.last_contact_at).toBe('2026-07-31'); // now − 12d
     expect(app.channel).toBe('StepStone');
     const labels = all<{ label: string }>("SELECT label FROM facts WHERE application_id = 'BEW-33'").map(
       (r) => r.label,

@@ -50,7 +50,6 @@ const APPLICATION_FIELDS: (keyof ApplicationPatch)[] = [
   'summary',
   'applied_at',
   'applied_via',
-  'last_contact_at',
 ];
 const COMPANY_FIELDS: (keyof CompanyPatch)[] = [
   'name',

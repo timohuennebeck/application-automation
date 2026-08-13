@@ -195,4 +195,11 @@ export const MIGRATIONS: string[] = [
   `
   ALTER TABLE followups ADD COLUMN completed_at TEXT;
   `,
+
+  /* Migration 4: "Letzter Kontakt" is retired. Nothing was ever derived from
+     it — no sort, no filter, no due-date reckoning — so the column goes, and
+     its dates with it. */
+  `
+  ALTER TABLE applications DROP COLUMN last_contact_at;
+  `,
 ];

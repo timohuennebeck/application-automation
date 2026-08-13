@@ -287,8 +287,8 @@ export const SORT_OPTIONS: [SortKey, string, SortDir][] = [
 /* Sidebar field catalog. Most labels route to real DB columns; only the
    free-form POSITION fields are stored in the facts table. */
 export const SECTIONS: [string, string[]][] = [
-  ['Bewerbung', ['Plattform', 'Beworben via', 'Beworben am', 'Letzter Kontakt']],
+  ['Bewerbung', ['Plattform', 'Beworben via', 'Beworben am']],
   ['Position', ['Berufsbezeichnung', 'Standort', 'Gehalt', 'Erfahrung']],
   ['Unternehmen', ['Firma', 'Branche', 'Mitarbeiterzahl', 'Karriereseite', 'E-Mail', 'Telefon']],
 ];
-export const DATE_FIELDS: Record<string, boolean> = { 'Beworben am': true, 'Letzter Kontakt': true };
+export const DATE_FIELDS: Record<string, boolean> = { 'Beworben am': true };

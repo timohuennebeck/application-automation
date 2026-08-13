@@ -102,11 +102,10 @@ const emptyRound = (title: string): RoundView => ({
 });
 
 /* Sidebar labels that live on the applications row. */
-const APP_FIELD: Record<string, 'channel' | 'applied_via' | 'applied_at' | 'last_contact_at'> = {
+const APP_FIELD: Record<string, 'channel' | 'applied_via' | 'applied_at'> = {
   Plattform: 'channel',
   'Beworben via': 'applied_via',
   'Beworben am': 'applied_at',
-  'Letzter Kontakt': 'last_contact_at',
 };
 /* Sidebar labels that live on the shared companies row. */
 const COMPANY_FIELD: Record<string, 'sector' | 'headcount' | 'website' | 'email' | 'phone'> = {
@@ -116,7 +115,7 @@ const COMPANY_FIELD: Record<string, 'sector' | 'headcount' | 'website' | 'email'
   'E-Mail': 'email',
   Telefon: 'phone',
 };
-const DATE_COLUMNS = new Set(['Beworben am', 'Letzter Kontakt']);
+const DATE_COLUMNS = new Set(['Beworben am']);
 /* Cleared facts that should default to the select kind. */
 const SELECT_FACTS = new Set(['Gehalt', 'Erfahrung']);
 

@@ -55,7 +55,6 @@ export function PropertiesSidebar({ cardId, role, company, columnIndex }: Proper
     Plattform: { value: app?.channel || '—' },
     'Beworben via': { value: app?.applied_via || '—' },
     'Beworben am': { value: app?.applied_at ? isoToDate(app.applied_at) : '—' },
-    'Letzter Kontakt': { value: app?.last_contact_at ? isoToDate(app.last_contact_at) : '—' },
     Branche: { value: comp?.sector || 'nicht angegeben' },
     Mitarbeiterzahl: { value: comp?.headcount || 'nicht angegeben' },
     Karriereseite: { value: comp?.website || '—', link: true },

@@ -6,7 +6,6 @@ import type { ReactNode } from 'react';
 import { COLUMNS, SortDir, SortKey, STAGE_IDS } from '../data/config';
 import { Author, DocumentKind, FactKind, Interest, LinkKind, RoundState } from '../shared/enums';
 import type { ActivityRow, FollowupRow } from '../shared/db-types';
-import { CANONICAL_ROUNDS } from '../shared/domain';
 import { indexSnapshot, roundInput, personView } from './db-view';
 import type { RoundView } from './db-view';
 import { dateToISO } from '../lib/date';
@@ -95,11 +94,10 @@ const initialState = (): AppState => ({
   profileDragId: null,
 });
 
-const CANONICAL_TITLES = new Set(CANONICAL_ROUNDS);
-
 const emptyRound = (title: string): RoundView => ({
   state: RoundState.OPEN,
   title,
+  stage: '',
   date: '',
   time: '',
   where: '',
@@ -280,42 +278,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [set],
   );
 
-  /* Clearing an interview blanks a canonical round but removes one the user
-     added, so an accidentally created interview can actually be got rid of. */
+  /* Deleting an interview removes it outright — rounds only exist once the
+     user added one, so there is nothing canonical left to preserve. */
   const resetRound = useCallback(
     (id: string, ri: number) => {
-      const rounds = roundsFor(id);
-      const r = rounds[ri];
+      const r = roundsFor(id)[ri];
       if (!r) return;
-      const removable = !CANONICAL_TITLES.has(r.title);
       mutateRounds(id, (rs) => {
-        if (removable) {
-          rs.splice(ri, 1);
-          return;
-        }
-        const row = rs[ri];
-        row.date = '';
-        row.time = '';
-        row.where = '';
-        row.link = '';
-        row.people = [];
-        row.notes = [];
-        row.state = RoundState.OPEN;
-        // Dropping the id makes rounds.set replace the row, so the cascade
-        // clears its note thread too — notes aren't part of RoundInput.
-        row.dbId = undefined;
+        rs.splice(ri, 1);
       });
-      logAct(
-        id,
-        removable
-          ? 'hat das Interview „' + r.title + '“ gelöscht'
-          : 'hat das Interview „' + r.title + '“ zurückgesetzt',
-      );
+      logAct(id, 'hat das Interview „' + r.title + '“ gelöscht');
       set((s) => ({
         dropdown: null,
         roundEdit: null,
         roundDraft: null,
-        roundSel: { ...s.roundSel, [id]: Math.max(0, ri - (removable ? 1 : 0)) },
+        roundSel: { ...s.roundSel, [id]: Math.max(0, ri - 1) },
       }));
     },
     [logAct, mutateRounds, roundsFor, set],
@@ -526,6 +503,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 dbId: r.id,
                 state: r.state,
                 title: r.title,
+                stage: r.stage || '',
                 date: '',
                 time: '',
                 where: '',
@@ -734,17 +712,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const d = s.roundDraft;
     if (!e || !d) return;
     const wasNew = !!e.isNew;
-    if (wasNew && !(d.date && d.time && d.where && d.title.trim())) return;
+    if (wasNew && !(d.date && d.time && d.where && d.title.trim() && d.stage)) return;
     mutateRounds(e.id, (rs) => {
       if (wasNew) rs.push(emptyRound(d.title));
       const r = wasNew ? rs[rs.length - 1] : rs[e.ri];
       if (!r) return;
       r.title = d.title;
+      r.stage = d.stage;
       r.date = d.date;
       r.time = d.time;
       r.where = d.where;
       r.people = d.people.slice();
-      r.link = d.where === 'Google Meet' || d.where === 'Microsoft Teams' ? d.link : '';
+      // Any remote interview keeps its meeting link; an in-person one has none.
+      r.link = d.where === 'In Person' ? '' : d.link;
       if (r.state !== RoundState.DONE) r.state = d.date ? RoundState.NEXT : RoundState.OPEN;
     });
     logAct(

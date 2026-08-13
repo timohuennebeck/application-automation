@@ -39,6 +39,10 @@ export interface PersonEditState {
   isNew: boolean;
   /* Set when the editor was opened from a contact picker, naming that picker. */
   forContact?: string;
+  /* Set when it was opened from a round's participant picker: the editor then
+     takes over that popover instead of hanging off the participant's chip —
+     the person may not be in the round at all. */
+  forPicker?: boolean;
   /* Which link list that picker writes: the card's contacts or the follow-up
      email's recipients. */
   contactStore?: LinkKind;
@@ -69,6 +73,7 @@ export interface RoundEditState {
 
 export interface RoundDraft {
   title: string;
+  stage: string;
   date: string;
   time: string;
   where: string;

@@ -104,6 +104,8 @@ export interface RoundRow {
   position: number;
   state: RoundState;
   title: string;
+  /* One of the board's interview stages, null for unstaged custom rounds. */
+  stage: string | null;
   /* Local wall-clock appointment: date + optional start/end range. */
   scheduled_date: string | null;
   start_time: string | null;
@@ -176,6 +178,7 @@ export interface RoundInput {
   id?: number;
   state: RoundState;
   title: string;
+  stage: string | null;
   scheduled_date: string | null;
   start_time: string | null;
   end_time: string | null;

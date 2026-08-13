@@ -259,4 +259,35 @@ export const MIGRATIONS: string[] = [
   );
   CREATE INDEX idx_comment_attachments_comment ON comment_attachments(comment_id);
   `,
+
+  /* Migration 9: interviews are created by hand now, not pre-seeded four to a
+     card — so the untouched placeholders those seeds left behind go. A round
+     stays if anything was ever put on it: a schedule, a location or link, a
+     participant, a note, or a state other than open. */
+  `
+  DELETE FROM rounds
+  WHERE state = 'OPEN'
+    AND COALESCE(scheduled_date, '') = ''
+    AND COALESCE(start_time, '')     = ''
+    AND COALESCE(end_time, '')       = ''
+    AND COALESCE(location, '')       = ''
+    AND COALESCE(link, '')           = ''
+    AND id NOT IN (SELECT round_id FROM round_people)
+    AND id NOT IN (SELECT round_id FROM round_notes);
+  `,
+
+  /* Migration 10: the interview stage (the board's interview columns) becomes
+     its own column instead of doubling as the title. Rounds titled after the
+     old presets get the matching stage; custom titles stay unstaged. */
+  `
+  ALTER TABLE rounds ADD COLUMN stage TEXT;
+  UPDATE rounds SET stage = CASE title
+    WHEN 'Screening'        THEN 'Screening'
+    WHEN 'Runde 1'          THEN 'Interview'
+    WHEN 'Runde 2'          THEN '2. Interview'
+    WHEN 'Interview'        THEN 'Interview'
+    WHEN '2. Interview'     THEN '2. Interview'
+    WHEN 'Finales Gespräch' THEN 'Finales Gespräch'
+  END;
+  `,
 ];

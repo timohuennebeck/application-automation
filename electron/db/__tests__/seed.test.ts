@@ -76,14 +76,16 @@ describe('seedIfEmpty', () => {
     expect(nadine.linkedin).toBe('linkedin.com/in/nadine-wolf');
   });
 
-  it('gives every application rounds ending in Finales Gespräch, a slot-0 followup, a comment, 2 documents, Gehalt+Standort facts', () => {
+  it('gives every application a slot-0 followup, a comment, 2 documents, Gehalt+Standort facts — and rounds only where the sample defines them', () => {
+    const sampled = new Set(['BEW-24', 'BEW-19', 'BEW-15']);
     for (const { id } of all<{ id: string }>('SELECT id FROM applications')) {
       const rounds = all<{ title: string }>(
         'SELECT title FROM rounds WHERE application_id = ? ORDER BY position',
         id,
       );
-      expect(rounds.length, id).toBeGreaterThanOrEqual(3);
-      expect(rounds[rounds.length - 1].title, id).toBe('Finales Gespräch');
+      /* Interviews are added by hand — no card starts with placeholders. */
+      if (sampled.has(id)) expect(rounds.length, id).toBeGreaterThanOrEqual(3);
+      else expect(rounds, id).toEqual([]);
       expect(
         one<{ n: number }>(
           'SELECT COUNT(*) AS n FROM followups WHERE application_id = ? AND position = 0',
@@ -117,8 +119,8 @@ describe('seedIfEmpty', () => {
       end_time: '11:00',
       location: 'In Person',
     });
-    // BEW-24's seed lacks a final round — it must be appended.
-    expect(all("SELECT title FROM rounds WHERE application_id = 'BEW-24'")).toHaveLength(4);
+    // BEW-24's seed has exactly its three sample rounds — nothing is appended.
+    expect(all("SELECT title FROM rounds WHERE application_id = 'BEW-24'")).toHaveLength(3);
   });
 
   it('parses yearless activity dates and keeps participant order', () => {

@@ -28,8 +28,8 @@ import type {
   RoundRow,
   StageRow,
 } from '../../src/shared/db-types.ts';
-import { Author, DocumentKind, FactKind, Interest, LinkKind, RoundState } from '../../src/shared/enums.ts';
-import { CANONICAL_ROUNDS, DEFAULT_COMMENT, DEFAULT_FOLLOWUPS } from '../../src/shared/domain.ts';
+import { Author, DocumentKind, FactKind, Interest, LinkKind } from '../../src/shared/enums.ts';
+import { DEFAULT_COMMENT, DEFAULT_FOLLOWUPS } from '../../src/shared/domain.ts';
 
 /* Person avatar palette — insertion-order assignment, persisted per row. */
 const PERSON_COLORS = [
@@ -155,11 +155,6 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
     documents: DocumentRow[];
     comments: CommentRow[];
   } {
-    const insRound = db.prepare(
-      'INSERT INTO rounds (application_id, position, state, title) VALUES (?,?,?,?)',
-    );
-    CANONICAL_ROUNDS.forEach((title, pos) => insRound.run(appId, pos, RoundState.OPEN, title));
-
     db.prepare('INSERT INTO comments (application_id, author, text, created_at) VALUES (?,?,?,?)').run(
       appId,
       Author.KEPLER,
@@ -434,11 +429,11 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
         park.run(applicationId);
 
         const updRound = db.prepare(
-          'UPDATE rounds SET position = ?, state = ?, title = ?, scheduled_date = ?, start_time = ?, end_time = ?, location = ?, link = ? WHERE id = ? AND application_id = ?',
+          'UPDATE rounds SET position = ?, state = ?, title = ?, stage = ?, scheduled_date = ?, start_time = ?, end_time = ?, location = ?, link = ? WHERE id = ? AND application_id = ?',
         );
         const insRound = db.prepare(
-          `INSERT INTO rounds (application_id, position, state, title, scheduled_date, start_time, end_time, location, link)
-           VALUES (?,?,?,?,?,?,?,?,?)`,
+          `INSERT INTO rounds (application_id, position, state, title, stage, scheduled_date, start_time, end_time, location, link)
+           VALUES (?,?,?,?,?,?,?,?,?,?)`,
         );
         const clearPeople = db.prepare('DELETE FROM round_people WHERE round_id = ?');
         const insPerson = db.prepare(
@@ -452,6 +447,7 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
               pos,
               r.state,
               r.title,
+              r.stage,
               r.scheduled_date,
               r.start_time,
               r.end_time,
@@ -467,6 +463,7 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
               pos,
               r.state,
               r.title,
+              r.stage,
               r.scheduled_date,
               r.start_time,
               r.end_time,

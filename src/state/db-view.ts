@@ -29,6 +29,8 @@ export interface RoundView {
   dbId?: number;
   state: RoundState;
   title: string;
+  /* One of the board's interview stages, '' for unstaged custom rounds. */
+  stage: string;
   /* German display date DD.MM.YYYY, '' when unscheduled. */
   date: string;
   /* '10:00 – 11:00', '10:00', or ''. */
@@ -128,6 +130,7 @@ export function roundView(
     dbId: row.id,
     state: row.state,
     title: row.title,
+    stage: row.stage || '',
     date: row.scheduled_date ? isoToDate(row.scheduled_date) : '',
     time: timeRangeText(row.start_time, row.end_time),
     where: row.location || '',
@@ -146,6 +149,7 @@ export function roundInput(r: RoundView): RoundInput {
     id: r.dbId,
     state: r.state,
     title: r.title,
+    stage: r.stage || null,
     scheduled_date: dateToISO(r.date) || null,
     start_time: start,
     end_time: end,

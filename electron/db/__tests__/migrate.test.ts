@@ -212,6 +212,69 @@ describe('migrations', () => {
     expect((db.prepare('SELECT id FROM applications').all() as { id: string }[])[0].id).toBe('BEW-1');
   });
 
+  /* Migration 9: rounds used to be pre-created for every card, so a database
+     is full of untouched placeholders. Only a round with nothing on it at all
+     goes — a date, a participant, a note, or a finished state keeps it. */
+  it('deletes rounds that were never touched and keeps every other one', () => {
+    const db = dbAtVersion(8);
+    db.exec(`
+      INSERT INTO companies (id, name, created_at, updated_at) VALUES (1, 'Acme', 't', 't');
+      INSERT INTO applications (id, role, company_id, interest, stage_id, stage_position, created_at, updated_at)
+        VALUES ('BEW-1', 'Designer', 1, 'HIGH', 'interessiert', 0, 't', 't');
+      INSERT INTO people (id, name, color, created_at, updated_at) VALUES (1, 'Ines', 'c', 't', 't');
+      INSERT INTO rounds (id, application_id, position, state, title) VALUES (1, 'BEW-1', 0, 'OPEN', 'Screening');
+      INSERT INTO rounds (id, application_id, position, state, title, scheduled_date)
+        VALUES (2, 'BEW-1', 1, 'OPEN', 'Runde 1', '2026-08-20');
+      INSERT INTO rounds (id, application_id, position, state, title) VALUES (3, 'BEW-1', 2, 'OPEN', 'Runde 2');
+      INSERT INTO rounds (id, application_id, position, state, title) VALUES (4, 'BEW-1', 3, 'OPEN', 'Finales Gespräch');
+      INSERT INTO rounds (id, application_id, position, state, title) VALUES (5, 'BEW-1', 4, 'DONE', 'Kennenlernen');
+      INSERT INTO round_people (round_id, person_id, position) VALUES (3, 1, 0);
+      INSERT INTO round_notes (round_id, author, text, created_at) VALUES (4, 'DU', 'Vorbereitung', 't');
+    `);
+
+    migrate(db);
+
+    const titles = (
+      db.prepare('SELECT title FROM rounds ORDER BY position').all() as { title: string }[]
+    ).map((r) => r.title);
+    /* Runde 1 has a date, Runde 2 a participant, Finales Gespräch a note and
+       Kennenlernen is done — only the blank Screening placeholder goes. */
+    expect(titles).toEqual(['Runde 1', 'Runde 2', 'Finales Gespräch', 'Kennenlernen']);
+  });
+
+  /* Migration 10: the interview stage becomes its own column, no longer read
+     out of the title. Rounds whose title was one of the old presets get the
+     matching board stage; custom titles stay unstaged. */
+  it('backfills the stage from legacy preset titles', () => {
+    const db = dbAtVersion(9);
+    db.exec(`
+      INSERT INTO companies (id, name, created_at, updated_at) VALUES (1, 'Acme', 't', 't');
+      INSERT INTO applications (id, role, company_id, interest, stage_id, stage_position, created_at, updated_at)
+        VALUES ('BEW-1', 'Designer', 1, 'HIGH', 'interessiert', 0, 't', 't');
+      INSERT INTO rounds (application_id, position, state, title, scheduled_date)
+        VALUES ('BEW-1', 0, 'DONE', 'Screening', '2026-08-01');
+      INSERT INTO rounds (application_id, position, state, title, scheduled_date)
+        VALUES ('BEW-1', 1, 'DONE', 'Runde 1', '2026-08-05');
+      INSERT INTO rounds (application_id, position, state, title, scheduled_date)
+        VALUES ('BEW-1', 2, 'NEXT', 'Runde 2', '2026-08-20');
+      INSERT INTO rounds (application_id, position, state, title, scheduled_date)
+        VALUES ('BEW-1', 3, 'OPEN', 'Kennenlernen mit dem Team', '2026-08-25');
+    `);
+
+    migrate(db);
+
+    const rows = db.prepare('SELECT title, stage FROM rounds ORDER BY position').all() as {
+      title: string;
+      stage: string | null;
+    }[];
+    expect(rows).toEqual([
+      { title: 'Screening', stage: 'Screening' },
+      { title: 'Runde 1', stage: 'Interview' },
+      { title: 'Runde 2', stage: '2. Interview' },
+      { title: 'Kennenlernen mit dem Team', stage: null },
+    ]);
+  });
+
   it('enforces foreign keys', () => {
     const db = openDb(':memory:');
     expect(() =>

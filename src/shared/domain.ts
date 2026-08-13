@@ -1,9 +1,9 @@
 /* Domain constants and types shared by the Electron main process (seed, repo,
-   files) and the renderer. The canonical round titles decide whether clearing
-   an interview resets the row or removes it, so every side has to agree on the
-   same four. */
+   files) and the renderer. */
 
-export const CANONICAL_ROUNDS: string[] = ['Screening', 'Runde 1', 'Runde 2', 'Finales Gespräch'];
+/* The preset titles the create-interview dialog offers, mirroring the
+   interview stages of the kanban board. */
+export const CANONICAL_ROUNDS: string[] = ['Screening', 'Interview', '2. Interview', 'Finales Gespräch'];
 
 /* The comment Kepler leaves on every freshly created card. */
 export const DEFAULT_COMMENT =

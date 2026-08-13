@@ -14,8 +14,8 @@ import {
   INITIAL_ROUNDS,
   SALARY,
 } from '../../src/data/sample-data.ts';
-import { CANONICAL_ROUNDS, DEFAULT_COMMENT, DEFAULT_FOLLOWUPS } from '../../src/shared/domain.ts';
-import { Author, DocumentKind, FactKind, LinkKind, RoundState } from '../../src/shared/enums.ts';
+import { DEFAULT_COMMENT, DEFAULT_FOLLOWUPS } from '../../src/shared/domain.ts';
+import { Author, DocumentKind, FactKind, LinkKind } from '../../src/shared/enums.ts';
 import { STAGES } from './schema.ts';
 import {
   dayMonthToISO,
@@ -48,17 +48,6 @@ const ROUTED_LABELS = new Set([
 ]);
 
 const atNine = (isoDate: string) => `${isoDate}T09:00:00.000Z`;
-
-/* An unscheduled round in the sample-data shape the seed loop consumes. */
-const emptyRound = (title: string) => ({
-  state: RoundState.OPEN,
-  title,
-  date: '',
-  time: '',
-  where: '',
-  people: [] as string[],
-  link: '',
-});
 
 /* Local calendar date — toISOString would shift the day for users west of UTC. */
 const localDay = (d: Date) =>
@@ -121,8 +110,8 @@ export function seedIfEmpty(db: DatabaseSync, now = new Date()): boolean {
       'INSERT INTO comments (application_id, author, text, created_at) VALUES (?,?,?,?)',
     );
     const insRound = db.prepare(
-      `INSERT INTO rounds (application_id, position, state, title, scheduled_date, start_time, end_time, location, link)
-       VALUES (?,?,?,?,?,?,?,?,?)`,
+      `INSERT INTO rounds (application_id, position, state, title, stage, scheduled_date, start_time, end_time, location, link)
+       VALUES (?,?,?,?,?,?,?,?,?,?)`,
     );
     const insRoundPerson = db.prepare(
       'INSERT INTO round_people (round_id, person_id, position) VALUES (?,?,?)',
@@ -286,14 +275,17 @@ export function seedIfEmpty(db: DatabaseSync, now = new Date()): boolean {
       }
     }
 
-    /* Rounds — canonical defaults, final round guaranteed last. */
+    /* Rounds — only the ones the sample actually defines; interviews are
+       added by hand, so no card starts with placeholders. The sample titles
+       predate the stage column, so the stage is read off the title. */
+    const LEGACY_STAGE: Record<string, string> = {
+      Screening: 'Screening',
+      'Runde 1': 'Interview',
+      'Runde 2': '2. Interview',
+      'Finales Gespräch': 'Finales Gespräch',
+    };
     for (const id of Object.keys(CARD_DEFS)) {
-      const sample = INITIAL_ROUNDS[id];
-      const rounds = !sample
-        ? CANONICAL_ROUNDS.map((title) => emptyRound(title))
-        : sample.some((r) => /final/i.test(r.title))
-          ? sample
-          : [...sample, emptyRound('Finales Gespräch')];
+      const rounds = INITIAL_ROUNDS[id] ?? [];
       rounds.forEach((r, pos) => {
         const [start, end] = splitTimeRange(r.time);
         const res = insRound.run(
@@ -301,6 +293,7 @@ export function seedIfEmpty(db: DatabaseSync, now = new Date()): boolean {
           pos,
           r.state,
           r.title,
+          LEGACY_STAGE[r.title] ?? null,
           germanDateToISO(r.date) || null,
           start,
           end,

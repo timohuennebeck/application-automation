@@ -24,7 +24,8 @@ describe('repo', () => {
     expect(res.application.id).toBe('BEW-45');
     expect(res.application.stage_id).toBe('interessiert');
     expect(res.application.stage_position).toBe(0);
-    expect(res.rounds.map((r) => r.title)).toEqual(['Screening', 'Runde 1', 'Runde 2', 'Finales Gespräch']);
+    /* No pre-seeded interviews — rounds only exist once the user adds one. */
+    expect(res.rounds).toEqual([]);
     expect(res.followups).toHaveLength(3);
     expect(res.documents).toHaveLength(2);
     expect(res.comments).toHaveLength(1);
@@ -201,11 +202,12 @@ describe('repo', () => {
     const note = repo.addRoundNote(rounds[1].id, Author.DU, 'Merken');
     const updated = repo.setRounds('BEW-24', [
       { ...rounds[1], people: [1] },
-      { ...rounds[3], people: [] },
+      { ...rounds[2], people: [] },
       {
         id: undefined,
         state: RoundState.OPEN,
         title: 'Extra',
+        stage: '2. Interview',
         scheduled_date: null,
         start_time: null,
         end_time: null,
@@ -214,7 +216,9 @@ describe('repo', () => {
         people: [],
       },
     ]);
-    expect(updated.rounds.map((r) => r.title)).toEqual(['Runde 1', 'Finales Gespräch', 'Extra']);
+    expect(updated.rounds.map((r) => r.title)).toEqual(['Runde 1', 'Runde 2', 'Extra']);
+    /* The stage travels with the round — both on insert and on update. */
+    expect(updated.rounds.map((r) => r.stage)).toEqual(['Interview', '2. Interview', '2. Interview']);
     expect(count('SELECT COUNT(*) AS n FROM round_notes WHERE id = ?', note.id)).toBe(1);
     expect(count('SELECT COUNT(*) AS n FROM rounds WHERE id = ?', rounds[0].id)).toBe(0);
     expect(

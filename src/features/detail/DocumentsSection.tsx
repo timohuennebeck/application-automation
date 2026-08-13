@@ -65,9 +65,10 @@ export function DocumentsSection({ card }: { card: { id: string; role: string; c
               title={d.title}
               caption={caption(d)}
               hint="Öffnen"
-              /* The PDF is the finished thing, so that is what a plain click
-                 opens; the HTML behind it stays one menu entry away. */
-              onClick={() => open(d, d.pdf_path ?? d.file_path)}
+              /* The HTML is what a plain click opens, so the document lands in
+                 the browser the way a template does in the profile. The PDF
+                 stays one menu entry away, where Vorschau gets it instead. */
+              onClick={() => open(d, d.file_path ?? d.pdf_path)}
             >
               {/* stopPropagation throughout, or the card's own click would open
                   the document behind the menu. */}

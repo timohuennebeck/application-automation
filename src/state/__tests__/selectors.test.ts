@@ -65,14 +65,7 @@ function state(filter: Partial<BoardFilter> = {}): AppState {
       B: [{ application_id: 'B', person_id: 9, kind: LinkKind.CONTACT, position: 0 }],
     },
     board: [['A', 'B', 'C']],
-    boardFilter: {
-      sort: SortKey.NONE,
-      dir: SortDir.ASC,
-      people: [],
-      channels: [],
-      interests: [],
-      ...filter,
-    },
+    boardFilter: { sort: SortKey.NONE, dir: SortDir.ASC, interests: [], ...filter },
   } as unknown as AppState;
 }
 
@@ -94,15 +87,15 @@ describe('visibleCards', () => {
     expect(visibleCards(state({ sort: SortKey.ROLE, dir: SortDir.ASC }), 0)).toEqual(['B', 'C', 'A']);
   });
 
-  it('filters by channel, interest and contact', () => {
-    expect(visibleCards(state({ channels: ['LinkedIn'] }), 0)).toEqual(['A', 'C']);
-    expect(visibleCards(state({ interests: [Interest.URGENT, Interest.MEDIUM] }), 0)).toEqual(['B', 'C']);
-    expect(visibleCards(state({ people: [7] }), 0)).toEqual(['A']);
-  });
-
-  it('combines every filter, and counts them for the toolbar', () => {
-    const st = state({ channels: ['LinkedIn'], interests: [Interest.MEDIUM] });
-    expect(visibleCards(st, 0)).toEqual(['C']);
+  it('filters by interest, and counts the picked levels for the toolbar', () => {
+    const st = state({ interests: [Interest.URGENT, Interest.MEDIUM] });
+    expect(visibleCards(st, 0)).toEqual(['B', 'C']);
     expect(activeFilterCount(st)).toBe(2);
   });
+
+  it('sorts what the filter left over', () => {
+    const st = state({ interests: [Interest.URGENT, Interest.MEDIUM], sort: SortKey.ROLE });
+    expect(visibleCards(st, 0)).toEqual(['B', 'C']);
+  });
 });
+

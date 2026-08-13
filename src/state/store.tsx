@@ -19,8 +19,6 @@ import type { AppState, AppStore, BoardFilter, ContactEntry, Patch, Round } from
 export const EMPTY_FILTER: BoardFilter = {
   sort: SortKey.NONE,
   dir: SortDir.ASC,
-  people: [],
-  channels: [],
   interests: [],
 };
 

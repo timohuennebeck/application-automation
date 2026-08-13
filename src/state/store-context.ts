@@ -47,9 +47,6 @@ export interface PersonEditState {
 export interface BoardFilter {
   sort: SortKey;
   dir: SortDir;
-  /* Person ids; a card passes when one of its contacts is among them. */
-  people: number[];
-  channels: string[];
   interests: Interest[];
 }
 

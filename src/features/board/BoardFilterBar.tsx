@@ -1,23 +1,22 @@
 import { INTEREST, INTEREST_ORDER, SortDir, SortKey, SORT_OPTIONS } from '../../data/config';
-import { activeFilterCount, filterOptions, isSorted } from '../../state/selectors';
+import { activeFilterCount, isSorted } from '../../state/selectors';
 import { useApp } from '../../state/store-context';
 import type { BoardFilter } from '../../state/store-context';
 import { EMPTY_FILTER } from '../../state/store';
 import { ChipToggle } from '../../ui/ChipToggle';
 import { MenuItem, MenuLabel } from '../../ui/MenuItem';
 import { Popover, PopoverAnchor, PopoverVariant } from '../../ui/Popover';
-import { Avatar, Chevron, FilterGlyph } from '../../ui/icons';
+import { Chevron, FilterGlyph } from '../../ui/icons';
 
 const DROPDOWN_KEY = 'boardfilter';
 
 /* Sort and filter for the whole board, in the top right of the shell. Both are
    a view over the stored order — nothing here is written to the database. */
 export function BoardFilterBar() {
-  const { st, set, person } = useApp();
+  const { st, set } = useApp();
   const filter = st.boardFilter;
   const open = st.dropdown === DROPDOWN_KEY;
   const count = activeFilterCount(st);
-  const options = filterOptions(st);
 
   const patch = (p: Partial<BoardFilter>) => set((s) => ({ boardFilter: { ...s.boardFilter, ...p } }));
 
@@ -104,68 +103,13 @@ export function BoardFilterBar() {
             ))}
           </div>
 
-          {options.channels.length > 0 && (
-            <>
-              <MenuLabel style={{ paddingTop: 8 }}>Plattform</MenuLabel>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, padding: '2px 8px 4px' }}>
-                {options.channels.map((channel) => (
-                  <ChipToggle
-                    key={channel}
-                    size="sm"
-                    label={channel}
-                    selected={filter.channels.includes(channel)}
-                    onClick={() => patch({ channels: toggle(filter.channels, channel) })}
-                  />
-                ))}
-              </div>
-            </>
-          )}
-
-          {options.people.length > 0 && (
-            <>
-              <MenuLabel style={{ paddingTop: 8 }}>Kontaktperson</MenuLabel>
-              <div
-                className="no-scrollbar"
-                style={{
-                  maxHeight: 176,
-                  overflowY: 'auto',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 1,
-                }}
-              >
-                {options.people.map((pid) => {
-                  const p = person(String(pid));
-                  return (
-                    <MenuItem
-                      key={pid}
-                      selected={filter.people.includes(pid)}
-                      onClick={() => patch({ people: toggle(filter.people, pid) })}
-                    >
-                      <Avatar bg={p.bg} size={20} fontSize={8.5}>
-                        {p.initials}
-                      </Avatar>
-                      <span
-                        style={{
-                          flex: '1 1 auto',
-                          minWidth: 0,
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {p.name}
-                      </span>
-                    </MenuItem>
-                  );
-                })}
-              </div>
-            </>
-          )}
-
+          {/* fit-content so the hover tint hugs the label instead of the panel. */}
           {(count > 0 || isSorted(st)) && (
-            <MenuItem style={{ marginTop: 6, color: 'var(--c-8b8880)' }} onClick={() => patch(EMPTY_FILTER)}>
-              Zurücksetzen
+            <MenuItem
+              style={{ marginTop: 6, width: 'fit-content', color: 'var(--c-8b8880)' }}
+              onClick={() => patch(EMPTY_FILTER)}
+            >
+              Filter zurücksetzen
             </MenuItem>
           )}
         </Popover>

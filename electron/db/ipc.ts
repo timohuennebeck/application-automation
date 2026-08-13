@@ -27,6 +27,10 @@ export const DB_CHANNELS = {
   'db:followups.saveEmail': 'saveFollowupEmail',
   'db:documents.setFile': 'setDocumentFile',
   'db:activities.add': 'addActivity',
+  'db:profileFacts.add': 'addProfileFact',
+  'db:profileFacts.update': 'updateProfileFact',
+  'db:profileFacts.delete': 'deleteProfileFact',
+  'db:profileFacts.reorder': 'reorderProfileFacts',
 } as const satisfies Record<string, keyof Repo>;
 
 /* Side effects that outlive the database row. Deleting an application cascades

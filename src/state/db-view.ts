@@ -12,6 +12,7 @@ import type {
   FactRow,
   FollowupRow,
   PersonRow,
+  ProfileFactRow,
   RoundInput,
   RoundNoteRow,
   RoundPersonRow,
@@ -63,6 +64,8 @@ export interface DomainState {
   followupsByApp: Record<string, FollowupRow[]>;
   documentsByApp: Record<string, DocumentRow[]>;
   activitiesByApp: Record<string, ActivityRow[]>;
+  /* Profile-wide, so a flat list rather than one keyed by application. */
+  profileFacts: ProfileFactRow[];
   board: string[][];
 }
 
@@ -172,6 +175,7 @@ export function indexSnapshot(snap: DbSnapshot, now = new Date()): DomainState {
     followupsByApp: groupBy(snap.followups, (f) => f.application_id),
     documentsByApp: groupBy(snap.documents, (d) => d.application_id),
     activitiesByApp: groupBy(snap.activities, (a) => a.application_id),
+    profileFacts: snap.profileFacts,
     board: boardFrom(snap.applications),
   };
 }

@@ -19,6 +19,7 @@ import type {
   PersonInput,
   PersonPatch,
   PersonRow,
+  ProfileFactRow,
   RoundInput,
   RoundNoteRow,
   RoundPersonRow,
@@ -116,6 +117,11 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
   const getPerson = (id: number) => one<PersonRow>('SELECT * FROM people WHERE id = ?', id);
   const getFollowup = (id: number) => one<FollowupRow>('SELECT * FROM followups WHERE id = ?', id);
 
+  const getProfileFact = (id: number) => one<ProfileFactRow>('SELECT * FROM profile_facts WHERE id = ?', id);
+  /* Ties broken by id so a fresh database, where every position is still 0,
+     still comes back in the order the rows were added. */
+  const allProfileFacts = () => all<ProfileFactRow>('SELECT * FROM profile_facts ORDER BY position, id');
+
   const touchApplication = (id: string) =>
     db.prepare('UPDATE applications SET updated_at = ? WHERE id = ?').run(nowISO(), id);
 
@@ -206,6 +212,7 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
         followups: all<FollowupRow>('SELECT * FROM followups ORDER BY application_id, position'),
         documents: all<DocumentRow>('SELECT * FROM documents ORDER BY application_id, id'),
         activities: all<ActivityRow>('SELECT * FROM activities ORDER BY application_id, id'),
+        profileFacts: allProfileFacts(),
       };
     },
 
@@ -565,6 +572,49 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
           documentId,
         );
         return one<DocumentRow>('SELECT * FROM documents WHERE id = ?', documentId);
+      });
+    },
+
+    /* ── Profile facts ────────────────────────────────────────────────────
+       The applicant's own notes, not an application's. Nothing here touches
+       updated_at on an application, because none of it belongs to one. */
+
+    addProfileFact(text: string): ProfileFactRow {
+      return tx(() => {
+        const next = one<{ p: number }>('SELECT COALESCE(MAX(position) + 1, 0) AS p FROM profile_facts').p;
+        const t = nowISO();
+        const res = db
+          .prepare('INSERT INTO profile_facts (text, position, created_at, updated_at) VALUES (?,?,?,?)')
+          .run(text, next, t, t);
+        return getProfileFact(Number(res.lastInsertRowid));
+      });
+    },
+
+    updateProfileFact(factId: number, text: string): ProfileFactRow {
+      return tx(() => {
+        db.prepare('UPDATE profile_facts SET text = ?, updated_at = ? WHERE id = ?').run(
+          text,
+          nowISO(),
+          factId,
+        );
+        return getProfileFact(factId);
+      });
+    },
+
+    deleteProfileFact(factId: number): void {
+      tx(() => {
+        db.prepare('DELETE FROM profile_facts WHERE id = ?').run(factId);
+      });
+    },
+
+    /* Takes every id in the order the list now reads and writes that order
+       back as the positions. Assigning from the incoming index rather than
+       shifting what was there means a gap left by a delete cannot strand it. */
+    reorderProfileFacts(ids: number[]): ProfileFactRow[] {
+      return tx(() => {
+        const upd = db.prepare('UPDATE profile_facts SET position = ? WHERE id = ?');
+        ids.forEach((id, i) => upd.run(i, id));
+        return allProfileFacts();
       });
     },
 

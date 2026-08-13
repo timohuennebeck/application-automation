@@ -45,6 +45,12 @@ const db: DbApi = {
   } as DbApi['followups'],
   documents: { setFile: invoke('db:documents.setFile') } as DbApi['documents'],
   activities: { add: invoke('db:activities.add') } as DbApi['activities'],
+  profileFacts: {
+    add: invoke('db:profileFacts.add'),
+    update: invoke('db:profileFacts.update'),
+    delete: invoke('db:profileFacts.delete'),
+    reorder: invoke('db:profileFacts.reorder'),
+  } as DbApi['profileFacts'],
 };
 
 /* The only surface the renderer gets. Agent SDK calls will be added here as

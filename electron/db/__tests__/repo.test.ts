@@ -177,6 +177,66 @@ describe('repo', () => {
     ).toEqual([1]);
   });
 
+  describe('profile facts', () => {
+    const texts = () => repo.load().profileFacts.map((f) => f.text);
+
+    it('appends a new fact after the ones already there', () => {
+      const before = texts();
+      const row = repo.addProfileFact('Spreche fließend Spanisch');
+
+      expect(row.text).toBe('Spreche fließend Spanisch');
+      expect(texts()).toEqual([...before, 'Spreche fließend Spanisch']);
+    });
+
+    it('rewrites the text and bumps updated_at, keeping the position', () => {
+      const row = repo.addProfileFact('Sprech fließend Spanisch');
+      const fixed = repo.updateProfileFact(row.id, 'Spreche fließend Spanisch');
+
+      expect(fixed.text).toBe('Spreche fließend Spanisch');
+      expect(fixed.position).toBe(row.position);
+      expect(fixed.updated_at >= row.created_at).toBe(true);
+    });
+
+    it('deletes only the fact asked for', () => {
+      const a = repo.addProfileFact('Bleibt');
+      const b = repo.addProfileFact('Geht');
+
+      repo.deleteProfileFact(b.id);
+
+      expect(texts()).toContain('Bleibt');
+      expect(texts()).not.toContain('Geht');
+      expect(count('SELECT COUNT(*) AS n FROM profile_facts WHERE id = ?', a.id)).toBe(1);
+    });
+
+    /* The renderer sends the ids in the order the list now reads, so the
+       positions are rewritten to match rather than swapped pairwise. */
+    it('renumbers positions to the order the ids arrive in', () => {
+      const a = repo.addProfileFact('A');
+      const b = repo.addProfileFact('B');
+      const c = repo.addProfileFact('C');
+
+      const rows = repo.reorderProfileFacts([c.id, a.id, b.id]);
+
+      expect(rows.map((f) => f.text)).toEqual(['C', 'A', 'B']);
+      expect(rows.map((f) => f.position)).toEqual([0, 1, 2]);
+      expect(texts()).toEqual(['C', 'A', 'B']);
+    });
+
+    /* A gap left by a delete must not strand the next reorder — positions are
+       assigned from the incoming order, not adjusted from what they were. */
+    it('reorders cleanly after a delete left a gap', () => {
+      const a = repo.addProfileFact('A');
+      const b = repo.addProfileFact('B');
+      const c = repo.addProfileFact('C');
+      repo.deleteProfileFact(b.id);
+
+      const rows = repo.reorderProfileFacts([c.id, a.id]);
+
+      expect(rows.map((f) => f.text)).toEqual(['C', 'A']);
+      expect(rows.map((f) => f.position)).toEqual([0, 1]);
+    });
+  });
+
   it('creates people with cycling colors and kind-scoped link replace', () => {
     const p = repo.createPerson({ name: 'Neue Person' });
     expect(p.initials).toBe('NP');

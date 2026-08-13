@@ -140,6 +140,16 @@ export interface ActivityRow {
   created_at: string;
 }
 
+/* One thing worth knowing about the applicant that neither the CV nor the cover
+   letter says. Belongs to the profile, so it has no application_id. */
+export interface ProfileFactRow {
+  id: number;
+  text: string;
+  position: number;
+  created_at: string;
+  updated_at: string;
+}
+
 /* Input shape for the full-list round replace (db:rounds.set). */
 export interface RoundInput {
   id?: number;
@@ -243,6 +253,14 @@ export interface DbApi {
   activities: {
     add(applicationId: string, author: Author, text: string): Promise<ActivityRow>;
   };
+  profileFacts: {
+    add(text: string): Promise<ProfileFactRow>;
+    update(factId: number, text: string): Promise<ProfileFactRow>;
+    delete(factId: number): Promise<void>;
+    /* Every id, in the order the list now reads; positions are rewritten to
+       match. Resolves to the full list in its new order. */
+    reorder(ids: number[]): Promise<ProfileFactRow[]>;
+  };
 }
 
 /* Everything db:load returns — the renderer's entire domain state. */
@@ -260,4 +278,5 @@ export interface DbSnapshot {
   followups: FollowupRow[];
   documents: DocumentRow[];
   activities: ActivityRow[];
+  profileFacts: ProfileFactRow[];
 }

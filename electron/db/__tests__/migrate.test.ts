@@ -30,6 +30,7 @@ const TABLES = [
   'followups',
   'documents',
   'activities',
+  'profile_facts',
 ];
 
 describe('migrations', () => {
@@ -186,6 +187,28 @@ describe('migrations', () => {
        everything else it had. */
     expect(rows[0]).toEqual({ title: 'Lebenslauf', file_path: null, pdf_path: null });
     expect(rows[1]).toEqual({ title: 'Anschreiben', file_path: null, pdf_path: null });
+  });
+
+  /* Migration 7: the facts that belong to the applicant rather than to any one
+     application, which is why the table has no application_id to cascade from. */
+  it('adds profile_facts without touching what is already there', () => {
+    const db = dbAtVersion(6);
+    db.exec(`
+      INSERT INTO companies (id, name, created_at, updated_at) VALUES (1, 'Acme', 't', 't');
+      INSERT INTO applications (id, role, company_id, interest, stage_id, stage_position, created_at, updated_at)
+        VALUES ('BEW-1', 'Designer', 1, 'HIGH', 'interessiert', 0, 't', 't');
+    `);
+
+    migrate(db);
+
+    const columns = (db.prepare('PRAGMA table_info(profile_facts)').all() as { name: string }[]).map(
+      (c) => c.name,
+    );
+    expect(columns).toEqual(['id', 'text', 'position', 'created_at', 'updated_at']);
+    /* Nothing to migrate into it: the table starts empty on an existing
+       database, and the application that was there is untouched. */
+    expect((db.prepare('SELECT * FROM profile_facts').all() as unknown[]).length).toBe(0);
+    expect((db.prepare('SELECT id FROM applications').all() as { id: string }[])[0].id).toBe('BEW-1');
   });
 
   it('enforces foreign keys', () => {

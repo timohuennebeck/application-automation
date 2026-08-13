@@ -225,4 +225,22 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE documents DROP COLUMN format;
   UPDATE documents SET file_path = NULL WHERE file_path LIKE '%.docx';
   `,
+
+  /* Migration 7: the things worth knowing about the applicant that the CV and
+     the cover letter never say — the ones that make a letter sound like a
+     person wrote it.
+
+     They belong to the profile, not to an application, so there is no
+     application_id and nothing cascades them away. `position` is the order the
+     list is shown and handed over in; it carries no UNIQUE constraint, so
+     reordering is a straight renumber. */
+  `
+  CREATE TABLE profile_facts (
+    id          INTEGER PRIMARY KEY,
+    text        TEXT NOT NULL,
+    position    INTEGER NOT NULL,
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL
+  );
+  `,
 ];

@@ -161,7 +161,8 @@ export function cardSubtitle(st: AppState, id: string): CardSubtitle {
 
   // The next actionable follow-up: the soonest upcoming one if it is within a
   // week, else the most recently missed one — never the oldest overdue slot.
-  const diffs = (st.followupsByApp[id] || []).map((f) => dayDiff(f.due_at));
+  // Sent ones are out of the running; nothing about them is still due.
+  const diffs = (st.followupsByApp[id] || []).filter((f) => !f.completed_at).map((f) => dayDiff(f.due_at));
   const upcoming = diffs.filter((d) => d >= 0).sort((a, b) => a - b)[0];
   const overdue = diffs.filter((d) => d < 0).sort((a, b) => b - a)[0];
   const due = upcoming !== undefined && upcoming <= 7 ? upcoming : overdue;

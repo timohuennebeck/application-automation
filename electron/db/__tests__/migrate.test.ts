@@ -1,7 +1,19 @@
+import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
 import { openDb } from '../open.ts';
 import { migrate } from '../migrate.ts';
 import { MIGRATIONS, STAGES } from '../schema.ts';
+
+/* A database as it stood after `version` migrations — the real thing, not a
+   fully migrated one with its version counter wound back. Only the former
+   still lacks the columns the later migrations add. */
+function dbAtVersion(version: number): DatabaseSync {
+  const db = new DatabaseSync(':memory:');
+  db.exec('PRAGMA foreign_keys = ON');
+  for (let v = 0; v < version; v++) db.exec(MIGRATIONS[v]);
+  db.exec(`PRAGMA user_version = ${version}`);
+  return db;
+}
 
 const TABLES = [
   'meta',
@@ -53,10 +65,8 @@ describe('migrations', () => {
      before it holds the old lower-case spellings, so run migration 1 alone,
      insert those rows, and let migration 2 catch up with them. */
   it('uppercases the pre-enum value sets', () => {
-    const db = openDb(':memory:');
-    db.exec('PRAGMA user_version = 1');
+    const db = dbAtVersion(1);
     db.exec(`
-      DELETE FROM comments; DELETE FROM applications; DELETE FROM companies;
       INSERT INTO companies (id, name, created_at, updated_at) VALUES (1, 'Acme', 't', 't');
       INSERT INTO applications (id, role, company_id, interest, stage_id, stage_position, created_at, updated_at)
         VALUES ('BEW-1', 'Designer', 1, 'high', 'interessiert', 0, 't', 't');
@@ -80,6 +90,25 @@ describe('migrations', () => {
     expect(one<{ kind: string }>("SELECT kind FROM facts WHERE label = 'Gehalt'").kind).toBe('SELECT');
     expect(one<{ kind: string | null }>("SELECT kind FROM facts WHERE label = 'Standort'").kind).toBeNull();
     expect(one<{ kind: string }>('SELECT kind FROM documents').kind).toBe('COVER_LETTER');
+  });
+
+  /* Migration 3 adds followups.completed_at. A database created before it has
+     the rows but not the column, so run migration 2 alone, insert a follow-up,
+     and let migration 3 catch up with it. */
+  it('opens every existing follow-up when it adds completed_at', () => {
+    const db = dbAtVersion(2);
+    db.exec(`
+      INSERT INTO companies (id, name, created_at, updated_at) VALUES (1, 'Acme', 't', 't');
+      INSERT INTO applications (id, role, company_id, interest, stage_id, stage_position, created_at, updated_at)
+        VALUES ('BEW-1', 'Designer', 1, 'HIGH', 'interessiert', 0, 't', 't');
+      INSERT INTO followups (application_id, label, due_at, position)
+        VALUES ('BEW-1', 'Follow up', '2026-08-09', 0);
+    `);
+
+    migrate(db);
+
+    const row = db.prepare('SELECT * FROM followups').get() as { completed_at: string | null };
+    expect(row.completed_at).toBeNull();
   });
 
   it('enforces foreign keys', () => {

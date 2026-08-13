@@ -64,8 +64,18 @@ export function StatusDot({
       return ring(
         <path d="M4.3 7 L9.7 7" fill="none" stroke={accent} strokeWidth="1.6" strokeLinecap="round" />,
       );
-    case DotKind.FILLED:
-      return ring(null, accent);
+    case DotKind.DONE:
+      return ring(
+        <path
+          d="M4.4 7.1 L6.3 9 L9.6 5.2"
+          fill="none"
+          stroke="var(--c-fbfaf7)"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />,
+        accent,
+      );
     default:
       return ring(null, 'none', '2.2 2.2');
   }
@@ -298,25 +308,26 @@ export function ThemeGlyph() {
   );
 }
 
-export function CopyGlyph() {
+/* A clipboard: the board, plus the clip that sits over its top edge. */
+export function ClipboardGlyph() {
   return (
     <svg width="14" height="14" viewBox="0 0 16 16" style={{ flexShrink: 0 }}>
-      <rect
-        x="5.4"
-        y="5.4"
-        width="8.2"
-        height="8.2"
-        rx="1.8"
-        fill="none"
-        stroke="var(--c-77746d)"
-        strokeWidth="1.3"
-      />
       <path
-        d="M10.6 3.6 A1.8 1.8 0 0 0 8.8 2.4 H4.2 A1.8 1.8 0 0 0 2.4 4.2 V8.8 A1.8 1.8 0 0 0 3.6 10.6"
+        d="M6.1 3.2 H4.4 A1.6 1.6 0 0 0 2.8 4.8 V12.6 A1.6 1.6 0 0 0 4.4 14.2 H11.6 A1.6 1.6 0 0 0 13.2 12.6 V4.8 A1.6 1.6 0 0 0 11.6 3.2 H9.9"
         fill="none"
         stroke="var(--c-77746d)"
         strokeWidth="1.3"
         strokeLinecap="round"
+      />
+      <rect
+        x="5.9"
+        y="1.8"
+        width="4.2"
+        height="2.8"
+        rx="1"
+        fill="none"
+        stroke="var(--c-77746d)"
+        strokeWidth="1.3"
       />
     </svg>
   );

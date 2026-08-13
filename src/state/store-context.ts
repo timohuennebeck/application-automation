@@ -180,6 +180,7 @@ export interface AppStore {
   updateComment: (id: string, commentId: number, text: string) => void;
   deleteComment: (id: string, commentId: number) => void;
   setFollowupDue: (id: string, followupId: number, dueISO: string) => void;
+  setFollowupCompleted: (id: string, followupId: number, done: boolean) => void;
   /* Persist a generated draft silently (first open). */
   saveEmailDraft: (id: string, followupId: number, subject: string, body: string) => void;
   /* Persist a re-generated draft behind the loading skeleton. */

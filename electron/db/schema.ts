@@ -188,4 +188,11 @@ export const MIGRATIONS: string[] = [
   UPDATE facts        SET kind     = upper(kind) WHERE kind IS NOT NULL;
   UPDATE documents    SET kind     = upper(replace(kind, '-', '_'));
   `,
+
+  /* Migration 3: a follow-up can be ticked off once it has been sent. NULL is
+     "still open"; the timestamp is what "Erledigt vor 15 Tagen" counts from.
+     Migration 1 stays as it was, so this column only ever arrives here. */
+  `
+  ALTER TABLE followups ADD COLUMN completed_at TEXT;
+  `,
 ];

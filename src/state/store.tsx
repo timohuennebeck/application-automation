@@ -915,6 +915,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [set],
   );
 
+  /* Ticks a follow-up off as sent, or puts it back on the list. The timestamp
+     is what the chip counts "Erledigt vor 15 Tagen" from. */
+  const setFollowupCompleted = useCallback(
+    (id: string, followupId: number, done: boolean) => {
+      const completedAt = done ? new Date().toISOString() : null;
+      set((s) => ({
+        followupsByApp: {
+          ...s.followupsByApp,
+          [id]: (s.followupsByApp[id] || []).map((f) =>
+            f.id === followupId ? { ...f, completed_at: completedAt } : f,
+          ),
+        },
+      }));
+      persist(db()?.followups.setCompleted(followupId, completedAt));
+    },
+    [set],
+  );
+
   /* Drafts are generated once, stored, and then read from the DB — see the
      design spec's followups section. */
   const saveEmailDraft = useCallback(
@@ -1067,6 +1085,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       updateComment,
       deleteComment,
       setFollowupDue,
+      setFollowupCompleted,
       saveEmailDraft,
       regenerateEmail,
       cancelEditRef,

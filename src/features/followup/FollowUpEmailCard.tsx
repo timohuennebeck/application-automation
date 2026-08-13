@@ -1,13 +1,15 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { isoToDate, shiftISO, shiftYM, todayISO } from '../../lib/date';
 import { LinkKind } from '../../shared/enums';
 import { useApp } from '../../state/store-context';
 import { CalendarPopover } from '../../ui/Calendar';
 import { FieldChip } from '../../ui/FieldChip';
 import { PopoverAnchor } from '../../ui/Popover';
-import { Caret, CopyGlyph, KeplerAvatar, RegenGlyph } from '../../ui/icons';
+import { Caret, Check, ClipboardGlyph, KeplerAvatar, RegenGlyph } from '../../ui/icons';
 import { ContactPicker } from '../people/ContactPicker';
 import { draftEmail, type FollowUpSlot } from './schedule';
+
+const COPIED_MS = 1400;
 
 /* Wide enough for "Kontaktperson", the longest label in this card. */
 const LABEL = {
@@ -70,8 +72,19 @@ export function FollowUpEmailCard({
   slots: FollowUpSlot[];
   sel: number;
 }) {
-  const { st, set, emailContactsFor, setEmailContacts, setFollowupDue, saveEmailDraft, regenerateEmail } =
-    useApp();
+  const {
+    st,
+    set,
+    emailContactsFor,
+    setEmailContacts,
+    setFollowupDue,
+    setFollowupCompleted,
+    saveEmailDraft,
+    regenerateEmail,
+  } = useApp();
+
+  const [copied, setCopied] = useState(false);
+  const copiedTimer = useRef<number | undefined>(undefined);
 
   const slot = slots[sel];
   const dueKey = 'due:' + cardId + ':' + sel;
@@ -100,19 +113,41 @@ export function FollowUpEmailCard({
     if (!stored) saveEmailDraft(cardId, slot.id, subject, body);
   }, [stored, cardId, slot.id, subject, body, saveEmailDraft]);
 
-  const rel =
-    slot.diff === 0
+  /* A sent follow-up is not late for anything, so the red urgency gives way to
+     the date it went out. */
+  const rel = slot.done
+    ? '· ' + slot.meta
+    : slot.diff === 0
       ? '· heute'
       : slot.diff === 1
         ? '· morgen'
         : slot.diff > 0
           ? '· in ' + slot.diff + ' Tagen'
           : '· seit ' + -slot.diff + ' Tagen überfällig';
-  const relColor =
-    slot.diff <= 0 ? 'var(--c-c2564c)' : slot.diff <= 2 ? 'var(--c-9a7218)' : 'var(--c-9a978f)';
+  const relColor = slot.done
+    ? 'var(--c-8b8880)'
+    : slot.diff <= 0
+      ? 'var(--c-c2564c)'
+      : slot.diff <= 2
+        ? 'var(--c-9a7218)'
+        : 'var(--c-9a978f)';
 
   const preview = body.split('\n').filter(Boolean)[1] || body;
   const words = body.trim().split(/\s+/).length + ' Wörter';
+
+  /* A sent draft is struck through: subject, preview and body, the parts that
+     were the message. The word count and the labels stay legible. */
+  const sent = slot.done ? ({ textDecoration: 'line-through' } as const) : null;
+
+  /* The tick is cleared on a timer, which has to be dropped if the card goes
+     away first — otherwise it fires into an unmounted component. */
+  const copy = () => {
+    navigator.clipboard?.writeText(subject + '\n\n' + body);
+    setCopied(true);
+    window.clearTimeout(copiedTimer.current);
+    copiedTimer.current = window.setTimeout(() => setCopied(false), COPIED_MS);
+  };
+  useEffect(() => () => window.clearTimeout(copiedTimer.current), []);
 
   return (
     <div
@@ -180,7 +215,15 @@ export function FollowUpEmailCard({
 
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 9 }}>
               <div style={LABEL}>Betreff</div>
-              <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--c-1b1a17)', lineHeight: 1.4 }}>
+              <div
+                style={{
+                  fontSize: 12.5,
+                  fontWeight: 600,
+                  color: 'var(--c-1b1a17)',
+                  lineHeight: 1.4,
+                  ...sent,
+                }}
+              >
                 {subject}
               </div>
             </div>
@@ -224,6 +267,7 @@ export function FollowUpEmailCard({
                       textOverflow: 'ellipsis',
                       minWidth: 0,
                       flex: '1 1 0',
+                      ...sent,
                     }}
                   >
                     {preview}
@@ -251,6 +295,7 @@ export function FollowUpEmailCard({
                   whiteSpace: 'pre-line',
                   textWrap: 'pretty',
                   paddingLeft: 19,
+                  ...sent,
                 }}
               >
                 {body}
@@ -259,12 +304,10 @@ export function FollowUpEmailCard({
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <div
-              className="icon-btn"
-              title="Kopieren"
-              onClick={() => navigator.clipboard?.writeText(subject + '\n\n' + body)}
-            >
-              <CopyGlyph />
+            {/* The glyph turns into a tick for a moment — the only sign that a
+                copy to an invisible clipboard actually happened. */}
+            <div className="icon-btn" title="Kopieren" onClick={copy}>
+              {copied ? <Check size={13} /> : <ClipboardGlyph />}
             </div>
             <div
               className="icon-btn"
@@ -275,6 +318,10 @@ export function FollowUpEmailCard({
               }}
             >
               <RegenGlyph />
+            </div>
+            {/* A switch, not a one-way door: the same button opens it again. */}
+            <div className="icon-btn" onClick={() => setFollowupCompleted(cardId, slot.id, !slot.done)}>
+              <Check size={13} stroke={slot.done ? 'var(--c-1b1a17)' : 'var(--c-77746d)'} />
             </div>
           </div>
         </div>

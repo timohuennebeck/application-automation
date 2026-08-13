@@ -536,6 +536,14 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
       });
     },
 
+    /* Ticks a follow-up off as sent, or puts it back on the list with null. */
+    setFollowupCompleted(followupId: number, completedAt: string | null): FollowupRow {
+      return tx(() => {
+        db.prepare('UPDATE followups SET completed_at = ? WHERE id = ?').run(completedAt, followupId);
+        return getFollowup(followupId);
+      });
+    },
+
     saveFollowupEmail(followupId: number, subject: string, text: string): FollowupRow {
       return tx(() => {
         db.prepare(

@@ -38,6 +38,7 @@ const db: DbApi = {
   } as DbApi['applicationPeople'],
   followups: {
     setDue: invoke('db:followups.setDue'),
+    setCompleted: invoke('db:followups.setCompleted'),
     saveEmail: invoke('db:followups.saveEmail'),
   } as DbApi['followups'],
   activities: { add: invoke('db:activities.add') } as DbApi['activities'],

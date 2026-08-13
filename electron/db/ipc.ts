@@ -23,6 +23,7 @@ export const DB_CHANNELS = {
   'db:people.delete': 'deletePerson',
   'db:applicationPeople.set': 'setApplicationPeople',
   'db:followups.setDue': 'setFollowupDue',
+  'db:followups.setCompleted': 'setFollowupCompleted',
   'db:followups.saveEmail': 'saveFollowupEmail',
   'db:activities.add': 'addActivity',
 } as const satisfies Record<string, keyof Repo>;

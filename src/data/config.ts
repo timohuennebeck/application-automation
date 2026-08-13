@@ -119,14 +119,15 @@ export const Urgency = {
 } as const;
 export type Urgency = (typeof Urgency)[keyof typeof Urgency];
 
-/* Shape of the status ring (ui/icons StatusDot). Columns use every member but
-   FILLED, which belongs to follow-ups and rounds. */
+/* Shape of the status ring (ui/icons StatusDot), shared by the columns and the
+   follow-up chips. */
 export const DotKind = {
   DASHED: 'DASHED',
   PIE: 'PIE',
   CANCEL: 'CANCEL',
   MUTED: 'MUTED',
-  FILLED: 'FILLED',
+  /* Follow-ups only: ticked off as sent. */
+  DONE: 'DONE',
 } as const;
 export type DotKind = (typeof DotKind)[keyof typeof DotKind];
 

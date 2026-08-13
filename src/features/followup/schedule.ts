@@ -1,5 +1,5 @@
 import { DotKind } from '../../data/config';
-import { dayDiff } from '../../lib/date';
+import { dayDiff, relLabel } from '../../lib/date';
 import type { AppState } from '../../state/store-context';
 
 export interface FollowUpSlot {
@@ -9,11 +9,15 @@ export interface FollowUpSlot {
   title: string;
   iso: string;
   diff: number;
-  /* "heute" / "in 9 Tagen" / "überfällig" */
+  /* "heute" / "in 9 Tagen" / "überfällig" / "Erledigt vor 15 Tagen" */
   meta: string;
   dot: string;
   kind: DotKind;
-  /* Overdue and far-future follow-ups are de-emphasised. */
+  /* How full the pie is drawn — how far the wait has run down. */
+  frac: number;
+  /* Ticked off as sent; the date it happened is in the row's completed_at. */
+  done: boolean;
+  /* Done and far-future follow-ups are de-emphasised. */
   dim: number;
   /* The stored draft; null until it has been generated once. */
   emailSubject: string | null;
@@ -26,26 +30,51 @@ export function followUpSlots(st: AppState, cardId: string): FollowUpSlot[] {
 
   return rows.map((f, index) => {
     const diff = dayDiff(f.due_at);
+    /* Once it is sent, the due date stops mattering: no follow-up is overdue
+       that has already gone out. */
+    const done = !!f.completed_at;
     return {
       index,
       id: f.id,
       title: f.label,
       iso: f.due_at,
       diff,
-      meta: diff === 0 ? 'heute' : diff === 1 ? 'morgen' : diff > 0 ? 'in ' + diff + ' Tagen' : 'überfällig',
-      dot: diff < 0 ? 'var(--c-a8523f)' : diff <= 1 ? 'var(--c-d0a03f)' : 'var(--c-c9c5bb)',
-      kind: diff < 0 ? DotKind.FILLED : diff <= 1 ? DotKind.PIE : DotKind.DASHED,
-      dim: diff < 0 || diff > 7 ? 0.5 : 1,
+      meta: done
+        ? 'Erledigt ' + relLabel(dayDiff(f.completed_at!.slice(0, 10)))
+        : diff === 0
+          ? 'heute'
+          : diff === 1
+            ? 'morgen'
+            : diff > 0
+              ? 'in ' + diff + ' Tagen'
+              : 'überfällig',
+      /* One ring that fills up as the date closes in: empty and dashed while
+         there is time, part-filled in amber on the day, all but full in the
+         warning red once the date has passed — and a grey tick once sent. */
+      dot: done
+        ? 'var(--c-c9c5bb)'
+        : diff < 0
+          ? 'var(--c-c2564c)'
+          : diff <= 1
+            ? 'var(--c-d0a03f)'
+            : 'var(--c-c9c5bb)',
+      kind: done ? DotKind.DONE : diff <= 1 ? DotKind.PIE : DotKind.DASHED,
+      /* Not a full turn: at 1 the arc closes on its own start and renders as
+         nothing at all. */
+      frac: diff < 0 ? 0.9 : 0.45,
+      done,
+      dim: done || diff > 7 ? 0.5 : 1,
       emailSubject: f.email_subject,
       emailText: f.email_text,
     };
   });
 }
 
-/* Chip and menu label: names the role, elided to keep the chip compact. */
+/* Chip and menu label: names the role in full. Where it does not fit, the
+   layout truncates it with a real ellipsis — a character budget here would cut
+   mid-word even when there was room to spare. */
 export function slotLabel(slot: FollowUpSlot, role: string): string {
-  const full = slot.index === 0 ? 'Follow up zur Bewerbung als ' + role : slot.title + ': ' + role;
-  return full.length > 32 ? full.slice(0, 32).trim() + '…' : full;
+  return slot.index === 0 ? 'Follow up zur Bewerbung als ' + role : slot.title + ': ' + role;
 }
 
 /* Kepler's drafted follow-up. Tone escalates across the sequence, and the last

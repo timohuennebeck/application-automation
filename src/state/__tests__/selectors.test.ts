@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { SortDir, SortKey } from '../../data/config.ts';
+import { SortDir, SortKey, Urgency } from '../../data/config.ts';
 import { Interest, LinkKind } from '../../shared/enums.ts';
+import { shiftISO, todayISO } from '../../lib/date.ts';
 import type { ApplicationRow, CompanyRow, FactRow } from '../../shared/db-types.ts';
-import { activeFilterCount, isSorted, visibleCards } from '../selectors.ts';
+import { activeFilterCount, cardSubtitle, isSorted, visibleCards } from '../selectors.ts';
 import type { AppState, BoardFilter } from '../store-context.ts';
 
 const application = (
@@ -99,3 +100,38 @@ describe('visibleCards', () => {
   });
 });
 
+/* A card with one follow-up, `dueDays` from today, optionally ticked off. */
+function cardWithFollowup(dueDays: number, completed: boolean): AppState {
+  return {
+    applications: { A: application('A', 'UX Researcher', 1, Interest.LOW, 'LinkedIn') },
+    roundsState: {},
+    followupsByApp: {
+      A: [
+        {
+          id: 1,
+          application_id: 'A',
+          label: 'Follow up',
+          due_at: shiftISO(todayISO(), dueDays),
+          position: 0,
+          email_subject: null,
+          email_text: null,
+          generated_at: null,
+          completed_at: completed ? todayISO() : null,
+        },
+      ],
+    },
+  } as unknown as AppState;
+}
+
+describe('cardSubtitle', () => {
+  it('calls out a follow-up that has come and gone', () => {
+    expect(cardSubtitle(cardWithFollowup(-4, false), 'A')).toEqual({
+      text: '4 Tage überfällig',
+      tone: Urgency.DUE,
+    });
+  });
+
+  it('stops calling it overdue once it has been sent', () => {
+    expect(cardSubtitle(cardWithFollowup(-4, true), 'A').tone).toBe(Urgency.MUTED);
+  });
+});

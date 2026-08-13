@@ -116,6 +116,8 @@ export interface FollowupRow {
   email_subject: string | null;
   email_text: string | null;
   generated_at: string | null;
+  /* When the user ticked the follow-up off as sent; null while it is open. */
+  completed_at: string | null;
 }
 
 export interface DocumentRow {
@@ -235,6 +237,7 @@ export interface DbApi {
   };
   followups: {
     setDue(followupId: number, dueAt: string): Promise<FollowupRow>;
+    setCompleted(followupId: number, completedAt: string | null): Promise<FollowupRow>;
     saveEmail(followupId: number, subject: string, text: string): Promise<FollowupRow>;
   };
   activities: {

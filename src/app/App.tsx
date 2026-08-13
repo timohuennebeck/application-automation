@@ -1,4 +1,5 @@
 import { Board } from '../features/board/Board';
+import { CardContactPicker } from '../features/board/CardContactPicker';
 import { CardMenu } from '../features/board/CardMenu';
 import { NewApplicationModal } from '../features/create/NewApplicationModal';
 import { DetailView } from '../features/detail/DetailView';
@@ -56,6 +57,7 @@ function Shell() {
       <TopBar />
       {st.openCardId ? <DetailView /> : <Board />}
       <CardMenu />
+      <CardContactPicker />
       {st.searchOpen && <SearchPalette />}
       {st.modalOpen && <NewApplicationModal />}
     </div>

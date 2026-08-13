@@ -87,10 +87,12 @@ export function NewApplicationModal() {
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 4 }}>
         <FieldLabel>Beschreibung</FieldLabel>
+        {/* Borderless, like the URL field above it — the label carries the
+            framing, so the box would only add noise. */}
         <textarea
           value={st.jobDescription}
           rows={3}
-          placeholder="Worum geht es in der Rolle?"
+          placeholder="Beschreibung hinzufügen…"
           onChange={(e) => set({ jobDescription: e.target.value })}
           style={{
             fontSize: 13.5,
@@ -98,18 +100,15 @@ export function NewApplicationModal() {
             lineHeight: 1.55,
             fontFamily: 'inherit',
             border: 'none',
-            boxShadow: 'inset 0 0 0 1px var(--c-cfccc3)',
-            borderRadius: 6,
-            padding: '8px 10px',
             outline: 'none',
             resize: 'vertical',
-            background: 'var(--c-fff)',
+            background: 'transparent',
+            padding: 0,
             width: '100%',
             minWidth: 0,
             boxSizing: 'border-box',
           }}
         />
-        <FieldHint>Kurze Notiz zur Stelle. Sie steht später als Zusammenfassung an der Karte.</FieldHint>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 4 }}>

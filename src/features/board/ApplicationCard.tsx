@@ -1,5 +1,5 @@
 import { AGENT_RUNS } from '../../data/sample-data';
-import { INTEREST } from '../../data/config';
+import { CHANNEL_BG, INTEREST } from '../../data/config';
 import type { ColumnDef } from '../../data/config';
 import { Urgency } from '../../data/config';
 import { Interest } from '../../shared/enums';
@@ -97,44 +97,109 @@ export function ApplicationCard({ id, col, ci }: { id: string; col: ColumnDef; c
         {role}
       </div>
       <div style={{ fontSize: 11, color: 'var(--c-77746d)', lineHeight: 1.35 }}>{company}</div>
-      {card.salary && (
-        <div style={{ fontSize: 10.5, color: 'var(--c-5f5c56)', fontWeight: 500 }}>{card.salary}</div>
+      {(card.salary || card.channel) && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+          {card.salary && (
+            <div style={{ fontSize: 10.5, color: 'var(--c-5f5c56)', fontWeight: 500 }}>{card.salary}</div>
+          )}
+          {card.channel && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                flexShrink: 0,
+                marginLeft: card.salary ? 'auto' : 0,
+                fontSize: 10,
+                color: 'var(--c-5f5c56)',
+                background: 'var(--c-f4f2ed)',
+                borderRadius: 999,
+                padding: '1px 7px 1px 5px',
+              }}
+            >
+              <span
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: '50%',
+                  flexShrink: 0,
+                  background: CHANNEL_BG[card.channel] || 'var(--c-b3b0a8)',
+                }}
+              />
+              {card.channel}
+            </div>
+          )}
+        </div>
       )}
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0, marginTop: 1 }}>
-        {contacts.length > 0 && (
-          <>
-            <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-              {contacts.slice(0, 3).map((c, i) => (
-                <Avatar
-                  key={i}
-                  bg={c.bg || 'var(--c-7a5aa8)'}
-                  size={16}
-                  style={{ marginLeft: i ? -5 : 0, zIndex: 10 - i, boxShadow: '0 0 0 1.5px var(--c-fff)' }}
-                >
-                  {initials(c.name) || '?'}
-                </Avatar>
-              ))}
-            </div>
-            <div
-              style={{
-                fontSize: 10.5,
-                color: 'var(--c-5f5c56)',
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                minWidth: 0,
-              }}
-            >
-              {contacts[0].name}
-            </div>
-            {contacts.length > 1 && (
-              <div style={{ fontSize: 10.5, color: 'var(--c-9a978f)', flexShrink: 0 }}>
-                +{contacts.length - 1}
+        {/* Contacts are editable straight from the board; the click must not
+            also open the card. */}
+        <div
+          className="card-contacts"
+          title="Kontaktpersonen ändern"
+          onClick={(e) => {
+            e.stopPropagation();
+            set((s) => ({
+              cardContact: s.cardContact?.id === id ? null : { id, x: e.clientX, y: e.clientY + 12 },
+              contactDraft: '',
+              cardMenu: null,
+            }));
+          }}
+          style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0, borderRadius: 6 }}
+        >
+          {contacts.length > 0 ? (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                {contacts.slice(0, 3).map((c, i) => (
+                  <Avatar
+                    key={i}
+                    bg={c.bg || 'var(--c-7a5aa8)'}
+                    size={16}
+                    style={{ marginLeft: i ? -5 : 0, zIndex: 10 - i, boxShadow: '0 0 0 1.5px var(--c-fff)' }}
+                  >
+                    {initials(c.name) || '?'}
+                  </Avatar>
+                ))}
               </div>
-            )}
-          </>
-        )}
+              <div
+                style={{
+                  fontSize: 10.5,
+                  color: 'var(--c-5f5c56)',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  minWidth: 0,
+                }}
+              >
+                {contacts[0].name}
+              </div>
+              {contacts.length > 1 && (
+                <div style={{ fontSize: 10.5, color: 'var(--c-9a978f)', flexShrink: 0 }}>
+                  +{contacts.length - 1}
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <Avatar bg="var(--c-dedbd4)" size={16} style={{ color: 'var(--c-8b8880)' }}>
+                –
+              </Avatar>
+              <div
+                style={{
+                  fontSize: 10.5,
+                  color: 'var(--c-9a978f)',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  minWidth: 0,
+                }}
+              >
+                Kein Kontakt ausgewählt
+              </div>
+            </>
+          )}
+        </div>
         {!run && !interview && (
           <div
             style={{

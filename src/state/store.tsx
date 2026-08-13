@@ -58,6 +58,7 @@ const initialState = (): AppState => ({
   commentDraft: '',
   openCardId: null,
   cardMenu: null,
+  cardContact: null,
   modalOpen: false,
   multiple: false,
   ...EMPTY_DRAFT,
@@ -478,6 +479,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ...CLOSED_EDITORS,
         openCardId: id,
         cardMenu: null,
+        cardContact: null,
         emailLoading: false,
         emailExpanded: false,
         followupSel: 0,
@@ -563,6 +565,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           roundExpanded: drop(s.roundExpanded),
           roundSel: drop(s.roundSel),
           cardMenu: null,
+          cardContact: null,
           openCardId: s.openCardId === id ? null : s.openCardId,
           dragId: null,
           overCol: null,
@@ -972,8 +975,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const s = stRef.current;
       if (e.key === 'Escape') {
         if (s.cardMenu) set({ cardMenu: null });
-        else if (s.searchOpen) set({ searchOpen: false });
         else if (s.personEdit) savePerson();
+        else if (s.cardContact) set({ cardContact: null, contactDraft: '' });
+        else if (s.searchOpen) set({ searchOpen: false });
         else if (s.contactEdit) set({ contactEdit: null });
         else if (s.roundPop) set({ roundPop: null });
         else if (s.roundEdit) set({ roundEdit: null, roundDraft: null, roundPop: null });
@@ -1018,6 +1022,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA')) ae.blur();
       if (s.dropdown) set({ dropdown: null });
       if (s.cardMenu) set({ cardMenu: null });
+      if (s.cardContact) set({ cardContact: null, contactDraft: '' });
       if (s.commentMenu) set({ commentMenu: null });
       if (s.personEdit) savePerson();
       if (s.contactEdit) set({ contactEdit: null });

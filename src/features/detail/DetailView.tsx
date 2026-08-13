@@ -77,15 +77,15 @@ function RoleHeading({ cardId, role, locked }: { cardId: string; role: string; l
           writeField(cardId, 'Berufsbezeichnung', st.editDraft.trim());
           set({ editing: null });
         }}
+        /* Same type on the same ground as the heading it replaces: entering
+           the editor adds a caret and nothing else. */
         style={{
           ...style,
           fontFamily: 'inherit',
           boxSizing: 'border-box',
-          border: '1px solid var(--c-cfccc3)',
-          borderRadius: 6,
-          padding: '1px 5px',
-          marginLeft: -6,
-          background: 'var(--c-fff)',
+          border: 'none',
+          padding: 0,
+          background: 'transparent',
           outline: 'none',
         }}
       />

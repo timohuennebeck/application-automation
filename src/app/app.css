@@ -40,6 +40,17 @@
 .kb-card:hover {
   box-shadow: 0 2px 6px var(--s-10);
 }
+/* The contact row is its own click target inside the card. It shrinks before
+   the due-date text beside it does. */
+.card-contacts {
+  padding: 1px 4px;
+  margin-left: -4px;
+  min-width: 0;
+  cursor: pointer;
+}
+.card-contacts:hover {
+  background: var(--c-f1efe9);
+}
 
 /* Inline editable chips (grey pill fields) */
 .chip {

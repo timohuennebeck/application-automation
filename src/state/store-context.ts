@@ -53,8 +53,10 @@ export interface BoardFilter {
   interests: Interest[];
 }
 
-/* Position of the board context menu, in viewport coordinates. */
-export interface CardMenuState {
+/* A board card plus a viewport position — used by the surfaces that float at
+   the cursor rather than inside the column: the context menu and the card's
+   contact picker. Both have to escape the board's scroll container. */
+export interface CardPointerState {
   id: string;
   x: number;
   y: number;
@@ -106,7 +108,9 @@ export interface AppState {
   commentEditDraft: string;
   commentDraft: string;
   openCardId: string | null;
-  cardMenu: CardMenuState | null;
+  cardMenu: CardPointerState | null;
+  /* The card whose contacts are being edited straight from the board. */
+  cardContact: CardPointerState | null;
   modalOpen: boolean;
   multiple: boolean;
   /* The create dialog's inputs: posting URL, free-text description and the

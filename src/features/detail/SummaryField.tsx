@@ -34,16 +34,17 @@ export function SummaryField({
           saveSummary(cardId, st.editDraft.trim() || summary);
           set({ editing: null });
         }}
+        /* Reads exactly like the text it replaces — same type, padding and
+           ground, so entering the editor only adds a caret. */
         style={
           {
             display: 'block',
+            fontFamily: 'inherit',
             fontSize: 12.5,
-            color: 'var(--c-3d3a34)',
+            color: 'var(--c-5f5c56)',
             lineHeight: 1.6,
-            background: 'var(--c-fff)',
+            background: 'transparent',
             border: 'none',
-            boxShadow: 'inset 0 0 0 1px var(--c-cfccc3)',
-            borderRadius: 6,
             padding: '8px 10px',
             outline: 'none',
             resize: 'none',

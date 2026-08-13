@@ -5,8 +5,7 @@ import type { ContactEntry } from '../../state/store-context';
 import { FieldChip } from '../../ui/FieldChip';
 import { Popover, PopoverVariant } from '../../ui/Popover';
 import { Avatar } from '../../ui/icons';
-import { PeoplePicker } from './PeoplePicker';
-import { PersonEditCard } from './PersonEditCard';
+import { ContactPickerBody } from './ContactPickerBody';
 
 /* Contact chip plus its picker popover. `popKey` keeps the sidebar copy and the
    follow-up copy independent, since both can be on screen at once. */
@@ -32,50 +31,8 @@ export function ContactPicker({
   avatarSize?: number;
   align?: 'left' | 'right';
 }) {
-  const { st, set, peopleForCard, savePerson, deletePerson } = useApp();
+  const { st, set } = useApp();
   const open = st.contactEdit === popKey;
-  const editing = st.personEdit?.forContact === popKey && st.personEdit.id === cardId ? st.personEdit : null;
-
-  const toggle = (key: string) => {
-    const p = peopleForCard(cardId).find((s) => s.key === key);
-    if (!p) return;
-    const pid = Number(key);
-    const sel = list.some((c) => c.personId === pid);
-    onSave(
-      sel
-        ? list.filter((c) => c.personId !== pid)
-        : list.concat([
-            {
-              personId: pid,
-              name: p.name,
-              role: p.role || '',
-              email: p.email || '',
-              phone: p.phone || '',
-              linkedin: p.linkedin || '',
-              bg: p.bg,
-            },
-          ]),
-    );
-  };
-
-  /* The person row is only written to the DB once the editor is saved with a
-     name (savePerson); until then the draft lives under the 'pending' key. */
-  const startCreate = (name: string) =>
-    set({
-      personEdit: {
-        id: cardId,
-        ri: -1,
-        key: 'pending',
-        isNew: true,
-        forContact: popKey,
-        contactStore: store,
-      },
-      personDraft: { name, role: '', email: '', phone: '', linkedin: '' },
-      personField: 'name',
-      personFieldDraft: name,
-      editing: null,
-      dropdown: null,
-    });
 
   const stack = (list.length ? list : [{ name: '?', bg: 'var(--c-b3b0a8)' }]).slice(0, 3);
   const label =
@@ -132,25 +89,15 @@ export function ContactPicker({
           width={288}
           style={{ maxWidth: 'calc(100vw - 48px)' }}
         >
-          {editing ? (
-            <PersonEditCard
-              personKey={editing.key}
-              canDelete={false}
-              onDelete={() => deletePerson(cardId, editing.key, true)}
-              onDone={savePerson}
-            />
-          ) : (
-            <PeoplePicker
-              draft={st.contactDraft}
-              onDraftChange={(v) => set({ contactDraft: v })}
-              company={company}
-              people={peopleForCard(cardId)}
-              isSelected={(key) => list.some((c) => c.personId === Number(key))}
-              onToggle={toggle}
-              onCreate={startCreate}
-              onClose={() => set({ contactEdit: null, contactDraft: '' })}
-            />
-          )}
+          <ContactPickerBody
+            popKey={popKey}
+            cardId={cardId}
+            company={company}
+            list={list}
+            onSave={onSave}
+            store={store}
+            onClose={() => set({ contactEdit: null, contactDraft: '' })}
+          />
         </Popover>
       )}
     </>

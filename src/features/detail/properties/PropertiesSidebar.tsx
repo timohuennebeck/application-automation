@@ -58,7 +58,7 @@ export function PropertiesSidebar({ cardId, role, company, columnIndex }: Proper
     Branche: { value: comp?.sector || 'nicht angegeben' },
     Mitarbeiterzahl: { value: comp?.headcount || 'nicht angegeben' },
     Karriereseite: { value: comp?.website || '—', link: true },
-    'E-Mail': { value: comp?.email || '—', link: true },
+    Email: { value: comp?.email || '—', link: true },
     Telefon: { value: comp?.phone || '—' },
   };
   /* Gehalt has no placeholder: its two dropdowns say "von"/"bis" themselves. */

@@ -202,4 +202,12 @@ export const MIGRATIONS: string[] = [
   `
   ALTER TABLE applications DROP COLUMN last_contact_at;
   `,
+
+  /* Migration 5: "E-Mail" is spelled "Email" throughout. The channel is one of
+     the few labels that is also a stored value, so the rows move with it —
+     otherwise a card would keep a channel no dropdown offers. */
+  `
+  UPDATE applications SET channel     = 'Email' WHERE channel     = 'E-Mail';
+  UPDATE applications SET applied_via = 'Email' WHERE applied_via = 'E-Mail';
+  `,
 ];

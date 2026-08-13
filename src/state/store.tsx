@@ -112,7 +112,7 @@ const COMPANY_FIELD: Record<string, 'sector' | 'headcount' | 'website' | 'email'
   Branche: 'sector',
   Mitarbeiterzahl: 'headcount',
   Karriereseite: 'website',
-  'E-Mail': 'email',
+  Email: 'email',
   Telefon: 'phone',
 };
 const DATE_COLUMNS = new Set(['Beworben am']);

@@ -39,10 +39,10 @@ const ROUTED_LABELS = new Set([
   'Branche',
   'Mitarbeiterzahl',
   'Karriereseite',
-  'E-Mail',
+  'Email',
   'Telefon',
   'Kontaktperson',
-  'Kontaktperson E-Mail',
+  'Kontaktperson Email',
   'Kontaktperson Telefon',
   'Kontaktperson LinkedIn',
 ]);
@@ -148,7 +148,7 @@ export function seedIfEmpty(db: DatabaseSync, now = new Date()): boolean {
         factValue(id, 'Branche') ?? null,
         factValue(id, 'Mitarbeiterzahl') ?? null,
         factValue(id, 'Karriereseite') ?? null,
-        factValue(id, 'E-Mail') ?? null,
+        factValue(id, 'Email') ?? null,
         factValue(id, 'Telefon') ?? null,
         nowISO,
         nowISO,
@@ -255,7 +255,7 @@ export function seedIfEmpty(db: DatabaseSync, now = new Date()): boolean {
             'UPDATE people SET email = COALESCE(email, ?), phone = COALESCE(phone, ?), linkedin = COALESCE(linkedin, ?) WHERE id = ?',
           );
           upd.run(
-            factValue(appId, 'Kontaktperson E-Mail') ?? null,
+            factValue(appId, 'Kontaktperson Email') ?? null,
             factValue(appId, 'Kontaktperson Telefon') ?? null,
             factValue(appId, 'Kontaktperson LinkedIn') ?? null,
             row.id,

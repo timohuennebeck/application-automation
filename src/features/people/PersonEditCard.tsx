@@ -13,7 +13,7 @@ interface FieldDef {
 const FIELDS: FieldDef[] = [
   { label: 'Name', prop: 'name', placeholder: '—' },
   { label: 'Position', prop: 'role', placeholder: '—' },
-  { label: 'E-Mail', prop: 'email', placeholder: '—', link: true },
+  { label: 'Email', prop: 'email', placeholder: '—', link: true },
   { label: 'Telefon', prop: 'phone', placeholder: '—' },
   { label: 'LinkedIn', prop: 'linkedin', placeholder: '—', link: true },
 ];

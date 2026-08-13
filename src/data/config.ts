@@ -27,7 +27,7 @@ export const CHANNEL_BG: Record<string, string> = {
   Indeed: 'var(--c-5f5aa8)',
   StepStone: 'var(--c-7a5aa8)',
   Karriereseite: 'var(--c-5b7a5e)',
-  'E-Mail': 'var(--c-3f7f9e)',
+  Email: 'var(--c-3f7f9e)',
   Recruiter: 'var(--c-a8523f)',
   Empfehlung: 'var(--c-a4762f)',
   Initiativbewerbung: 'var(--c-a8497a)',
@@ -289,6 +289,6 @@ export const SORT_OPTIONS: [SortKey, string, SortDir][] = [
 export const SECTIONS: [string, string[]][] = [
   ['Bewerbung', ['Plattform', 'Beworben via', 'Beworben am']],
   ['Position', ['Berufsbezeichnung', 'Standort', 'Gehalt', 'Erfahrung']],
-  ['Unternehmen', ['Firma', 'Branche', 'Mitarbeiterzahl', 'Karriereseite', 'E-Mail', 'Telefon']],
+  ['Unternehmen', ['Firma', 'Branche', 'Mitarbeiterzahl', 'Karriereseite', 'Email', 'Telefon']],
 ];
 export const DATE_FIELDS: Record<string, boolean> = { 'Beworben am': true };

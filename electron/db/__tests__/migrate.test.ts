@@ -132,6 +132,29 @@ describe('migrations', () => {
     expect(row).toMatchObject({ role: 'Designer', applied_at: '2026-07-19' });
   });
 
+  /* Migration 5 renames the stored channel value along with its label, so a
+     card already on "E-Mail" keeps its colour and stays selectable. */
+  it('renames the E-Mail channel on both columns it can sit in', () => {
+    const db = dbAtVersion(4);
+    db.exec(`
+      INSERT INTO companies (id, name, created_at, updated_at) VALUES (1, 'Acme', 't', 't');
+      INSERT INTO applications (id, role, company_id, interest, channel, applied_via, stage_id, stage_position, created_at, updated_at)
+        VALUES ('BEW-1', 'Designer', 1, 'HIGH', 'E-Mail', 'E-Mail', 'interessiert', 0, 't', 't');
+      INSERT INTO applications (id, role, company_id, interest, channel, applied_via, stage_id, stage_position, created_at, updated_at)
+        VALUES ('BEW-2', 'Texter', 1, 'LOW', 'LinkedIn', NULL, 'interessiert', 1, 't', 't');
+    `);
+
+    migrate(db);
+
+    const rows = db.prepare('SELECT id, channel, applied_via FROM applications ORDER BY id').all() as {
+      id: string;
+      channel: string | null;
+      applied_via: string | null;
+    }[];
+    expect(rows[0]).toEqual({ id: 'BEW-1', channel: 'Email', applied_via: 'Email' });
+    expect(rows[1]).toEqual({ id: 'BEW-2', channel: 'LinkedIn', applied_via: null });
+  });
+
   it('enforces foreign keys', () => {
     const db = openDb(':memory:');
     expect(() =>

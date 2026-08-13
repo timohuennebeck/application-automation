@@ -37,6 +37,53 @@ function useCard(cardId: string) {
   };
 }
 
+/* The role heading, editable in place. Writes go through the same routed
+   field as the sidebar's Berufsbezeichnung, so both stay in step. */
+function RoleHeading({ cardId, role, locked }: { cardId: string; role: string; locked: boolean }) {
+  const { st, set, writeField, cancelEditRef } = useApp();
+  const style = {
+    fontSize: 21, fontWeight: 600, color: 'var(--c-1b1a17)', lineHeight: 1.2,
+    letterSpacing: '-0.01em', width: '100%', minWidth: 0,
+  } as const;
+
+  if (st.editing === TITLE_KEY) {
+    return (
+      <input
+        value={st.editDraft}
+        autoFocus
+        onChange={(e) => set({ editDraft: e.target.value })}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') e.currentTarget.blur();
+          else if (e.key === 'Escape') { e.stopPropagation(); cancelEditRef.current = true; e.currentTarget.blur(); }
+        }}
+        onBlur={() => {
+          if (cancelEditRef.current) { cancelEditRef.current = false; set({ editing: null }); return; }
+          writeField(cardId, 'Berufsbezeichnung', st.editDraft.trim());
+          set({ editing: null });
+        }}
+        style={{
+          ...style, fontFamily: 'inherit', boxSizing: 'border-box',
+          border: '1px solid var(--c-cfccc3)', borderRadius: 6, padding: '1px 5px', marginLeft: -6,
+          background: 'var(--c-fff)', outline: 'none',
+        }}
+      />
+    );
+  }
+
+  return (
+    <div
+      title={locked ? undefined : 'Bezeichnung ändern'}
+      onClick={() => { if (!locked) set({ editing: TITLE_KEY, editDraft: role, dropdown: null }); }}
+      style={{ ...style, textWrap: 'pretty', cursor: locked ? 'not-allowed' : 'text' }}
+    >
+      {role}
+    </div>
+  );
+}
+
+/* Shares AppState.editing with the sidebar fields, so opening one closes the other. */
+const TITLE_KEY = 'title';
+
 export function DetailView() {
   const { st, set, deleteCard } = useApp();
   const cardId = st.openCardId!;
@@ -83,10 +130,8 @@ export function DetailView() {
           {/* Pinned head of the page: identity and summary stay in view. */}
           <div style={{ display: 'flex', gap: 13, flexShrink: 0, padding: '6px 24px 0', maxWidth: CONTENT_MAX, boxSizing: 'border-box' }}>
             <Avatar bg={CHANNEL_BG[card.channel] || 'var(--c-8b8880)'} size={36} fontSize={15}>{card.company[0]}</Avatar>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
-              <div style={{ fontSize: 21, fontWeight: 600, color: 'var(--c-1b1a17)', lineHeight: 1.2, letterSpacing: '-0.01em', textWrap: 'pretty' }}>
-                {card.role}
-              </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0, flex: '1 1 0' }}>
+              <RoleHeading cardId={cardId} role={card.role} locked={!!run} />
               <div style={{ fontSize: 12.5, color: 'var(--c-8b8880)', lineHeight: 1.4 }}>
                 {card.companyFull.replace(/,\s*/g, ' · ')} ·{' '}
                 <a href="#" style={{ textDecoration: 'none' }}>

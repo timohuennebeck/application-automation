@@ -746,14 +746,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const k = (e.key || '').toLowerCase();
       if (k === 'enter' && s.roundEdit) { e.preventDefault(); saveRound(); }
       else if (k === 'enter' && s.modalOpen) { e.preventDefault(); createCard(); }
-      else if (k === 'b') { e.preventDefault(); set({ modalOpen: true }); }
+      else if (k === 't') { e.preventDefault(); toggleTheme(); }
       else if (k === 'k') { e.preventDefault(); set((s2) => ({ searchOpen: !s2.searchOpen, searchQ: '' })); }
       else if (k === 'c') {
         // Never steal ⌘C from a real copy: text fields own their own selection,
         // and Chromium does not report it through window.getSelection().
         const ae = document.activeElement;
         const inField = !!ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA');
-        if (!inField && !window.getSelection()?.toString()) { e.preventDefault(); toggleTheme(); }
+        if (!inField && !window.getSelection()?.toString()) { e.preventDefault(); set({ modalOpen: true }); }
       }
     };
 

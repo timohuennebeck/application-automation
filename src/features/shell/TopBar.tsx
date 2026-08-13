@@ -19,7 +19,7 @@ export function TopBar() {
       </div>
       <div className="top-btn no-drag" title="Bewerbung anlegen" onClick={() => set({ modalOpen: true })}>
         <div>Bewerbung anlegen</div>
-        <div className="kbd">⌘B</div>
+        <div className="kbd">⌘C</div>
       </div>
       <div
         className="top-btn no-drag"
@@ -28,7 +28,7 @@ export function TopBar() {
       >
         <ThemeGlyph />
         <div>Theme wechseln</div>
-        <div className="kbd">⌘C</div>
+        <div className="kbd">⌘T</div>
       </div>
     </div>
   );

@@ -85,7 +85,7 @@ export function FactList() {
           <input
             value={st.profileFactDraft}
             autoFocus
-            placeholder="Ich war 2022 in Kolumbien..."
+            placeholder="Ich habe mal in Kolumbien gelebt..."
             onChange={(e) => set({ profileFactDraft: e.target.value })}
             onKeyDown={(e) => {
               if (e.key === 'Enter') e.currentTarget.blur();

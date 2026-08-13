@@ -1,5 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell } from 'electron';
-import { rmSync } from 'node:fs';
+import { rmSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { openDb } from './db/open.ts';
@@ -7,12 +7,14 @@ import { seedIfEmpty } from './db/seed.ts';
 import { createRepo } from './db/repo.ts';
 import { registerDbIpc } from './db/ipc.ts';
 import {
+  copyCommentAttachment,
   copyDocument,
   copyTemplate,
   documentPaths,
   documentSize,
   listTemplates,
   purgeApplicationFiles,
+  removeStoredFile,
   resolveDocumentPath,
   templatePath,
 } from './files.ts';
@@ -141,6 +143,36 @@ ipcMain.handle('documents:open', (_e, filePath: string) =>
   shell.openPath(resolveDocumentPath(app.getPath('userData'), filePath)),
 );
 
+/* Comment attachments: any file type, several at once. Unlike documents there
+   is no fixed slot, so the picker is unfiltered and multi-select. */
+
+/* Every source picked this session. openSource refuses anything else, so the
+   renderer can only hand the OS paths the user chose in the dialog. */
+const pickedAttachmentSources = new Set<string>();
+
+ipcMain.handle('attachments:pick', async (_e, title: string) => {
+  const res = await dialog.showOpenDialog(win!, {
+    title,
+    properties: ['openFile', 'multiSelections'],
+  });
+  if (res.canceled || res.filePaths.length === 0) return null;
+  for (const p of res.filePaths) pickedAttachmentSources.add(p);
+  return res.filePaths.map((p) => ({ path: p, name: path.basename(p), size: statSync(p).size }));
+});
+
+/* Opens a staged source that has not been sent yet — the copy in userData only
+   exists after send, so this opens the original. '' on success, else the reason. */
+ipcMain.handle('attachments:openSource', (_e, sourcePath: string) => {
+  if (!pickedAttachmentSources.has(sourcePath)) return 'Unbekannte Datei.';
+  return shell.openPath(sourcePath);
+});
+
+/* Copies the staged sources into userData at send time; the comment's rows are
+   only written from what this returns, so a row never points at missing bytes. */
+ipcMain.handle('attachments:copy', (_e, applicationId: string, sourcePaths: string[]) =>
+  sourcePaths.map((p) => copyCommentAttachment(app.getPath('userData'), applicationId, p)),
+);
+
 /* Profile templates: the two documents that are not tied to an application.
    They share the picker above, so the extension is checked once more in
    copyTemplate before anything is written. */
@@ -162,6 +194,7 @@ function initDb(): boolean {
     seedIfEmpty(db);
     registerDbIpc(createRepo(db), {
       afterDeleteApplication: (id) => purgeApplicationFiles(app.getPath('userData'), id),
+      afterDeleteComment: (paths) => paths.forEach((p) => removeStoredFile(app.getPath('userData'), p)),
     });
     return true;
   } catch (err) {

@@ -5,7 +5,7 @@
    Everything here takes the userData root as its first argument rather than
    reaching for Electron's app.getPath, which keeps it testable and keeps the
    Electron import out of the pure parts. */
-import { copyFileSync, mkdirSync, rmSync, statSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, rmSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { toISO } from '../src/lib/date.ts';
 import type { TemplateInfo } from '../src/shared/domain.ts';
@@ -103,6 +103,62 @@ export function documentSize(userDataPath: string, storedPath: string): number |
   } catch {
     return null;
   }
+}
+
+/* ── Comment attachments ──────────────────────────────────────────────────
+   Arbitrary files attached to a comment, kept under
+   documents/<applicationId>/attachments/ so purging an application takes them
+   with it. Unlike documents there are many per comment with user-chosen names,
+   so the stored name is sanitized and de-collided instead of fixed per kind. */
+
+/* Display name → one safe path segment. The name comes from whatever the user
+   picked, so separators and control characters must not survive into a path. */
+function sanitizeAttachmentName(name: string): string {
+  const cleaned = Array.from(path.basename(name), (ch) =>
+    ch < ' ' || '/\\:*?"<>|'.includes(ch) ? '-' : ch,
+  ).join('');
+  const base = cleaned.replace(/^\.+/, '').trim();
+  if (!base) return 'anhang';
+  if (base.length <= 120) return base;
+  const ext = path.extname(base);
+  return base.slice(0, 120 - ext.length) + ext;
+}
+
+export interface AttachmentCopy {
+  /* Relative to userData, what comment_attachments.file_path stores. */
+  filePath: string;
+  /* The name the file was picked under, for display. */
+  name: string;
+  size: number;
+}
+
+/* Copies a picked file into the comment's application folder and reports what
+   to hand db:comments.add. Two picks of the same name coexist as x.pdf and
+   x-2.pdf — attachments are immutable, so nothing may be overwritten. */
+export function copyCommentAttachment(
+  userDataPath: string,
+  applicationId: string,
+  sourcePath: string,
+): AttachmentCopy {
+  const dir = path.join(applicationDir(userDataPath, applicationId), 'attachments');
+  mkdirSync(dir, { recursive: true });
+  const safe = sanitizeAttachmentName(sourcePath);
+  const ext = path.extname(safe);
+  const stem = safe.slice(0, safe.length - ext.length);
+  let name = safe;
+  for (let n = 2; existsSync(path.join(dir, name)); n++) name = `${stem}-${n}${ext}`;
+  copyFileSync(sourcePath, path.join(dir, name));
+  return {
+    filePath: path.join('documents', applicationId, 'attachments', name),
+    name: path.basename(sourcePath),
+    size: statSync(path.join(dir, name)).size,
+  };
+}
+
+/* Removes one stored file, e.g. when its comment is deleted. Tolerates a file
+   that is already gone; refuses anything outside the documents folder. */
+export function removeStoredFile(userDataPath: string, storedPath: string): void {
+  rmSync(resolveDocumentPath(userDataPath, storedPath), { force: true });
 }
 
 /* ── Profile templates ────────────────────────────────────────────────────

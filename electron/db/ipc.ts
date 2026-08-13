@@ -38,6 +38,9 @@ export const DB_CHANNELS = {
    one layer that knows about both. */
 export interface DbIpcHooks {
   afterDeleteApplication?: (applicationId: string) => void;
+  /* Receives what deleteComment returns: the attachment paths whose rows just
+     cascaded away. */
+  afterDeleteComment?: (removedPaths: string[]) => void;
 }
 
 export function registerDbIpc(repo: Repo, hooks: DbIpcHooks = {}): void {
@@ -46,6 +49,7 @@ export function registerDbIpc(repo: Repo, hooks: DbIpcHooks = {}): void {
     ipcMain.handle(channel, (_e, ...args: unknown[]) => {
       const out = fn(...args);
       if (method === 'deleteApplication') hooks.afterDeleteApplication?.(args[0] as string);
+      if (method === 'deleteComment') hooks.afterDeleteComment?.(out as string[]);
       return out;
     });
   }

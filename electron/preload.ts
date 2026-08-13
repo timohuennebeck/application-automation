@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { DbApi } from '../src/shared/db-types.ts';
+import type { AttachmentInput, DbApi } from '../src/shared/db-types.ts';
 import type { DocumentUpload, TemplateInfo } from '../src/shared/domain.ts';
 import type { DocumentKind, TemplateKind } from '../src/shared/enums.ts';
 
@@ -73,6 +73,20 @@ const api = {
       ipcRenderer.invoke('documents:sizes', filePaths),
     /* Hands the file to the OS; resolves to '' on success, else the reason. */
     open: (filePath: string): Promise<string> => ipcRenderer.invoke('documents:open', filePath),
+  },
+  /* Files attached to comments. Picking only stages sources in the renderer;
+     copy() puts the bytes into userData at send time and resolves to what
+     db.comments.add stores. */
+  attachments: {
+    /* Multi-select, any file type; null when the dialog was cancelled. */
+    pick: (title: string): Promise<{ path: string; name: string; size: number }[] | null> =>
+      ipcRenderer.invoke('attachments:pick', title),
+    copy: (applicationId: string, sourcePaths: string[]): Promise<AttachmentInput[]> =>
+      ipcRenderer.invoke('attachments:copy', applicationId, sourcePaths),
+    /* Opens a still-staged source file with the OS; '' on success, else the
+       reason. Only paths returned by pick() are accepted. */
+    openSource: (sourcePath: string): Promise<string> =>
+      ipcRenderer.invoke('attachments:openSource', sourcePath),
   },
   /* The two profile-wide templates. There is no database behind these — the
      file on disk is the state, so every call reads it fresh. */

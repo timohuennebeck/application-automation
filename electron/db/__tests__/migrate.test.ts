@@ -31,6 +31,7 @@ const TABLES = [
   'documents',
   'activities',
   'profile_facts',
+  'comment_attachments',
 ];
 
 describe('migrations', () => {

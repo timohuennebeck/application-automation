@@ -243,4 +243,20 @@ export const MIGRATIONS: string[] = [
     updated_at  TEXT NOT NULL
   );
   `,
+
+  /* Migration 8: files attached to a comment. The bytes live under
+     documents/<application_id>/attachments/; the row keeps the name the file
+     was picked under, since the stored name is sanitized and de-collided.
+     `size` is captured at copy time — the file never changes after send. */
+  `
+  CREATE TABLE comment_attachments (
+    id          INTEGER PRIMARY KEY,
+    comment_id  INTEGER NOT NULL REFERENCES comments(id) ON DELETE CASCADE,
+    name        TEXT NOT NULL,
+    file_path   TEXT NOT NULL,
+    size        INTEGER NOT NULL,
+    created_at  TEXT NOT NULL
+  );
+  CREATE INDEX idx_comment_attachments_comment ON comment_attachments(comment_id);
+  `,
 ];

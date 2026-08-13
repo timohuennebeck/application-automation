@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { DocumentKind, TemplateKind } from '../../src/shared/enums.ts';
 import { toISO } from '../../src/lib/date.ts';
 import {
+  copyCommentAttachment,
   copyDocument,
   copyTemplate,
   documentFileName,
@@ -12,6 +13,7 @@ import {
   isHtml,
   listTemplates,
   purgeApplicationFiles,
+  removeStoredFile,
   resolveDocumentPath,
   templatePath,
 } from '../files.ts';
@@ -131,6 +133,64 @@ describe('resolveDocumentPath', () => {
   });
 });
 
+describe('copyCommentAttachment', () => {
+  it('files the copy under attachments/ and reports path, name and size', () => {
+    const copy = copyCommentAttachment(root, 'BEW-33', source('Zeugnis 2024.pdf', 'pdf bytes'));
+
+    expect(copy).toEqual({
+      filePath: path.join('documents', 'BEW-33', 'attachments', 'Zeugnis 2024.pdf'),
+      name: 'Zeugnis 2024.pdf',
+      size: 9,
+    });
+    expect(readFileSync(path.join(root, copy.filePath), 'utf8')).toBe('pdf bytes');
+  });
+
+  it('keeps two picks of the same name apart instead of overwriting', () => {
+    mkdirSync(path.join(root, 'elsewhere'));
+    const a = copyCommentAttachment(root, 'BEW-33', source('x.pdf', 'first'));
+    const b = copyCommentAttachment(root, 'BEW-33', source(path.join('elsewhere', 'x.pdf'), 'second'));
+
+    expect(path.basename(a.filePath)).toBe('x.pdf');
+    expect(path.basename(b.filePath)).toBe('x-2.pdf');
+    expect(readFileSync(path.join(root, a.filePath), 'utf8')).toBe('first');
+    expect(readFileSync(path.join(root, b.filePath), 'utf8')).toBe('second');
+    /* The display name is the picked one either way. */
+    expect(b.name).toBe('x.pdf');
+  });
+
+  it('stores a hostile name flattened, never escaping the folder', () => {
+    mkdirSync(path.join(root, 'evil'));
+    const copy = copyCommentAttachment(root, 'BEW-33', source(path.join('evil', '..pass..wd')));
+
+    expect(path.dirname(copy.filePath)).toBe(path.join('documents', 'BEW-33', 'attachments'));
+    expect(path.basename(copy.filePath)).toBe('pass..wd');
+  });
+
+  it('refuses an id that would climb out of the documents folder', () => {
+    expect(() => copyCommentAttachment(root, '../keep', source('a.pdf'))).toThrow(/id/i);
+  });
+});
+
+describe('removeStoredFile', () => {
+  it('removes the file it is pointed at', () => {
+    const copy = copyCommentAttachment(root, 'BEW-33', source('a.pdf'));
+
+    removeStoredFile(root, copy.filePath);
+
+    expect(existsSync(path.join(root, copy.filePath))).toBe(false);
+  });
+
+  it('says nothing when the file is already gone', () => {
+    expect(() =>
+      removeStoredFile(root, path.join('documents', 'BEW-33', 'attachments', 'a.pdf')),
+    ).not.toThrow();
+  });
+
+  it('refuses a path outside the documents folder', () => {
+    expect(() => removeStoredFile(root, '../bewerbungen.db')).toThrow(/unsafe/i);
+  });
+});
+
 describe('purgeApplicationFiles', () => {
   it('takes the application folder with it', () => {
     copyDocument(root, 'BEW-33', DocumentKind.LEBENSLAUF, source('a.html'));
@@ -140,6 +200,14 @@ describe('purgeApplicationFiles', () => {
 
     expect(existsSync(path.join(root, 'documents', 'BEW-33'))).toBe(false);
     expect(existsSync(path.join(root, 'documents', 'BEW-29'))).toBe(true);
+  });
+
+  it('takes comment attachments with it', () => {
+    const copy = copyCommentAttachment(root, 'BEW-33', source('a.pdf'));
+
+    purgeApplicationFiles(root, 'BEW-33');
+
+    expect(existsSync(path.join(root, copy.filePath))).toBe(false);
   });
 
   it('says nothing when there was never a folder', () => {

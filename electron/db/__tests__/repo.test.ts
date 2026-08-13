@@ -140,7 +140,7 @@ describe('repo', () => {
   });
 
   it('tracks comment edits and stored email drafts', () => {
-    const c = repo.addComment('BEW-24', Author.DU, 'Hallo');
+    const { comment: c } = repo.addComment('BEW-24', Author.DU, 'Hallo');
     expect(c.edited_at).toBeNull();
     const edited = repo.updateComment(c.id, 'Hallo!');
     expect(edited.edited_at).toBe(NOW.toISOString());
@@ -149,6 +149,51 @@ describe('repo', () => {
     const saved = repo.saveFollowupEmail(slot.id, 'Betreff', 'Text');
     expect(saved.email_subject).toBe('Betreff');
     expect(saved.generated_at).toBe(NOW.toISOString());
+  });
+
+  describe('comment attachments', () => {
+    const ZEUGNIS = {
+      name: 'Zeugnis 2024.pdf',
+      filePath: 'documents/BEW-24/attachments/Zeugnis 2024.pdf',
+      size: 9,
+    };
+
+    it('stores the attachments with the comment and returns them', () => {
+      const res = repo.addComment('BEW-24', Author.DU, 'Anbei das Zeugnis', [ZEUGNIS]);
+
+      expect(res.attachments).toHaveLength(1);
+      expect(res.attachments[0]).toMatchObject({
+        comment_id: res.comment.id,
+        name: ZEUGNIS.name,
+        file_path: ZEUGNIS.filePath,
+        size: ZEUGNIS.size,
+        created_at: NOW.toISOString(),
+      });
+      expect(repo.load().commentAttachments.map((a) => a.id)).toContain(res.attachments[0].id);
+    });
+
+    it('accepts a comment that is only an attachment', () => {
+      const res = repo.addComment('BEW-24', Author.DU, '', [ZEUGNIS]);
+      expect(res.comment.text).toBe('');
+      expect(res.attachments).toHaveLength(1);
+    });
+
+    it('deleteComment returns the stored paths and cascades the rows', () => {
+      const res = repo.addComment('BEW-24', Author.DU, 'Anbei', [ZEUGNIS]);
+
+      const paths = repo.deleteComment(res.comment.id);
+
+      expect(paths).toEqual([ZEUGNIS.filePath]);
+      expect(
+        count('SELECT COUNT(*) AS n FROM comment_attachments WHERE comment_id = ?', res.comment.id),
+      ).toBe(0);
+    });
+
+    it('cascades away with the application', () => {
+      repo.addComment('BEW-24', Author.DU, 'Anbei', [ZEUGNIS]);
+      repo.deleteApplication('BEW-24');
+      expect(count('SELECT COUNT(*) AS n FROM comment_attachments')).toBe(0);
+    });
   });
 
   it('setRounds keeps notes for surviving rounds and drops removed ones', () => {

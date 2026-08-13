@@ -77,6 +77,27 @@ export interface CommentRow {
   edited_at: string | null;
 }
 
+/* A file attached to a comment. `name` is what the file was picked under and
+   what the thread shows; `file_path` is where the copy landed, relative to
+   userData. Attachments are immutable — added at send, removed with the
+   comment. */
+export interface CommentAttachmentRow {
+  id: number;
+  comment_id: number;
+  name: string;
+  file_path: string;
+  size: number;
+  created_at: string;
+}
+
+/* What db:comments.add receives per staged file — produced by
+   window.desktop.attachments.copy, which put the bytes on disk first. */
+export interface AttachmentInput {
+  name: string;
+  filePath: string;
+  size: number;
+}
+
 export interface RoundRow {
   id: number;
   application_id: string;
@@ -221,9 +242,16 @@ export interface DbApi {
     delete(applicationId: string, label: string): Promise<void>;
   };
   comments: {
-    add(applicationId: string, author: Author, text: string): Promise<CommentRow>;
+    add(
+      applicationId: string,
+      author: Author,
+      text: string,
+      attachments?: AttachmentInput[],
+    ): Promise<{ comment: CommentRow; attachments: CommentAttachmentRow[] }>;
     update(commentId: number, text: string): Promise<CommentRow>;
-    delete(commentId: number): Promise<void>;
+    /* Resolves to the stored file paths of the comment's attachments, which
+       the main process removes from disk after the rows cascade. */
+    delete(commentId: number): Promise<string[]>;
   };
   rounds: {
     set(
@@ -272,6 +300,7 @@ export interface DbSnapshot {
   people: PersonRow[];
   applicationPeople: ApplicationPersonRow[];
   comments: CommentRow[];
+  commentAttachments: CommentAttachmentRow[];
   rounds: RoundRow[];
   roundPeople: RoundPersonRow[];
   roundNotes: RoundNoteRow[];

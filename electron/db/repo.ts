@@ -8,6 +8,8 @@ import type {
   ApplicationPatch,
   ApplicationPersonRow,
   ApplicationRow,
+  AttachmentInput,
+  CommentAttachmentRow,
   CommentRow,
   CompanyPatch,
   CompanyRow,
@@ -206,6 +208,9 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
           'SELECT * FROM application_people ORDER BY application_id, kind, position',
         ),
         comments: all<CommentRow>('SELECT * FROM comments ORDER BY application_id, id'),
+        commentAttachments: all<CommentAttachmentRow>(
+          'SELECT * FROM comment_attachments ORDER BY comment_id, id',
+        ),
         rounds: all<RoundRow>('SELECT * FROM rounds ORDER BY application_id, position'),
         roundPeople: all<RoundPersonRow>('SELECT * FROM round_people ORDER BY round_id, position'),
         roundNotes: all<RoundNoteRow>('SELECT * FROM round_notes ORDER BY round_id, id'),
@@ -363,13 +368,29 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
       });
     },
 
-    addComment(applicationId: string, author: Author, text: string): CommentRow {
+    addComment(
+      applicationId: string,
+      author: Author,
+      text: string,
+      attachments: AttachmentInput[] = [],
+    ): { comment: CommentRow; attachments: CommentAttachmentRow[] } {
       return tx(() => {
         const res = db
           .prepare('INSERT INTO comments (application_id, author, text, created_at) VALUES (?,?,?,?)')
           .run(applicationId, author, text, nowISO());
+        const commentId = Number(res.lastInsertRowid);
+        const ins = db.prepare(
+          'INSERT INTO comment_attachments (comment_id, name, file_path, size, created_at) VALUES (?,?,?,?,?)',
+        );
+        for (const a of attachments) ins.run(commentId, a.name, a.filePath, a.size, nowISO());
         touchApplication(applicationId);
-        return one<CommentRow>('SELECT * FROM comments WHERE id = ?', Number(res.lastInsertRowid));
+        return {
+          comment: one<CommentRow>('SELECT * FROM comments WHERE id = ?', commentId),
+          attachments: all<CommentAttachmentRow>(
+            'SELECT * FROM comment_attachments WHERE comment_id = ? ORDER BY id',
+            commentId,
+          ),
+        };
       });
     },
 
@@ -380,9 +401,16 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
       });
     },
 
-    deleteComment(commentId: number): void {
-      tx(() => {
+    /* Returns the stored file paths of the comment's attachments — the rows
+       cascade with the comment, but only the IPC layer can clear the files. */
+    deleteComment(commentId: number): string[] {
+      return tx(() => {
+        const paths = all<{ file_path: string }>(
+          'SELECT file_path FROM comment_attachments WHERE comment_id = ?',
+          commentId,
+        );
         db.prepare('DELETE FROM comments WHERE id = ?').run(commentId);
+        return paths.map((p) => p.file_path);
       });
     },
 

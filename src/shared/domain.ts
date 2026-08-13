@@ -1,6 +1,7 @@
-/* Domain constants shared by the Electron main process (seed, repo) and the
-   renderer. The canonical round titles decide whether clearing an interview
-   resets the row or removes it, so every side has to agree on the same four. */
+/* Domain constants and types shared by the Electron main process (seed, repo,
+   files) and the renderer. The canonical round titles decide whether clearing
+   an interview resets the row or removes it, so every side has to agree on the
+   same four. */
 
 export const CANONICAL_ROUNDS: string[] = ['Screening', 'Runde 1', 'Runde 2', 'Finales Gespräch'];
 
@@ -16,3 +17,13 @@ export const DEFAULT_FOLLOWUPS: [number, string][] = [
   [9, 'Erneutes Follow up'],
   [25, 'Letztes Follow up'],
 ];
+
+/* What a document upload left behind: the stored HTML and the PDF rendered from
+   it. The two steps are reported separately because the upload can succeed
+   while the export does not — the HTML is kept either way, and pdfError is what
+   the card has to say about the missing PDF. */
+export interface DocumentUpload {
+  filePath: string;
+  pdfPath: string | null;
+  pdfError: string | null;
+}

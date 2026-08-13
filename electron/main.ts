@@ -1,11 +1,20 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell } from 'electron';
+import { rmSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { openDb } from './db/open.ts';
 import { seedIfEmpty } from './db/seed.ts';
 import { createRepo } from './db/repo.ts';
 import { registerDbIpc } from './db/ipc.ts';
-import { copyDocument, documentSize, purgeApplicationFiles, resolveDocumentPath } from './files.ts';
+import {
+  copyDocument,
+  documentPaths,
+  documentSize,
+  purgeApplicationFiles,
+  resolveDocumentPath,
+} from './files.ts';
+import { renderPdf } from './pdf.ts';
+import type { DocumentUpload } from '../src/shared/domain.ts';
 import type { DocumentKind } from '../src/shared/enums.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -81,17 +90,41 @@ ipcMain.handle('shell:openExternal', (_e, url: string) => openExternal(url));
    isolation on, never sees a real path — and because the dialog's file-type
    filter is a suggestion on macOS, the extension is checked again in
    copyDocument before anything is written. */
-ipcMain.handle('documents:pick', async () => {
+/* The renderer names a file type rather than handing over dialog options, so
+   what the picker offers stays decided here. */
+const FILE_TYPES: Record<string, { name: string; extensions: string[] }> = {
+  docx: { name: 'Word-Dokument', extensions: ['docx'] },
+  html: { name: 'HTML-Datei', extensions: ['html', 'htm'] },
+};
+
+ipcMain.handle('documents:pick', async (_e, title: string, type: string) => {
   const res = await dialog.showOpenDialog(win!, {
-    title: 'Dokument ersetzen',
+    title,
     properties: ['openFile'],
-    filters: [{ name: 'Word-Dokument', extensions: ['docx'] }],
+    filters: [FILE_TYPES[type] ?? FILE_TYPES.docx],
   });
   return res.canceled ? null : (res.filePaths[0] ?? null);
 });
 
-ipcMain.handle('documents:copy', (_e, applicationId: string, kind: DocumentKind, sourcePath: string) =>
-  copyDocument(app.getPath('userData'), applicationId, kind, sourcePath),
+/* Takes in the HTML and renders the PDF beside it in one step, so a row never
+   claims a source without the export that belongs to it. A failed export is
+   reported rather than thrown: the upload itself worked, and losing it because
+   Chromium could not print the file would be the wrong trade. */
+ipcMain.handle(
+  'documents:copy',
+  async (_e, applicationId: string, kind: DocumentKind, sourcePath: string): Promise<DocumentUpload> => {
+    const userData = app.getPath('userData');
+    const filePath = copyDocument(userData, applicationId, kind, sourcePath);
+    const { htmlAbs, pdfAbs, pdfRel } = documentPaths(userData, applicationId, kind);
+    try {
+      await renderPdf(htmlAbs, pdfAbs);
+      return { filePath, pdfPath: pdfRel, pdfError: null };
+    } catch (err) {
+      // Whatever was exported from the previous version is no longer this one.
+      rmSync(pdfAbs, { force: true });
+      return { filePath, pdfPath: null, pdfError: String(err) };
+    }
+  },
 );
 
 /* Sizes for the document menu, in one round trip. */

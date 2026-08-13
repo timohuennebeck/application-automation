@@ -210,4 +210,19 @@ export const MIGRATIONS: string[] = [
   UPDATE applications SET channel     = 'Email' WHERE channel     = 'E-Mail';
   UPDATE applications SET applied_via = 'Email' WHERE applied_via = 'E-Mail';
   `,
+
+  /* Migration 6: a document is now two files, not one. file_path holds the HTML
+     that gets edited, pdf_path the export rendered from it.
+
+     `format` goes with them: with two renditions per row there is no single
+     format left to name, and the card caption stops quoting one.
+
+     Anything uploaded as .docx is let go rather than relabelled — the column
+     now means "HTML source", and a Word file is not one. The row keeps its
+     title and dates and simply reads as having no file again. */
+  `
+  ALTER TABLE documents ADD COLUMN pdf_path TEXT;
+  ALTER TABLE documents DROP COLUMN format;
+  UPDATE documents SET file_path = NULL WHERE file_path LIKE '%.docx';
+  `,
 ];

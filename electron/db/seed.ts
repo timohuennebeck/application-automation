@@ -131,7 +131,7 @@ export function seedIfEmpty(db: DatabaseSync, now = new Date()): boolean {
       'INSERT INTO followups (application_id, label, due_at, position) VALUES (?,?,?,?)',
     );
     const insDocument = db.prepare(
-      'INSERT INTO documents (application_id, kind, title, format, created_at, updated_at) VALUES (?,?,?,?,?,?)',
+      'INSERT INTO documents (application_id, kind, title, created_at, updated_at) VALUES (?,?,?,?,?)',
     );
     const insActivity = db.prepare(
       'INSERT INTO activities (application_id, author, text, created_at) VALUES (?,?,?,?)',
@@ -340,18 +340,10 @@ export function seedIfEmpty(db: DatabaseSync, now = new Date()): boolean {
         id,
         DocumentKind.COVER_LETTER,
         'Cover Letter',
-        'docx',
         atNine('2026-07-26'),
         atNine('2026-07-26'),
       );
-      insDocument.run(
-        id,
-        DocumentKind.LEBENSLAUF,
-        'Lebenslauf',
-        'docx',
-        atNine('2026-07-22'),
-        atNine('2026-07-24'),
-      );
+      insDocument.run(id, DocumentKind.LEBENSLAUF, 'Lebenslauf', atNine('2026-07-22'), atNine('2026-07-24'));
     }
 
     /* Activities — HISTORY's yearless dates, year 2026 assumed. */

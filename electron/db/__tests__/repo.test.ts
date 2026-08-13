@@ -35,6 +35,32 @@ describe('repo', () => {
     expect(again.application.id).toBe('BEW-46'); // counter, not MAX+1
   });
 
+  it('starts a document with neither file and points it at both when one is uploaded', () => {
+    const doc = repo.createApplication({ role: 'Designer', company: 'Acme GmbH', channel: null })
+      .documents[0];
+    expect(doc).toMatchObject({ file_path: null, pdf_path: null });
+
+    const html = 'documents/BEW-45/cover-letter.html';
+    const pdf = 'documents/BEW-45/cover-letter.pdf';
+    const row = repo.setDocumentFile(doc.id, html, pdf);
+
+    expect(row).toMatchObject({ file_path: html, pdf_path: pdf });
+    /* "aktualisiert am" on the card hangs off this being later than created_at. */
+    expect(row.updated_at >= row.created_at).toBe(true);
+  });
+
+  /* A failed export leaves the source without its rendition; the row has to be
+     able to say so rather than keep pointing at a PDF that is not there. */
+  it('records an upload whose PDF export failed', () => {
+    const doc = repo.createApplication({ role: 'Designer', company: 'Acme GmbH', channel: null })
+      .documents[0];
+
+    const row = repo.setDocumentFile(doc.id, 'documents/BEW-45/cover-letter.html', null);
+
+    expect(row.pdf_path).toBeNull();
+    expect(row.file_path).toBe('documents/BEW-45/cover-letter.html');
+  });
+
   it('stores the dialog description and links the picked people', () => {
     const people = repo
       .load()

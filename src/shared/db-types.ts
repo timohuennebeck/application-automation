@@ -124,9 +124,10 @@ export interface DocumentRow {
   application_id: string;
   kind: DocumentKind;
   title: string;
-  format: string;
-  /* Relative to userData/documents/<application_id>/; NULL until a real file exists. */
+  /* Both relative to userData/documents/<application_id>/, NULL until a real
+     file exists: the HTML that gets edited, and the PDF rendered from it. */
   file_path: string | null;
+  pdf_path: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -237,7 +238,7 @@ export interface DbApi {
     saveEmail(followupId: number, subject: string, text: string): Promise<FollowupRow>;
   };
   documents: {
-    setFile(documentId: number, filePath: string): Promise<DocumentRow>;
+    setFile(documentId: number, filePath: string, pdfPath: string | null): Promise<DocumentRow>;
   };
   activities: {
     add(applicationId: string, author: Author, text: string): Promise<ActivityRow>;

@@ -172,10 +172,10 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
 
     const t = now.toISOString();
     const insDoc = db.prepare(
-      'INSERT INTO documents (application_id, kind, title, format, created_at, updated_at) VALUES (?,?,?,?,?,?)',
+      'INSERT INTO documents (application_id, kind, title, created_at, updated_at) VALUES (?,?,?,?,?)',
     );
-    insDoc.run(appId, DocumentKind.COVER_LETTER, 'Cover Letter', 'docx', t, t);
-    insDoc.run(appId, DocumentKind.LEBENSLAUF, 'Lebenslauf', 'docx', t, t);
+    insDoc.run(appId, DocumentKind.COVER_LETTER, 'Cover Letter', t, t);
+    insDoc.run(appId, DocumentKind.LEBENSLAUF, 'Lebenslauf', t, t);
 
     return {
       rounds: all<RoundRow>('SELECT * FROM rounds WHERE application_id = ? ORDER BY position', appId),
@@ -552,13 +552,15 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
       });
     },
 
-    /* Points a document row at a file the user just supplied. Bumping
-       updated_at is what makes the card read "aktualisiert am" instead of
-       "erstellt am". */
-    setDocumentFile(documentId: number, filePath: string): DocumentRow {
+    /* Points a document row at the pair of files it now stands for: the HTML
+       the user supplied and the PDF rendered from it, which is NULL when the
+       export failed. Bumping updated_at is what makes the card read
+       "aktualisiert am" instead of "erstellt am". */
+    setDocumentFile(documentId: number, filePath: string, pdfPath: string | null): DocumentRow {
       return tx(() => {
-        db.prepare('UPDATE documents SET file_path = ?, updated_at = ? WHERE id = ?').run(
+        db.prepare('UPDATE documents SET file_path = ?, pdf_path = ?, updated_at = ? WHERE id = ?').run(
           filePath,
+          pdfPath,
           nowISO(),
           documentId,
         );

@@ -837,10 +837,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const api = window.desktop;
       if (!api) return 'Ohne Desktop-Umgebung nicht möglich.';
       try {
-        const source = await api.documents.pick();
+        const source = await api.documents.pick('Dokument ersetzen', 'html');
         if (!source) return null; // cancelled
-        const filePath = await api.documents.copy(id, kind, source);
-        const row = await api.db.documents.setFile(documentId, filePath);
+        const { filePath, pdfPath, pdfError } = await api.documents.copy(id, kind, source);
+        const row = await api.db.documents.setFile(documentId, filePath, pdfPath);
         set((s) => ({
           documentsByApp: {
             ...s.documentsByApp,
@@ -848,7 +848,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
           },
         }));
         logAct(id, 'hat „' + title + '“ ersetzt');
-        return null;
+        /* The upload counts as done — the row and the history already say so.
+           A failed export is reported on top of that, not instead of it. */
+        return pdfError ? 'Die Datei wurde übernommen, das PDF ließ sich nicht erzeugen: ' + pdfError : null;
       } catch (err) {
         console.error('[documents]', err);
         return String(err);

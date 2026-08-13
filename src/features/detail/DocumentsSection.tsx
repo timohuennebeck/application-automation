@@ -3,28 +3,29 @@ import { formatBytes } from '../../lib/bytes';
 import { isoToDate } from '../../lib/date';
 import { openDocument } from '../../lib/download';
 import { useApp } from '../../state/store-context';
+import { DocumentCard } from '../../ui/DocumentCard';
 import { MenuItem } from '../../ui/MenuItem';
 import { Popover, PopoverAnchor } from '../../ui/Popover';
 import { Section } from '../../ui/Section';
-import { DocGlyph, DotsGlyph } from '../../ui/icons';
+import { DocFormat, DotsGlyph } from '../../ui/icons';
 
 export function DocumentsSection({ card }: { card: { id: string; role: string; company: string } }) {
   const { st, set, replaceDocument } = useApp();
   const [error, setError] = useState<string | null>(null);
-  /* Sizes by document id, read from disk rather than stored — a row that lost
+  /* Sizes by stored path, read from disk rather than stored — a row that lost
      its file would otherwise keep quoting a size that is no longer true. */
-  const [sizes, setSizes] = useState<Record<number, number | null>>({});
+  const [sizes, setSizes] = useState<Record<string, number | null>>({});
   const docs = st.documentsByApp[card.id] || [];
 
-  const stored = docs.filter((d) => d.file_path);
-  const key = stored.map((d) => d.id + ':' + d.updated_at).join(',');
+  const paths = docs.flatMap((d) => [d.file_path, d.pdf_path].filter((p): p is string => !!p));
+  const key = paths.join(',') + '|' + docs.map((d) => d.updated_at).join(',');
   useEffect(() => {
-    if (!stored.length) return;
+    if (!paths.length) return;
     let live = true;
     window.desktop?.documents
-      .sizes(stored.map((d) => d.file_path as string))
+      .sizes(paths)
       .then((list) => {
-        if (live) setSizes(Object.fromEntries(stored.map((d, i) => [d.id, list[i]])));
+        if (live) setSizes(Object.fromEntries(paths.map((p, i) => [p, list[i]])));
       })
       .catch(() => undefined);
     return () => {
@@ -39,12 +40,12 @@ export function DocumentsSection({ card }: { card: { id: string; role: string; c
   const caption = (d: (typeof docs)[number]) => {
     const updated = d.updated_at > d.created_at;
     const day = isoToDate((updated ? d.updated_at : d.created_at).slice(0, 10));
-    return d.format.toUpperCase() + ' · ' + (updated ? 'aktualisiert am ' : 'erstellt am ') + day;
+    return (updated ? 'aktualisiert am ' : 'erstellt am ') + day;
   };
 
-  const open = (d: (typeof docs)[number]) => {
+  const open = (d: (typeof docs)[number], filePath: string | null) => {
     set({ dropdown: null });
-    openDocument(d.file_path, d.title, card).then(setError);
+    openDocument(filePath, d.title, card).then(setError);
   };
 
   return (
@@ -53,17 +54,24 @@ export function DocumentsSection({ card }: { card: { id: string; role: string; c
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
         {docs.map((d) => {
           const menuKey = 'doc:' + d.id;
-          const size = formatBytes(sizes[d.id] ?? null);
           return (
-            <div key={d.id} className="doc-card" title="Öffnen" onClick={() => open(d)}>
-              <DocGlyph />
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
-                <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--c-1b1a17)' }}>{d.title}</div>
-                <div style={{ fontSize: 11, color: 'var(--c-9a978f)' }}>{caption(d)}</div>
-              </div>
+            <DocumentCard
+              key={d.id}
+              /* Red once there is a PDF to hand over, orange otherwise: a
+                 document here is an HTML one whether or not its file has been
+                 generated yet. The drained glyph belongs to the profile, where
+                 an empty slot is a state you are meant to act on. */
+              format={d.pdf_path ? DocFormat.PDF : DocFormat.HTML}
+              title={d.title}
+              caption={caption(d)}
+              hint="Öffnen"
+              /* The PDF is the finished thing, so that is what a plain click
+                 opens; the HTML behind it stays one menu entry away. */
+              onClick={() => open(d, d.pdf_path ?? d.file_path)}
+            >
               {/* stopPropagation throughout, or the card's own click would open
                   the document behind the menu. */}
-              <PopoverAnchor style={{ marginLeft: 'auto', flexShrink: 0 }}>
+              <PopoverAnchor>
                 <div
                   className="doc-dl"
                   title="Mehr"
@@ -77,11 +85,25 @@ export function DocumentsSection({ card }: { card: { id: string; role: string; c
                 </div>
                 {st.dropdown === menuKey && (
                   <div onClick={(e) => e.stopPropagation()}>
-                    <Popover top={32} right={0} minWidth={176}>
-                      <MenuItem onClick={() => open(d)}>
-                        <span style={{ flex: '1 1 auto', whiteSpace: 'nowrap' }}>Herunterladen</span>
-                        {size && <span style={{ fontSize: 11.5, color: 'var(--c-a5a29a)' }}>{size}</span>}
-                      </MenuItem>
+                    <Popover top={32} right={0} minWidth={196}>
+                      {/* Only the renditions that exist are named. A document
+                          that has no files yet keeps the plain wording, because
+                          what it hands over is the placeholder export — calling
+                          that "HTML" would be a promise it does not keep. */}
+                      {d.file_path ? (
+                        <MenuItem onClick={() => open(d, d.file_path)}>
+                          <span style={{ flex: '1 1 auto', whiteSpace: 'nowrap' }}>HTML herunterladen</span>
+                          <Size bytes={sizes[d.file_path]} />
+                        </MenuItem>
+                      ) : (
+                        !d.pdf_path && <MenuItem onClick={() => open(d, null)}>Herunterladen</MenuItem>
+                      )}
+                      {d.pdf_path && (
+                        <MenuItem onClick={() => open(d, d.pdf_path)}>
+                          <span style={{ flex: '1 1 auto', whiteSpace: 'nowrap' }}>PDF herunterladen</span>
+                          <Size bytes={sizes[d.pdf_path]} />
+                        </MenuItem>
+                      )}
                       <MenuItem
                         style={{ whiteSpace: 'nowrap' }}
                         onClick={() => {
@@ -95,10 +117,18 @@ export function DocumentsSection({ card }: { card: { id: string; role: string; c
                   </div>
                 )}
               </PopoverAnchor>
-            </div>
+            </DocumentCard>
           );
         })}
       </div>
     </Section>
   );
+}
+
+/* The size beside a menu entry, left out entirely when the file is not there to
+   be measured. */
+function Size({ bytes }: { bytes?: number | null }) {
+  const text = formatBytes(bytes ?? null);
+  if (!text) return null;
+  return <span style={{ fontSize: 11.5, color: 'var(--c-a5a29a)' }}>{text}</span>;
 }

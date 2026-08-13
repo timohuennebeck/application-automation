@@ -155,6 +155,39 @@ describe('migrations', () => {
     expect(rows[1]).toEqual({ id: 'BEW-2', channel: 'LinkedIn', applied_via: null });
   });
 
+  /* Migration 6 turns one file per document into two: the HTML that is edited
+     and the PDF rendered from it. */
+  it('adds pdf_path, retires format and lets go of the .docx uploads', () => {
+    const db = dbAtVersion(5);
+    db.exec(`
+      INSERT INTO companies (id, name, created_at, updated_at) VALUES (1, 'Acme', 't', 't');
+      INSERT INTO applications (id, role, company_id, interest, stage_id, stage_position, created_at, updated_at)
+        VALUES ('BEW-1', 'Designer', 1, 'HIGH', 'interessiert', 0, 't', 't');
+      INSERT INTO documents (application_id, kind, title, format, file_path, created_at, updated_at)
+        VALUES ('BEW-1', 'LEBENSLAUF', 'Lebenslauf', 'DOCX', 'documents/BEW-1/lebenslauf.docx', 't', 't');
+      INSERT INTO documents (application_id, kind, title, format, file_path, created_at, updated_at)
+        VALUES ('BEW-1', 'COVER_LETTER', 'Anschreiben', 'DOCX', NULL, 't', 't');
+    `);
+
+    migrate(db);
+
+    const columns = (db.prepare('PRAGMA table_info(documents)').all() as { name: string }[]).map(
+      (c) => c.name,
+    );
+    expect(columns).toContain('pdf_path');
+    expect(columns).not.toContain('format');
+
+    const rows = db.prepare('SELECT title, file_path, pdf_path FROM documents ORDER BY id').all() as {
+      title: string;
+      file_path: string | null;
+      pdf_path: string | null;
+    }[];
+    /* The Word upload is dropped rather than passed off as HTML; the row keeps
+       everything else it had. */
+    expect(rows[0]).toEqual({ title: 'Lebenslauf', file_path: null, pdf_path: null });
+    expect(rows[1]).toEqual({ title: 'Anschreiben', file_path: null, pdf_path: null });
+  });
+
   it('enforces foreign keys', () => {
     const db = openDb(':memory:');
     expect(() =>

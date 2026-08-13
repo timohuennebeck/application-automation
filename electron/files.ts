@@ -9,23 +9,26 @@ import { copyFileSync, mkdirSync, rmSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { DocumentKind } from '../src/shared/enums.ts';
 
-/* The one format the agent can fill in without losing the layout: a .docx is
-   zipped XML, a PDF is a finished page. */
-export function isDocx(filePath: string): boolean {
-  return path.extname(filePath).toLowerCase() === '.docx';
+/* The one format the whole pipeline starts from: the agent edits the markup and
+   exports the PDF from it, so what gets uploaded is always the source, never
+   the finished page. */
+export function isHtml(filePath: string): boolean {
+  const ext = path.extname(filePath).toLowerCase();
+  return ext === '.html' || ext === '.htm';
 }
 
 /* Stored under the kind, not under whatever the file was called when it was
    picked — there is one document of each kind per application, so the name
-   carries no information and a stray name could escape the folder. */
-const FILE_NAMES: Record<DocumentKind, string> = {
-  [DocumentKind.LEBENSLAUF]: 'lebenslauf.docx',
-  [DocumentKind.COVER_LETTER]: 'cover-letter.docx',
-  [DocumentKind.OTHER]: 'other.docx',
+   carries no information and a stray name could escape the folder. The two
+   renditions of a document share this stem and differ only in extension. */
+const BASE_NAMES: Record<DocumentKind, string> = {
+  [DocumentKind.LEBENSLAUF]: 'lebenslauf',
+  [DocumentKind.COVER_LETTER]: 'cover-letter',
+  [DocumentKind.OTHER]: 'other',
 };
 
-export function documentFileName(kind: DocumentKind): string {
-  return FILE_NAMES[kind];
+export function documentFileName(kind: DocumentKind, ext: 'html' | 'pdf'): string {
+  return BASE_NAMES[kind] + '.' + ext;
 }
 
 /* Rejects an id that is not one plain path segment. The ids are generated
@@ -49,19 +52,36 @@ export function resolveDocumentPath(userDataPath: string, storedPath: string): s
   return resolved;
 }
 
+/* Where both renditions of a document live. The PDF is written beside the HTML
+   it was rendered from, so purging an application takes the pair with it. */
+export function documentPaths(
+  userDataPath: string,
+  applicationId: string,
+  kind: DocumentKind,
+): { htmlAbs: string; pdfAbs: string; pdfRel: string } {
+  const dir = applicationDir(userDataPath, applicationId);
+  const pdfName = documentFileName(kind, 'pdf');
+  return {
+    htmlAbs: path.join(dir, documentFileName(kind, 'html')),
+    pdfAbs: path.join(dir, pdfName),
+    pdfRel: path.join('documents', applicationId, pdfName),
+  };
+}
+
 /* Copies a picked file into place, replacing any earlier version, and returns
    the path to store in documents.file_path — relative to userData, so moving
-   the directory does not invalidate every row. */
+   the directory does not invalidate every row. What gets stored is the HTML
+   source; the PDF beside it is rendered from this copy afterwards. */
 export function copyDocument(
   userDataPath: string,
   applicationId: string,
   kind: DocumentKind,
   sourcePath: string,
 ): string {
-  if (!isDocx(sourcePath)) throw new Error(`not a .docx: ${sourcePath}`);
+  if (!isHtml(sourcePath)) throw new Error(`not an HTML file: ${sourcePath}`);
   const dir = applicationDir(userDataPath, applicationId);
   mkdirSync(dir, { recursive: true });
-  const name = documentFileName(kind);
+  const name = documentFileName(kind, 'html');
   copyFileSync(sourcePath, path.join(dir, name));
   return path.join('documents', applicationId, name);
 }

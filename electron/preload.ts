@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { DbApi } from '../src/shared/db-types.ts';
+import type { DocumentUpload } from '../src/shared/domain.ts';
 import type { DocumentKind } from '../src/shared/enums.ts';
 
 const invoke =
@@ -55,9 +56,11 @@ const api = {
   db,
   documents: {
     /* Native picker; null when the dialog was cancelled. */
-    pick: (): Promise<string | null> => ipcRenderer.invoke('documents:pick'),
-    /* Copies the picked file into userData, resolving to its stored path. */
-    copy: (applicationId: string, kind: DocumentKind, sourcePath: string): Promise<string> =>
+    pick: (title: string, type: 'docx' | 'html'): Promise<string | null> =>
+      ipcRenderer.invoke('documents:pick', title, type),
+    /* Copies the picked HTML into userData and renders the PDF beside it,
+       resolving to both stored paths. */
+    copy: (applicationId: string, kind: DocumentKind, sourcePath: string): Promise<DocumentUpload> =>
       ipcRenderer.invoke('documents:copy', applicationId, kind, sourcePath),
     /* Sizes in bytes, index-aligned with the paths; null where the file is gone. */
     sizes: (filePaths: string[]): Promise<(number | null)[]> =>

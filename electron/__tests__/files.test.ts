@@ -6,7 +6,8 @@ import { DocumentKind } from '../../src/shared/enums.ts';
 import {
   copyDocument,
   documentFileName,
-  isDocx,
+  documentPaths,
+  isHtml,
   purgeApplicationFiles,
   resolveDocumentPath,
 } from '../files.ts';
@@ -27,61 +28,88 @@ function source(name: string, body = 'original'): string {
   return p;
 }
 
-describe('isDocx', () => {
-  it('accepts .docx whatever the case', () => {
-    expect(isDocx('/a/b/Lebenslauf.docx')).toBe(true);
-    expect(isDocx('/a/b/Lebenslauf.DOCX')).toBe(true);
+describe('isHtml', () => {
+  it('accepts .html and .htm whatever the case', () => {
+    for (const name of ['cv.html', 'cv.HTML', 'cv.htm', 'cv.Htm']) {
+      expect(isHtml('/a/' + name), name).toBe(true);
+    }
   });
 
   it('rejects everything else, including the formats that look close', () => {
-    for (const name of ['cv.pdf', 'cv.doc', 'cv.pages', 'cv.docx.pdf', 'cv', 'docx']) {
-      expect(isDocx('/a/' + name), name).toBe(false);
+    for (const name of ['cv.pdf', 'cv.docx', 'cv.xhtml', 'cv.html.pdf', 'cv', 'html']) {
+      expect(isHtml('/a/' + name), name).toBe(false);
     }
   });
 });
 
 describe('documentFileName', () => {
   it('names the file after its kind, not after what was picked', () => {
-    expect(documentFileName(DocumentKind.LEBENSLAUF)).toBe('lebenslauf.docx');
-    expect(documentFileName(DocumentKind.COVER_LETTER)).toBe('cover-letter.docx');
-    expect(documentFileName(DocumentKind.OTHER)).toBe('other.docx');
+    expect(documentFileName(DocumentKind.LEBENSLAUF, 'html')).toBe('lebenslauf.html');
+    expect(documentFileName(DocumentKind.COVER_LETTER, 'html')).toBe('cover-letter.html');
+    expect(documentFileName(DocumentKind.OTHER, 'html')).toBe('other.html');
+  });
+
+  /* Both renditions of a document share the stem, so the PDF is always findable
+     from the kind alone. */
+  it('gives the two renditions the same stem', () => {
+    expect(documentFileName(DocumentKind.LEBENSLAUF, 'pdf')).toBe('lebenslauf.pdf');
+    expect(documentFileName(DocumentKind.COVER_LETTER, 'pdf')).toBe('cover-letter.pdf');
+  });
+});
+
+describe('documentPaths', () => {
+  it('puts the PDF beside the HTML it is rendered from', () => {
+    const dir = path.join(root, 'documents', 'BEW-33');
+    expect(documentPaths(root, 'BEW-33', DocumentKind.LEBENSLAUF)).toEqual({
+      htmlAbs: path.join(dir, 'lebenslauf.html'),
+      pdfAbs: path.join(dir, 'lebenslauf.pdf'),
+      pdfRel: path.join('documents', 'BEW-33', 'lebenslauf.pdf'),
+    });
+  });
+
+  it('refuses an id that would climb out of the documents folder', () => {
+    expect(() => documentPaths(root, '../keep', DocumentKind.LEBENSLAUF)).toThrow(/id/i);
   });
 });
 
 describe('copyDocument', () => {
   it('files the copy under the application and returns a relative path', () => {
-    const rel = copyDocument(root, 'BEW-33', DocumentKind.LEBENSLAUF, source('Mein CV.docx'));
+    const rel = copyDocument(root, 'BEW-33', DocumentKind.LEBENSLAUF, source('Mein CV.html'));
 
-    expect(rel).toBe(path.join('documents', 'BEW-33', 'lebenslauf.docx'));
+    expect(rel).toBe(path.join('documents', 'BEW-33', 'lebenslauf.html'));
     expect(readFileSync(path.join(root, rel), 'utf8')).toBe('original');
   });
 
   it('overwrites the previous version in place', () => {
-    copyDocument(root, 'BEW-33', DocumentKind.LEBENSLAUF, source('a.docx', 'first'));
-    const rel = copyDocument(root, 'BEW-33', DocumentKind.LEBENSLAUF, source('b.docx', 'second'));
+    copyDocument(root, 'BEW-33', DocumentKind.LEBENSLAUF, source('a.html', 'first'));
+    const rel = copyDocument(root, 'BEW-33', DocumentKind.LEBENSLAUF, source('b.html', 'second'));
 
     expect(readFileSync(path.join(root, rel), 'utf8')).toBe('second');
   });
 
   it('keeps the two kinds apart', () => {
-    copyDocument(root, 'BEW-33', DocumentKind.LEBENSLAUF, source('a.docx', 'cv'));
-    copyDocument(root, 'BEW-33', DocumentKind.COVER_LETTER, source('b.docx', 'letter'));
+    copyDocument(root, 'BEW-33', DocumentKind.LEBENSLAUF, source('a.html', 'cv'));
+    copyDocument(root, 'BEW-33', DocumentKind.COVER_LETTER, source('b.html', 'letter'));
 
     const dir = path.join(root, 'documents', 'BEW-33');
-    expect(readFileSync(path.join(dir, 'lebenslauf.docx'), 'utf8')).toBe('cv');
-    expect(readFileSync(path.join(dir, 'cover-letter.docx'), 'utf8')).toBe('letter');
+    expect(readFileSync(path.join(dir, 'lebenslauf.html'), 'utf8')).toBe('cv');
+    expect(readFileSync(path.join(dir, 'cover-letter.html'), 'utf8')).toBe('letter');
   });
 
-  it('refuses anything that is not a .docx, leaving nothing behind', () => {
-    expect(() => copyDocument(root, 'BEW-33', DocumentKind.LEBENSLAUF, source('cv.pdf'))).toThrow(/docx/i);
+  it('refuses anything that is not HTML, leaving nothing behind', () => {
+    for (const name of ['cv.pdf', 'cv.docx']) {
+      expect(() => copyDocument(root, 'BEW-33', DocumentKind.LEBENSLAUF, source(name)), name).toThrow(
+        /html/i,
+      );
+    }
     expect(existsSync(path.join(root, 'documents', 'BEW-33'))).toBe(false);
   });
 });
 
 describe('resolveDocumentPath', () => {
   it('resolves a stored path under the documents folder', () => {
-    const rel = copyDocument(root, 'BEW-33', DocumentKind.LEBENSLAUF, source('a.docx'));
-    expect(resolveDocumentPath(root, rel)).toBe(path.join(root, 'documents', 'BEW-33', 'lebenslauf.docx'));
+    const rel = copyDocument(root, 'BEW-33', DocumentKind.LEBENSLAUF, source('a.html'));
+    expect(resolveDocumentPath(root, rel)).toBe(path.join(root, 'documents', 'BEW-33', 'lebenslauf.html'));
   });
 
   it('refuses a path that climbs out of the documents folder', () => {
@@ -101,8 +129,8 @@ describe('resolveDocumentPath', () => {
 
 describe('purgeApplicationFiles', () => {
   it('takes the application folder with it', () => {
-    copyDocument(root, 'BEW-33', DocumentKind.LEBENSLAUF, source('a.docx'));
-    copyDocument(root, 'BEW-29', DocumentKind.LEBENSLAUF, source('b.docx'));
+    copyDocument(root, 'BEW-33', DocumentKind.LEBENSLAUF, source('a.html'));
+    copyDocument(root, 'BEW-29', DocumentKind.LEBENSLAUF, source('b.html'));
 
     purgeApplicationFiles(root, 'BEW-33');
 

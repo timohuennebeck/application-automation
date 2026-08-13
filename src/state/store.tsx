@@ -839,7 +839,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   const saveSummary = useCallback(
-    (id: string, text: string) => {
+    (id: string, text: string | null) => {
       set((s) => ({ applications: { ...s.applications, [id]: { ...s.applications[id], summary: text } } }));
       persist(db()?.applications.update(id, { summary: text }));
     },

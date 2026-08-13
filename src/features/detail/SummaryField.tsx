@@ -1,5 +1,21 @@
 import { useApp } from '../../state/store-context';
 
+const PLACEHOLDER = 'Beschreibung hinzufügen…';
+
+/* One box for both states, so clicking into the editor cannot shift the page:
+   the reading view carries the editor's padding and a transparent border, and
+   only the frame and the ground change. */
+const BOX = {
+  display: 'block',
+  fontFamily: 'inherit',
+  fontSize: 12.5,
+  lineHeight: 1.6,
+  borderRadius: 6,
+  padding: '8px 10px',
+  width: '100%',
+  boxSizing: 'border-box',
+} as const;
+
 /* Click-to-edit role summary. Locked while Kepler owns the record. */
 export function SummaryField({
   cardId,
@@ -17,6 +33,7 @@ export function SummaryField({
       <textarea
         value={st.editDraft}
         autoFocus
+        placeholder={PLACEHOLDER}
         onChange={(e) => set({ editDraft: e.target.value })}
         onKeyDown={(e) => {
           if (e.key === 'Escape') {
@@ -31,27 +48,20 @@ export function SummaryField({
             set({ editing: null });
             return;
           }
-          saveSummary(cardId, st.editDraft.trim() || summary);
+          // An emptied description stays empty — the placeholder takes over.
+          saveSummary(cardId, st.editDraft.trim() || null);
           set({ editing: null });
         }}
-        /* Reads exactly like the text it replaces — same type, padding and
-           ground, so entering the editor only adds a caret. */
         style={
           {
-            display: 'block',
-            fontFamily: 'inherit',
-            fontSize: 12.5,
+            ...BOX,
             color: 'var(--c-5f5c56)',
-            lineHeight: 1.6,
-            background: 'transparent',
-            border: 'none',
-            padding: '8px 10px',
+            background: 'var(--c-fff)',
+            border: '1px solid var(--c-cfccc3)',
             outline: 'none',
             resize: 'none',
             fieldSizing: 'content',
             minHeight: 0,
-            width: '100%',
-            boxSizing: 'border-box',
           } as React.CSSProperties
         }
       />
@@ -65,15 +75,14 @@ export function SummaryField({
         if (!locked) set({ editing: 'summary', editDraft: summary, dropdown: null });
       }}
       style={{
-        fontSize: 12.5,
-        color: 'var(--c-5f5c56)',
-        lineHeight: 1.6,
+        ...BOX,
+        color: summary ? 'var(--c-5f5c56)' : 'var(--c-a8a49b)',
+        border: '1px solid transparent',
         textWrap: 'pretty',
-        padding: '8px 10px',
         cursor: locked ? 'not-allowed' : 'text',
       }}
     >
-      {summary}
+      {summary || PLACEHOLDER}
     </div>
   );
 }

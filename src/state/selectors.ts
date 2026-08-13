@@ -39,12 +39,9 @@ export function cardView(st: AppState, id: string): CardView | null {
     interest: app.interest,
     channel: app.channel || '',
     salary: factOf(st, id, 'Gehalt'),
-    summary:
-      app.summary ||
-      app.role +
-        ' bei ' +
-        name +
-        '. Stellenanzeige ist übernommen, Anforderungen und Unterlagen liegen strukturiert an der Karte.',
+    /* Empty is a real state: the detail view shows its placeholder rather
+       than a sentence nobody wrote. */
+    summary: app.summary ?? '',
     website: company?.website || '',
   };
 }

@@ -44,6 +44,9 @@ function useCard(cardId: string) {
    field as the sidebar's Berufsbezeichnung, so both stay in step. */
 function RoleHeading({ cardId, role, locked }: { cardId: string; role: string; locked: boolean }) {
   const { st, set, writeField, cancelEditRef } = useApp();
+  /* One box for both states, so clicking into the editor cannot shift the
+     heading: the reading view carries the editor's padding and a transparent
+     border, and only the frame and the ground change. */
   const style = {
     fontSize: 21,
     fontWeight: 600,
@@ -52,6 +55,10 @@ function RoleHeading({ cardId, role, locked }: { cardId: string; role: string; l
     letterSpacing: '-0.01em',
     width: '100%',
     minWidth: 0,
+    boxSizing: 'border-box',
+    borderRadius: 6,
+    padding: '1px 5px',
+    marginLeft: -6,
   } as const;
 
   if (st.editing === TITLE_KEY) {
@@ -77,15 +84,12 @@ function RoleHeading({ cardId, role, locked }: { cardId: string; role: string; l
           writeField(cardId, 'Berufsbezeichnung', st.editDraft.trim());
           set({ editing: null });
         }}
-        /* Same type on the same ground as the heading it replaces: entering
-           the editor adds a caret and nothing else. */
+        /* Framed like the sidebar's field editors. */
         style={{
           ...style,
           fontFamily: 'inherit',
-          boxSizing: 'border-box',
-          border: 'none',
-          padding: 0,
-          background: 'transparent',
+          border: '1px solid var(--c-cfccc3)',
+          background: 'var(--c-fff)',
           outline: 'none',
         }}
       />
@@ -98,7 +102,12 @@ function RoleHeading({ cardId, role, locked }: { cardId: string; role: string; l
       onClick={() => {
         if (!locked) set({ editing: TITLE_KEY, editDraft: role, dropdown: null });
       }}
-      style={{ ...style, textWrap: 'pretty', cursor: locked ? 'not-allowed' : 'text' }}
+      style={{
+        ...style,
+        border: '1px solid transparent',
+        textWrap: 'pretty',
+        cursor: locked ? 'not-allowed' : 'text',
+      }}
     >
       {role}
     </div>

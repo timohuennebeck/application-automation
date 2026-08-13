@@ -43,8 +43,9 @@
 /* The contact row is its own click target inside the card. It shrinks before
    the due-date text beside it does. */
 .card-contacts {
-  padding: 1px 4px;
-  margin-left: -4px;
+  /* Enough room above and below that the hover pill clears the avatar. */
+  padding: 4px 6px;
+  margin: -3px 0 -3px -6px;
   min-width: 0;
   cursor: pointer;
 }

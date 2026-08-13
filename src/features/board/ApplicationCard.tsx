@@ -1,5 +1,5 @@
 import { AGENT_RUNS } from '../../data/sample-data';
-import { CHANNEL_BG, INTEREST } from '../../data/config';
+import { INTEREST } from '../../data/config';
 import type { ColumnDef } from '../../data/config';
 import { Urgency } from '../../data/config';
 import { Interest } from '../../shared/enums';
@@ -7,8 +7,25 @@ import { clock } from '../../lib/date';
 import { initials } from '../../lib/text';
 import { cardSubtitle, cardView, interviewChip } from '../../state/selectors';
 import { useApp } from '../../state/store-context';
-import { Avatar, PriorityBars, Spinner } from '../../ui/icons';
+import { Avatar, BriefcaseGlyph, EuroGlyph, GlobeGlyph, PriorityBars, Spinner } from '../../ui/icons';
 import { dragOverCol, endDrag, makeGhost } from './dnd';
+
+/* The stacked company / salary / platform lines, each labelled by its icon. */
+const FACT_ROW = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 5,
+  fontSize: 10.5,
+  color: 'var(--c-5f5c56)',
+  fontWeight: 500,
+  minWidth: 0,
+} as const;
+const ELLIPSIS = {
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+  minWidth: 0,
+} as const;
 
 /* A single application on the board. */
 export function ApplicationCard({ id, col, ci }: { id: string; col: ColumnDef; ci: number }) {
@@ -96,39 +113,20 @@ export function ApplicationCard({ id, col, ci }: { id: string; col: ColumnDef; c
       >
         {role}
       </div>
-      <div style={{ fontSize: 11, color: 'var(--c-77746d)', lineHeight: 1.35 }}>{company}</div>
-      {(card.salary || card.channel) && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-          {card.salary && (
-            <div style={{ fontSize: 10.5, color: 'var(--c-5f5c56)', fontWeight: 500 }}>{card.salary}</div>
-          )}
-          {card.channel && (
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 4,
-                flexShrink: 0,
-                marginLeft: card.salary ? 'auto' : 0,
-                fontSize: 10,
-                color: 'var(--c-5f5c56)',
-                background: 'var(--c-f4f2ed)',
-                borderRadius: 999,
-                padding: '1px 7px 1px 5px',
-              }}
-            >
-              <span
-                style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: '50%',
-                  flexShrink: 0,
-                  background: CHANNEL_BG[card.channel] || 'var(--c-b3b0a8)',
-                }}
-              />
-              {card.channel}
-            </div>
-          )}
+      <div style={{ ...FACT_ROW, fontSize: 11, color: 'var(--c-77746d)', fontWeight: 400 }}>
+        <BriefcaseGlyph style={{ color: 'var(--c-a5a29a)' }} />
+        <span style={ELLIPSIS}>{company}</span>
+      </div>
+      {card.salary && (
+        <div style={FACT_ROW}>
+          <EuroGlyph style={{ color: 'var(--c-a5a29a)' }} />
+          <span style={ELLIPSIS}>{card.salary}</span>
+        </div>
+      )}
+      {card.channel && (
+        <div style={FACT_ROW}>
+          <GlobeGlyph style={{ color: 'var(--c-a5a29a)' }} />
+          <span style={ELLIPSIS}>{card.channel}</span>
         </div>
       )}
 

@@ -178,7 +178,7 @@ export interface AppStore {
   /* Sidebar field write, routed to the owning table (see fact-label routing). */
   writeField: (id: string, label: string, value: string) => void;
   setInterest: (id: string, interest: Interest) => void;
-  saveSummary: (id: string, text: string) => void;
+  saveSummary: (id: string, text: string | null) => void;
   addComment: (id: string, text: string) => void;
   updateComment: (id: string, commentId: number, text: string) => void;
   deleteComment: (id: string, commentId: number) => void;

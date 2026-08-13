@@ -1,0 +1,45 @@
+import type { ReactNode } from 'react';
+import { DocFormat, DocGlyph } from './icons';
+
+/* The bordered card a document sits on, in the application's Bewerbungsunterlagen
+   and in the profile's template slots. Everything but the control on the right
+   is the same in both places, so that part comes in as children — a "…" menu
+   here, an upload button there. */
+export function DocumentCard({
+  format,
+  title,
+  caption,
+  hint,
+  muted,
+  onClick,
+  children,
+}: {
+  format: DocFormat;
+  title: string;
+  caption: string;
+  /* Tooltip for the card itself, which says what clicking it does. */
+  hint: string;
+  /* Drains the labels for a slot that has nothing in it yet. */
+  muted?: boolean;
+  onClick: () => void;
+  children?: ReactNode;
+}) {
+  return (
+    <div className="doc-card" title={hint} onClick={onClick}>
+      <DocGlyph format={format} />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+        <div
+          style={{
+            fontSize: 12.5,
+            fontWeight: 600,
+            color: muted ? 'var(--c-8b8880)' : 'var(--c-1b1a17)',
+          }}
+        >
+          {title}
+        </div>
+        <div style={{ fontSize: 11, color: muted ? 'var(--c-a5a29a)' : 'var(--c-9a978f)' }}>{caption}</div>
+      </div>
+      {children && <div style={{ marginLeft: 'auto', flexShrink: 0 }}>{children}</div>}
+    </div>
+  );
+}

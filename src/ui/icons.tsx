@@ -183,31 +183,61 @@ export function PencilGlyph({ size = 12, style }: { size?: number; style?: CSSPr
   );
 }
 
+/* What a document glyph stands for. EMPTY is a slot with nothing in it yet —
+   the same sheet of paper, drained of colour. */
+export const DocFormat = {
+  HTML: 'HTML',
+  PDF: 'PDF',
+  EMPTY: 'EMPTY',
+} as const;
+export type DocFormat = (typeof DocFormat)[keyof typeof DocFormat];
+
+/* Every format is the same lines of a written page; only their colour differs.
+   Orange for HTML, red for PDF, grey for a slot with nothing in it. The paper
+   itself stays neutral — tinting the whole sheet blue is what made this read as
+   a Word icon. */
+const DOC_LINES = 'M7 15 h12 M7 19 h12 M7 23 h8';
+const DOC_INK: Record<DocFormat, string> = {
+  [DocFormat.HTML]: 'var(--c-d1782f)',
+  [DocFormat.PDF]: 'var(--c-c2564c)',
+  [DocFormat.EMPTY]: 'var(--c-c9c5bb)',
+};
+
 export function DocGlyph({
+  format = DocFormat.PDF,
   width = 26,
   height = 32,
   strokeWidth = 1.2,
   lineWidth = 1.5,
   style,
 }: {
+  format?: DocFormat;
   width?: number;
   height?: number;
   strokeWidth?: number;
   lineWidth?: number;
   style?: CSSProperties;
 }) {
+  const empty = format === DocFormat.EMPTY;
+  const paper = empty ? 'var(--c-e0ded8)' : 'var(--c-d5d1c7)';
   return (
-    <svg width={width} height={height} viewBox="0 0 26 32" style={{ flexShrink: 0, ...style }}>
+    <svg
+      width={width}
+      height={height}
+      viewBox="0 0 26 32"
+      style={{ flexShrink: 0, opacity: empty ? 0.6 : 1, ...style }}
+    >
       <path
         d="M3 4 a2 2 0 0 1 2-2 h11 l7 7 v19 a2 2 0 0 1-2 2 H5 a2 2 0 0 1-2-2 Z"
-        fill="var(--c-f4f7fb)"
-        stroke="var(--c-b9cbe2)"
+        fill="var(--c-f6f5f1)"
+        stroke={paper}
         strokeWidth={strokeWidth}
       />
-      <path d="M16 2 v5 a2 2 0 0 0 2 2 h5" fill="none" stroke="var(--c-b9cbe2)" strokeWidth={strokeWidth} />
+      <path d="M16 2 v5 a2 2 0 0 0 2 2 h5" fill="none" stroke={paper} strokeWidth={strokeWidth} />
       <path
-        d="M7 15 h12 M7 19 h12 M7 23 h8"
-        stroke="var(--c-3f6ea8)"
+        d={DOC_LINES}
+        fill="none"
+        stroke={DOC_INK[format]}
         strokeWidth={lineWidth}
         strokeLinecap="round"
       />

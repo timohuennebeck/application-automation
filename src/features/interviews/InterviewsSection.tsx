@@ -1,6 +1,7 @@
 import { dateToISO, dayDiff, relLabel, shortDate } from '../../lib/date';
 import { RoundState } from '../../shared/enums';
 import { useApp } from '../../state/store-context';
+import { AddRow, DashedPlus } from '../../ui/AddRow';
 import { FieldChip } from '../../ui/FieldChip';
 import { MenuItem } from '../../ui/MenuItem';
 import { Popover, PopoverAnchor } from '../../ui/Popover';
@@ -12,7 +13,22 @@ import { RoundDot } from './RoundDot';
 export function InterviewsSection({ cardId, company }: { cardId: string; company: string }) {
   const { st, set, roundsFor } = useApp();
   const rounds = roundsFor(cardId);
-  if (!rounds.length) return null;
+
+  const addRound = () =>
+    set({
+      roundEdit: { id: cardId, ri: rounds.length, isNew: true },
+      roundDraft: { title: '', stage: '', date: '', time: '', where: 'In Person', link: '', people: [] },
+      dropdown: null,
+      editing: null,
+      roundPop: null,
+    });
+
+  if (!rounds.length)
+    return (
+      <Section sectionKey="rounds" title="Interviews" gap={14}>
+        <AddRow label="Interview hinzufügen" onClick={addRound} />
+      </Section>
+    );
 
   // Default to the upcoming round, else the first still open.
   const fallback = (() => {
@@ -65,43 +81,15 @@ export function InterviewsSection({ cardId, company }: { cardId: string; company
                   </MenuItem>
                 );
               })}
-              <MenuItem
-                style={{ color: 'var(--c-5f5c56)' }}
-                onClick={() =>
-                  set({
-                    roundEdit: { id: cardId, ri: rounds.length, isNew: true },
-                    roundDraft: { title: 'Interview', date: '', time: '', where: '', link: '', people: [] },
-                    dropdown: null,
-                    editing: null,
-                    roundPop: null,
-                  })
-                }
-              >
-                <div
-                  style={{
-                    width: 13,
-                    height: 13,
-                    borderRadius: '50%',
-                    border: '1px dashed var(--c-c9c5bb)',
-                    boxSizing: 'border-box',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: 9,
-                    color: 'var(--c-9a978f)',
-                    lineHeight: 1,
-                    flexShrink: 0,
-                  }}
-                >
-                  +
-                </div>
+              <MenuItem style={{ color: 'var(--c-5f5c56)' }} onClick={addRound}>
+                <DashedPlus size={13} />
                 <span style={{ whiteSpace: 'nowrap' }}>Interview hinzufügen</span>
               </MenuItem>
             </Popover>
           )}
         </PopoverAnchor>
       </div>
-      <InterviewCard cardId={cardId} ri={idx} round={round} company={company} />
+      <InterviewCard cardId={cardId} ri={idx} rounds={rounds.length} round={round} company={company} />
     </Section>
   );
 }

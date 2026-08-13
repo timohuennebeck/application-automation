@@ -1,16 +1,29 @@
-import { CHANNEL_BG, WHERE_OPTIONS } from '../../data/config';
+import { useRef } from 'react';
+import { CHANNEL_BG } from '../../data/config';
 import { dateToISO, isoToDate, shiftYM, todayISO } from '../../lib/date';
+import { CANONICAL_ROUNDS } from '../../shared/domain';
 import { useApp } from '../../state/store-context';
 import { CalendarPopover } from '../../ui/Calendar';
-import { ChipToggle } from '../../ui/ChipToggle';
+import { FieldChip } from '../../ui/FieldChip';
+import { MenuItem } from '../../ui/MenuItem';
 import { FieldHint, FieldLabel, ModalShell, SubmitButton } from '../../ui/ModalShell';
-import { PopoverAnchor } from '../../ui/Popover';
+import { Popover, PopoverAnchor } from '../../ui/Popover';
+import { Switch } from '../../ui/Switch';
 import { TimeRangePopover } from '../../ui/TimeRangePicker';
 import { Avatar, Check } from '../../ui/icons';
+import { RoundDot } from './RoundDot';
+
+/* A remote interview's location, read off its meeting link. */
+function remoteWhere(link: string): string {
+  if (link.includes('teams.microsoft.com')) return 'Microsoft Teams';
+  if (link.includes('meet.google.com')) return 'Google Meet';
+  return 'Remote';
+}
 
 /* Dialog for creating or editing an interview round. */
 export function InterviewEditModal({ company, channel }: { company: string; channel: string }) {
-  const { st, set, peopleForCard, saveRound, resetRound } = useApp();
+  const { st, set, peopleForCard, saveRound } = useApp();
+  const linkRef = useRef<HTMLInputElement>(null);
   const edit = st.roundEdit;
   const draft = st.roundDraft;
   if (!edit || !draft) return null;
@@ -20,8 +33,10 @@ export function InterviewEditModal({ company, channel }: { company: string; chan
   const today = todayISO();
   const selISO = dateToISO(draft.date);
   const isNew = !!edit.isNew;
-  const valid = !isNew || !!(draft.date && draft.time && draft.where && draft.title.trim());
-  const showLink = draft.where === 'Google Meet' || draft.where === 'Microsoft Teams';
+  const valid = !isNew || !!(draft.date && draft.time && draft.where && draft.title.trim() && draft.stage);
+  const inPerson = draft.where === 'In Person';
+  const showLink = !inPerson;
+  const statusIdx = CANONICAL_ROUNDS.indexOf(draft.stage);
   const close = () => set({ roundEdit: null, roundDraft: null, roundPop: null });
 
   const people = peopleForCard(edit.id);
@@ -34,30 +49,38 @@ export function InterviewEditModal({ company, channel }: { company: string; chan
   ];
 
   const popChip = (which: 'date' | 'time', text: string, filled: boolean) => (
-    <div
+    <FieldChip
+      open={st.roundPop === which}
+      empty={!filled}
+      chevron
+      gap={7}
+      style={{ padding: '3px 7px' }}
       onClick={() =>
         set((s) => ({
           roundPop: s.roundPop === which ? null : which,
           ...(which === 'time' ? { roundTimeStep: 'start' as const, roundTimeStart: null } : null),
         }))
       }
-      style={{
-        fontSize: 12.5,
-        color: filled ? 'var(--c-1b1a17)' : 'var(--c-a5a29a)',
-        lineHeight: 1.45,
-        background: st.roundPop === which ? 'var(--c-e7e4dc)' : 'var(--c-f6f5f1)',
-        borderRadius: 5,
-        padding: '3px 8px',
-        cursor: 'pointer',
-      }}
+      onClear={
+        filled
+          ? () => {
+              /* A time on no date is not an appointment, so the date takes the
+                 time with it. */
+              setDraft(which === 'date' ? { date: '', time: '' } : { time: '' });
+              set({ roundPop: null });
+            }
+          : undefined
+      }
+      clearTitle={which === 'date' ? 'Datum entfernen' : 'Uhrzeit entfernen'}
     >
-      {text}
-    </div>
+      <span>{text}</span>
+    </FieldChip>
   );
 
   return (
     <ModalShell
       onClose={close}
+      overflowVisible={!!st.roundPop}
       header={
         <div
           style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: 14, color: 'var(--c-5f5c56)' }}
@@ -71,16 +94,7 @@ export function InterviewEditModal({ company, channel }: { company: string; chan
       }
       footer={
         <>
-          {isNew ? (
-            <div />
-          ) : (
-            <div
-              style={{ fontSize: 13.5, color: 'var(--c-a8463d)', cursor: 'pointer', padding: '4px 0' }}
-              onClick={() => resetRound(edit.id, edit.ri)}
-            >
-              Interview löschen
-            </div>
-          )}
+          <div />
           <SubmitButton label={isNew ? 'Termin anlegen' : 'Speichern'} enabled={valid} onClick={saveRound} />
         </>
       }
@@ -105,6 +119,55 @@ export function InterviewEditModal({ company, channel }: { company: string; chan
         <FieldHint>
           Titel des Gesprächs, zum Beispiel „Interview“, „Fachgespräch“ oder „Kennenlernen mit dem Team“.
         </FieldHint>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 4 }}>
+        <FieldLabel>Interviewstatus</FieldLabel>
+        <PopoverAnchor style={{ width: 'fit-content' }}>
+          <FieldChip
+            open={st.roundPop === 'status'}
+            gap={7}
+            chevron
+            style={{ padding: '3px 7px' }}
+            onClick={() => set((s) => ({ roundPop: s.roundPop === 'status' ? null : 'status' }))}
+            onClear={
+              statusIdx >= 0
+                ? () => {
+                    setDraft({ stage: '' });
+                    set({ roundPop: null });
+                  }
+                : undefined
+            }
+            clearTitle="Interviewstatus entfernen"
+          >
+            {statusIdx >= 0 ? (
+              <>
+                <RoundDot index={statusIdx} total={CANONICAL_ROUNDS.length} />
+                <span>{draft.stage}</span>
+              </>
+            ) : (
+              <span style={{ color: 'var(--c-a5a29a)' }}>Interview auswählen</span>
+            )}
+          </FieldChip>
+          {st.roundPop === 'status' && (
+            <Popover top={28} minWidth={220} zIndex={70}>
+              {CANONICAL_ROUNDS.map((t, i) => (
+                <MenuItem
+                  key={t}
+                  selected={draft.stage === t}
+                  onClick={() => {
+                    setDraft({ stage: t });
+                    set({ roundPop: null });
+                  }}
+                >
+                  <RoundDot index={i} total={CANONICAL_ROUNDS.length} />
+                  <span style={{ whiteSpace: 'nowrap' }}>{t}</span>
+                  <span style={{ flex: '1 1 auto' }} />
+                </MenuItem>
+              ))}
+            </Popover>
+          )}
+        </PopoverAnchor>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 4 }}>
@@ -148,35 +211,34 @@ export function InterviewEditModal({ company, channel }: { company: string; chan
         </div>
         <FieldHint>
           {isNew
-            ? 'Titel, Datum, Uhrzeit und Standort sind nötig, um den Termin anzulegen.'
+            ? 'Titel, Interviewstatus, Datum und Uhrzeit sind nötig, um den Termin anzulegen.'
             : 'Datum und Uhrzeit des Gesprächs. Leer lassen, wenn der Termin noch nicht steht — die Runde bleibt dann als offen stehen.'}
         </FieldHint>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 4 }}>
-        <FieldLabel>Standort</FieldLabel>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-          {WHERE_OPTIONS.map((w) => (
-            <ChipToggle
-              key={w}
-              label={w}
-              selected={draft.where === w}
-              onClick={() => setDraft({ where: draft.where === w ? '' : w })}
-            />
-          ))}
-        </div>
+        <Switch
+          on={inPerson}
+          label="Ist in Person"
+          onClick={() => {
+            if (inPerson) {
+              setDraft({ where: remoteWhere(draft.link) });
+              // The link input only mounts with the next render.
+              requestAnimationFrame(() => linkRef.current?.focus());
+            } else {
+              setDraft({ where: 'In Person' });
+            }
+          }}
+        />
       </div>
 
       {showLink && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 4 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <input
+            ref={linkRef}
             value={draft.link}
-            placeholder={
-              draft.where === 'Microsoft Teams'
-                ? 'https://teams.microsoft.com/l/meetup-join/…'
-                : 'https://meet.google.com/…'
-            }
-            onChange={(e) => setDraft({ link: e.target.value })}
+            placeholder="https://meet.google.com/… oder https://teams.microsoft.com/…"
+            onChange={(e) => setDraft({ link: e.target.value, where: remoteWhere(e.target.value) })}
             style={{
               fontSize: 15,
               color: 'var(--c-1b1a17)',
@@ -189,8 +251,7 @@ export function InterviewEditModal({ company, channel }: { company: string; chan
             }}
           />
           <FieldHint>
-            Link zum Meeting einfügen. Er wird beim Termin hinterlegt und ist aus der Bewerbung heraus
-            aufrufbar.
+            Link einfügen. Er wird beim Termin hinterlegt und ist aus der Bewerbung heraus aufrufbar.
           </FieldHint>
         </div>
       )}

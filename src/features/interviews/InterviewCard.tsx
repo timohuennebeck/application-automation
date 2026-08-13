@@ -5,7 +5,6 @@ import { dateToISO, dayDiff, isoToDate, relLabel, shiftYM, todayISO } from '../.
 import { KEPLER_ENTRY } from '../../lib/mentions';
 import { Author, AUTHOR_LABEL, RoundState } from '../../shared/enums';
 import { useApp } from '../../state/store-context';
-import { AddRow } from '../../ui/AddRow';
 import { CalendarPopover } from '../../ui/Calendar';
 import { ChipToggle } from '../../ui/ChipToggle';
 import { FieldChip } from '../../ui/FieldChip';
@@ -13,21 +12,26 @@ import { FieldRow } from '../../ui/FieldRow';
 import { MentionComposer } from '../../ui/MentionComposer';
 import { MentionText } from '../../ui/MentionText';
 import { MenuItem } from '../../ui/MenuItem';
-import { Popover, PopoverAnchor, PopoverVariant } from '../../ui/Popover';
+import { Popover, PopoverAnchor } from '../../ui/Popover';
 import { TimeRangePopover } from '../../ui/TimeRangePicker';
 import { Avatar, DotsGlyph } from '../../ui/icons';
 import { PeoplePicker } from '../people/PeoplePicker';
 import { PersonEditCard } from '../people/PersonEditCard';
+import { RoundDot } from './RoundDot';
 
 /* One interview round: schedule, location, participants and its note thread. */
 export function InterviewCard({
   cardId,
   ri,
+  rounds,
   round,
   company,
 }: {
   cardId: string;
   ri: number;
+  /* How many rounds the application has — the dot's stage is this round's
+     position within them, exactly as in the selector above the card. */
+  rounds: number;
   round: Round;
   company: string;
 }) {
@@ -132,11 +136,54 @@ export function InterviewCard({
   // everyone attached to this application, not only this round's participants.
   const mentionable = [KEPLER_ENTRY, ...peopleForCard(cardId)];
   const mentionNames = mentionable.map((p) => p.name);
-  const expanded = !!st.roundExpanded[cardId + ':' + ri];
-  const asStack = people.length > 3 && !expanded;
   const meetLink = round.where === 'Google Meet' || round.where === 'Microsoft Teams';
   const addingPerson = st.editing === key('person');
   const menuOpen = isOpen('menu');
+
+  const togglePicker = () =>
+    set((s) => ({
+      editing: s.editing === key('person') ? null : key('person'),
+      editDraft: '',
+      dropdown: null,
+    }));
+
+  const noPeople = people.length === 0;
+  /* The chip states who is on the round the way the sidebar's contact chip
+     does: one name, or the first plus a count. */
+  const peopleLabel = noPeople
+    ? 'Kein Kontakt ausgewählt'
+    : people.length === 1
+      ? people[0].name
+      : people[0].name + ' +' + (people.length - 1);
+
+  const clearPeople = () => {
+    editRound((r) => {
+      r.people = [];
+    });
+    logAct(cardId, 'hat alle Teilnehmer aus „' + round.title + '“ entfernt');
+    set({ editing: null, personEdit: null, personDraft: null });
+  };
+
+  /* The picker's pencil opens the same editor the participant chips use, only
+     inside the picker: the person need not be in this round to be corrected. */
+  const pe = st.personEdit;
+  const pickerEdit = addingPerson && pe?.forPicker && pe.id === cardId && pe.ri === ri ? pe : null;
+  const editPersonFromPicker = (pk: string) => {
+    const p = person(pk);
+    set({
+      personEdit: { id: cardId, ri, key: pk, isNew: false, forPicker: true },
+      personDraft: {
+        name: p.name,
+        role: p.role,
+        email: p.email || '',
+        phone: p.phone || '',
+        linkedin: p.linkedin || '',
+      },
+      personField: null,
+      personFieldDraft: '',
+      dropdown: null,
+    });
+  };
 
   return (
     <div
@@ -152,6 +199,8 @@ export function InterviewCard({
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 7, minWidth: 0, flex: '1 1 0' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+          {/* The ring sits on the text's centre, not on its baseline. */}
+          <RoundDot index={ri} total={rounds} style={{ alignSelf: 'center', opacity: done ? 0.6 : 1 }} />
           <div style={{ fontSize: 13.5, fontWeight: 600, color: sy.titleColor, lineHeight: 1.3 }}>
             {round.title}
           </div>
@@ -163,6 +212,7 @@ export function InterviewCard({
             <FieldChip
               open={isOpen('date')}
               empty={!rISO}
+              chevron
               color={rISO && done ? 'var(--c-77746d)' : undefined}
               style={{ padding: '2px 7px', marginLeft: -7 }}
               onClick={() => toggle('date')}
@@ -192,10 +242,11 @@ export function InterviewCard({
             <FieldChip
               open={isOpen('time')}
               empty={!round.time}
+              chevron
               color={round.time && done ? 'var(--c-77746d)' : undefined}
               style={{ padding: '2px 7px', marginLeft: -7 }}
               onClick={() => toggle('time', { cardTimeStep: 'start', cardTimeStart: null })}
-              onClear={round.time ? () => setTime('', false) : undefined}
+              onClear={round.time ? () => setTime('', true) : undefined}
               clearTitle="Uhrzeit entfernen"
             >
               <span>{round.time || 'Keine Uhrzeit ausgewählt'}</span>
@@ -221,10 +272,18 @@ export function InterviewCard({
             <FieldChip
               open={isOpen('where')}
               empty={!round.where}
+              chevron
               color={round.where && done ? 'var(--c-77746d)' : undefined}
               style={{ padding: '2px 7px', marginLeft: -7 }}
               onClick={() => toggle('where')}
-              onClear={round.where ? () => setWhere('') : undefined}
+              onClear={
+                round.where
+                  ? () => {
+                      setWhere('');
+                      set({ dropdown: null });
+                    }
+                  : undefined
+              }
               clearTitle="Ort entfernen"
             >
               <span>{round.where || 'Kein Ort ausgewählt'}</span>
@@ -262,15 +321,6 @@ export function InterviewCard({
                 title={round.link}
                 style={{ padding: '2px 7px', marginLeft: -7 }}
                 onClick={() => toggle('link')}
-                onClear={
-                  round.link
-                    ? () =>
-                        editRound((r) => {
-                          r.link = '';
-                        })
-                    : undefined
-                }
-                clearTitle="Link entfernen"
               >
                 <span
                   style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}
@@ -324,115 +374,49 @@ export function InterviewCard({
           </FieldRow>
         )}
 
-        <FieldRow label="Teilnehmer" align="flex-start">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0, flex: '1 1 0' }}>
-            {asStack ? (
-              <div
-                className="add-row"
-                title="Alle anzeigen"
-                onClick={() =>
-                  set((s) => ({ roundExpanded: { ...s.roundExpanded, [cardId + ':' + ri]: true } }))
-                }
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 7,
-                  padding: '2px 6px',
-                  marginLeft: -6,
-                  width: 'fit-content',
-                  boxSizing: 'content-box',
-                }}
-              >
-                <div style={{ display: 'flex', flexShrink: 0 }}>
-                  {people.slice(0, 3).map((p, i) => (
-                    <Avatar
-                      key={p.key}
-                      bg={p.bg}
-                      style={{ boxShadow: '0 0 0 1.5px var(--c-fbfaf7)', marginLeft: i ? -6 : 0 }}
-                    >
-                      {p.initials}
-                    </Avatar>
-                  ))}
+        <FieldRow label="Teilnehmer">
+          {/* One chip opens the picker, like the sidebar's contact field: the
+              participants read as a value of the round rather than as a list
+              with an add row under it. */}
+          <PopoverAnchor style={{ width: 'fit-content' }}>
+            <FieldChip
+              open={addingPerson}
+              empty={noPeople}
+              chevron={!done}
+              gap={6}
+              style={{ padding: '2px 6px 2px 3px', marginLeft: -6 }}
+              onClick={done ? undefined : togglePicker}
+              onClear={!done && !noPeople ? clearPeople : undefined}
+              clearTitle="Alle Teilnehmer entfernen"
+            >
+              <div style={{ display: 'flex', flexShrink: 0 }}>
+                {(noPeople ? [null] : people.slice(0, 3)).map((p, i) => (
                   <Avatar
-                    bg="var(--c-f0eee8)"
-                    style={{
-                      color: 'var(--c-5f5c56)',
-                      boxShadow: '0 0 0 1.5px var(--c-fbfaf7)',
-                      marginLeft: -6,
-                    }}
+                    key={p ? p.key : 'none'}
+                    bg={p ? (sy.muted ? 'var(--c-c9c5bb)' : p.bg) : 'var(--c-b3b0a8)'}
+                    style={{ boxShadow: '0 0 0 1.5px var(--c-fff)', marginLeft: i ? -6 : 0 }}
                   >
-                    +{people.length - 3}
+                    {p ? p.initials : '–'}
                   </Avatar>
-                </div>
-                <div style={{ fontSize: 12, color: 'var(--c-8b8880)' }}>
-                  {people
-                    .map((p) => (p.role || '').split(',')[0])
-                    .filter(Boolean)
-                    .join(', ')}
-                </div>
+                ))}
               </div>
-            ) : (
-              people.map((p) => {
-                const pe = st.personEdit;
-                const editing = pe?.id === cardId && pe.ri === ri && pe.key === p.key;
-                const inRounds = st.roundsState[cardId]?.filter((r) => r.people.includes(p.key)).length ?? 1;
-                return (
-                  <PopoverAnchor key={p.key} style={{ width: 'fit-content' }}>
-                    <FieldChip
-                      open={editing}
-                      style={{ padding: '2px 6px', marginLeft: -6 }}
-                      onClick={() =>
-                        set({
-                          personEdit: { id: cardId, ri, key: p.key, isNew: false },
-                          personDraft: {
-                            name: p.name,
-                            role: p.role,
-                            email: p.email || '',
-                            phone: p.phone || '',
-                            linkedin: p.linkedin || '',
-                          },
-                          dropdown: null,
-                          editing: null,
-                        })
-                      }
-                      onClear={() => {
-                        editRound((r) => {
-                          r.people = r.people.filter((k) => k !== p.key);
-                        });
-                        logAct(cardId, 'hat ' + p.name + ' aus „' + round.title + '“ entfernt');
-                        set({ personEdit: null, personDraft: null });
-                      }}
-                      clearTitle="Aus dieser Runde entfernen"
-                    >
-                      <Avatar bg={sy.muted ? 'var(--c-c9c5bb)' : p.bg}>{p.initials}</Avatar>
-                      <span style={{ color: sy.muted ? 'var(--c-8b8880)' : 'var(--c-28261f)' }}>
-                        {p.name}
-                      </span>
-                      <span style={{ color: p.role ? 'var(--c-a5a29a)' : 'var(--c-c3c0b8)' }}>
-                        {p.role || 'Position fehlt'}
-                      </span>
-                    </FieldChip>
-                    {editing && (
-                      <Popover variant={PopoverVariant.PANEL} top={29} left={-6} width={312} padding={0}>
-                        <PersonEditCard
-                          personKey={p.key}
-                          subExtra={inRounds > 1 ? ' · in ' + inRounds + ' Runden' : ''}
-                          canDelete
-                          onDelete={() => deletePerson(cardId, p.key, false)}
-                          onDone={savePerson}
-                        />
-                      </Popover>
-                    )}
-                  </PopoverAnchor>
-                );
-              })
-            )}
-
-            {addingPerson ? (
-              /* The row keeps its own -6 gutter, so the anchor must not add one. */
-              <PopoverAnchor style={{ width: 'fit-content' }}>
-                <AddRow label="Person hinzufügen" active />
-                <Popover top={27} left={0} zIndex={20} width={290}>
+              <span style={{ fontSize: 12 }}>{peopleLabel}</span>
+              {people.length === 1 && (
+                <span style={{ fontSize: 12, color: people[0].role ? 'var(--c-a5a29a)' : 'var(--c-c3c0b8)' }}>
+                  {people[0].role || 'Position fehlt'}
+                </span>
+              )}
+            </FieldChip>
+            {addingPerson && (
+              <Popover top={29} left={-6} zIndex={20} width={290}>
+                {pickerEdit ? (
+                  <PersonEditCard
+                    personKey={pickerEdit.key}
+                    canDelete
+                    onDelete={() => deletePerson(cardId, pickerEdit.key, false)}
+                    onDone={savePerson}
+                  />
+                ) : (
                   <PeoplePicker
                     draft={st.editDraft}
                     onDraftChange={(v) => set({ editDraft: v })}
@@ -440,20 +424,14 @@ export function InterviewCard({
                     people={peopleForCard(cardId)}
                     isSelected={(k) => round.people.includes(k)}
                     onToggle={togglePerson}
+                    onEdit={editPersonFromPicker}
                     onCreate={(name) => createPersonForRound(cardId, ri, name)}
                     onClose={() => set({ editing: null, editDraft: '' })}
                   />
-                </Popover>
-              </PopoverAnchor>
-            ) : (
-              !done && (
-                <AddRow
-                  label="Person hinzufügen"
-                  onClick={() => set({ editing: key('person'), editDraft: '', dropdown: null })}
-                />
-              )
+                )}
+              </Popover>
             )}
-          </div>
+          </PopoverAnchor>
         </FieldRow>
 
         <div
@@ -515,13 +493,9 @@ export function InterviewCard({
 
       <PopoverAnchor style={{ flexShrink: 0 }}>
         <div
-          className="dots-btn"
+          className={menuOpen ? 'dots-btn dots-btn-open' : 'dots-btn'}
           title="Mehr"
           onClick={() => toggle('menu')}
-          style={{
-            background: menuOpen ? 'var(--c-e7e4dc)' : 'transparent',
-            color: menuOpen ? 'var(--c-1b1a17)' : 'var(--c-c3c0b8)',
-          }}
         >
           <DotsGlyph />
         </div>
@@ -534,6 +508,7 @@ export function InterviewCard({
                   roundEdit: { id: cardId, ri },
                   roundDraft: {
                     title: round.title,
+                    stage: round.stage,
                     date: round.date,
                     time: round.time,
                     where: round.where,

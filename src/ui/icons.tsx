@@ -385,23 +385,6 @@ export function PaperclipGlyph() {
   );
 }
 
-export function DownloadGlyph() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 16 16" style={{ flexShrink: 0 }}>
-      <path d="M8 2.6 V10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-      <path
-        d="M5.1 7.3 L8 10.2 L10.9 7.3"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path d="M3.6 13.2 h8.8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-    </svg>
-  );
-}
-
 export function DotsGlyph() {
   return (
     <svg width="13" height="13" viewBox="0 0 14 14">

@@ -236,6 +236,9 @@ export interface DbApi {
     setCompleted(followupId: number, completedAt: string | null): Promise<FollowupRow>;
     saveEmail(followupId: number, subject: string, text: string): Promise<FollowupRow>;
   };
+  documents: {
+    setFile(documentId: number, filePath: string): Promise<DocumentRow>;
+  };
   activities: {
     add(applicationId: string, author: Author, text: string): Promise<ActivityRow>;
   };

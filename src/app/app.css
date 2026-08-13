@@ -239,7 +239,6 @@
   box-shadow: 0 3px 10px var(--s-9);
 }
 .doc-dl {
-  margin-left: auto;
   flex-shrink: 0;
   width: 28px;
   height: 28px;
@@ -251,7 +250,8 @@
   cursor: pointer;
   color: var(--c-9a978f);
 }
-.doc-card:hover .doc-dl,
+/* Only the button itself lights up. Reacting to the whole card promised that
+   hovering anywhere would act on the menu, which it does not. */
 .doc-dl:hover {
   background: var(--c-eae7e0);
   color: var(--c-1b1a17);

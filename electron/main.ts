@@ -5,6 +5,8 @@ import { openDb } from './db/open.ts';
 import { seedIfEmpty } from './db/seed.ts';
 import { createRepo } from './db/repo.ts';
 import { registerDbIpc } from './db/ipc.ts';
+import { copyDocument, documentSize, purgeApplicationFiles, resolveDocumentPath } from './files.ts';
+import type { DocumentKind } from '../src/shared/enums.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -75,13 +77,43 @@ ipcMain.on('theme:set', (_e, theme: 'light' | 'dark') => {
 
 ipcMain.handle('shell:openExternal', (_e, url: string) => openExternal(url));
 
+/* Document files. The picker runs here because the renderer, with context
+   isolation on, never sees a real path — and because the dialog's file-type
+   filter is a suggestion on macOS, the extension is checked again in
+   copyDocument before anything is written. */
+ipcMain.handle('documents:pick', async () => {
+  const res = await dialog.showOpenDialog(win!, {
+    title: 'Dokument ersetzen',
+    properties: ['openFile'],
+    filters: [{ name: 'Word-Dokument', extensions: ['docx'] }],
+  });
+  return res.canceled ? null : (res.filePaths[0] ?? null);
+});
+
+ipcMain.handle('documents:copy', (_e, applicationId: string, kind: DocumentKind, sourcePath: string) =>
+  copyDocument(app.getPath('userData'), applicationId, kind, sourcePath),
+);
+
+/* Sizes for the document menu, in one round trip. */
+ipcMain.handle('documents:sizes', (_e, filePaths: string[]) =>
+  filePaths.map((p) => documentSize(app.getPath('userData'), p)),
+);
+
+/* Opens the stored file in whatever the OS uses for .docx. Returns the error
+   string openPath gives on failure ('' means it opened). */
+ipcMain.handle('documents:open', (_e, filePath: string) =>
+  shell.openPath(resolveDocumentPath(app.getPath('userData'), filePath)),
+);
+
 /* The database must be usable before any window exists; a broken store means
    quit with an error rather than silently running in-memory and losing edits. */
 function initDb(): boolean {
   try {
     const db = openDb(path.join(app.getPath('userData'), 'bewerbungen.db'));
     seedIfEmpty(db);
-    registerDbIpc(createRepo(db));
+    registerDbIpc(createRepo(db), {
+      afterDeleteApplication: (id) => purgeApplicationFiles(app.getPath('userData'), id),
+    });
     return true;
   } catch (err) {
     dialog.showErrorBox('Datenbank-Fehler', 'Die Datenbank konnte nicht geöffnet werden:\n\n' + String(err));

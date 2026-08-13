@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { DbApi } from '../src/shared/db-types.ts';
+import type { DocumentKind } from '../src/shared/enums.ts';
 
 const invoke =
   (channel: string) =>
@@ -41,6 +42,7 @@ const db: DbApi = {
     setCompleted: invoke('db:followups.setCompleted'),
     saveEmail: invoke('db:followups.saveEmail'),
   } as DbApi['followups'],
+  documents: { setFile: invoke('db:documents.setFile') } as DbApi['documents'],
   activities: { add: invoke('db:activities.add') } as DbApi['activities'],
 };
 
@@ -51,6 +53,18 @@ const api = {
   setTheme: (theme: 'light' | 'dark') => ipcRenderer.send('theme:set', theme),
   openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
   db,
+  documents: {
+    /* Native picker; null when the dialog was cancelled. */
+    pick: (): Promise<string | null> => ipcRenderer.invoke('documents:pick'),
+    /* Copies the picked file into userData, resolving to its stored path. */
+    copy: (applicationId: string, kind: DocumentKind, sourcePath: string): Promise<string> =>
+      ipcRenderer.invoke('documents:copy', applicationId, kind, sourcePath),
+    /* Sizes in bytes, index-aligned with the paths; null where the file is gone. */
+    sizes: (filePaths: string[]): Promise<(number | null)[]> =>
+      ipcRenderer.invoke('documents:sizes', filePaths),
+    /* Hands the file to the OS; resolves to '' on success, else the reason. */
+    open: (filePath: string): Promise<string> => ipcRenderer.invoke('documents:open', filePath),
+  },
 };
 
 contextBridge.exposeInMainWorld('desktop', api);

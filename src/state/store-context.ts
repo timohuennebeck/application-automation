@@ -13,7 +13,7 @@ import type {
 } from '../shared/db-types';
 import type { PersonView, RoundView } from './db-view';
 import type { SortDir, SortKey } from '../data/config';
-import type { Interest, LinkKind } from '../shared/enums';
+import type { DocumentKind, Interest, LinkKind } from '../shared/enums';
 
 /* Components render rounds through this alias. */
 export type Round = RoundView;
@@ -174,6 +174,14 @@ export interface AppStore {
   saveRound: () => void;
   /* Sidebar field write, routed to the owning table (see fact-label routing). */
   writeField: (id: string, label: string, value: string) => void;
+  /* Picks a .docx and points the document row at it. Resolves to the reason
+     it failed, or null on success and on cancel. */
+  replaceDocument: (
+    id: string,
+    documentId: number,
+    kind: DocumentKind,
+    title: string,
+  ) => Promise<string | null>;
   setInterest: (id: string, interest: Interest) => void;
   saveSummary: (id: string, text: string | null) => void;
   addComment: (id: string, text: string) => void;

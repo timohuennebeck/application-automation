@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { COLUMNS, SortDir, SortKey, STAGE_IDS } from '../data/config';
-import { Author, FactKind, Interest, LinkKind, RoundState } from '../shared/enums';
+import { Author, DocumentKind, FactKind, Interest, LinkKind, RoundState } from '../shared/enums';
 import type { ActivityRow, FollowupRow } from '../shared/db-types';
 import { CANONICAL_ROUNDS } from '../shared/domain';
 import { indexSnapshot, roundInput, personView } from './db-view';
@@ -828,6 +828,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [set],
   );
 
+  /* Replaces a document with a file the user picks. Deliberately not
+     optimistic: the row may only claim a file once the bytes are actually in
+     userData, or the card would offer a download that cannot open. Returns the
+     reason it failed, or null. */
+  const replaceDocument = useCallback(
+    async (id: string, documentId: number, kind: DocumentKind, title: string): Promise<string | null> => {
+      const api = window.desktop;
+      if (!api) return 'Ohne Desktop-Umgebung nicht möglich.';
+      try {
+        const source = await api.documents.pick();
+        if (!source) return null; // cancelled
+        const filePath = await api.documents.copy(id, kind, source);
+        const row = await api.db.documents.setFile(documentId, filePath);
+        set((s) => ({
+          documentsByApp: {
+            ...s.documentsByApp,
+            [id]: (s.documentsByApp[id] || []).map((d) => (d.id === documentId ? row : d)),
+          },
+        }));
+        logAct(id, 'hat „' + title + '“ ersetzt');
+        return null;
+      } catch (err) {
+        console.error('[documents]', err);
+        return String(err);
+      }
+    },
+    [logAct, set],
+  );
+
   const setInterest = useCallback(
     (id: string, interest: Interest) => {
       set((s) => ({ applications: { ...s.applications, [id]: { ...s.applications[id], interest } } }));
@@ -1083,6 +1112,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       createPersonForRound,
       saveRound,
       writeField,
+      replaceDocument,
       setInterest,
       saveSummary,
       addComment,

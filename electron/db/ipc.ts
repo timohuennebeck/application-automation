@@ -25,12 +25,24 @@ export const DB_CHANNELS = {
   'db:followups.setDue': 'setFollowupDue',
   'db:followups.setCompleted': 'setFollowupCompleted',
   'db:followups.saveEmail': 'saveFollowupEmail',
+  'db:documents.setFile': 'setDocumentFile',
   'db:activities.add': 'addActivity',
 } as const satisfies Record<string, keyof Repo>;
 
-export function registerDbIpc(repo: Repo): void {
+/* Side effects that outlive the database row. Deleting an application cascades
+   its child rows, but nothing in SQL clears the files on disk — and this is the
+   one layer that knows about both. */
+export interface DbIpcHooks {
+  afterDeleteApplication?: (applicationId: string) => void;
+}
+
+export function registerDbIpc(repo: Repo, hooks: DbIpcHooks = {}): void {
   for (const [channel, method] of Object.entries(DB_CHANNELS)) {
     const fn = repo[method] as (...args: unknown[]) => unknown;
-    ipcMain.handle(channel, (_e, ...args: unknown[]) => fn(...args));
+    ipcMain.handle(channel, (_e, ...args: unknown[]) => {
+      const out = fn(...args);
+      if (method === 'deleteApplication') hooks.afterDeleteApplication?.(args[0] as string);
+      return out;
+    });
   }
 }

@@ -552,6 +552,20 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
       });
     },
 
+    /* Points a document row at a file the user just supplied. Bumping
+       updated_at is what makes the card read "aktualisiert am" instead of
+       "erstellt am". */
+    setDocumentFile(documentId: number, filePath: string): DocumentRow {
+      return tx(() => {
+        db.prepare('UPDATE documents SET file_path = ?, updated_at = ? WHERE id = ?').run(
+          filePath,
+          nowISO(),
+          documentId,
+        );
+        return one<DocumentRow>('SELECT * FROM documents WHERE id = ?', documentId);
+      });
+    },
+
     addActivity(applicationId: string, author: Author, text: string): ActivityRow {
       return tx(() => {
         const res = db

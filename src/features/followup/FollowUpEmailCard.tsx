@@ -174,6 +174,7 @@ export function FollowUpEmailCard({
               <div style={LABEL}>Fällig am</div>
               <FieldChip
                 open={dueOpen}
+                chevron
                 gap={5}
                 onClick={() =>
                   set((s) => ({ dropdown: s.dropdown === dueKey ? null : dueKey, editing: null }))

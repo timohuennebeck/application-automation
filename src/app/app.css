@@ -76,6 +76,28 @@
   color: var(--c-5f5c56);
   background: var(--c-d8d4ca);
 }
+/* A dropdown holding a clearable value trades its chevron for the ✕ under the
+   cursor: same spot, same width, one click to empty the field. */
+.chip-swap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.chip-swap .chip-clear {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  margin-left: 0;
+  display: none;
+}
+.chip:hover .chip-swap .chip-clear {
+  display: block;
+}
+.chip:hover .chip-swap .chip-chevron {
+  visibility: hidden;
+}
 
 /* Dropdown menus. Order matters: the selected row still has to react to hover. */
 .menu-item {
@@ -376,10 +398,22 @@
   font-size: 13px;
   line-height: 1;
   letter-spacing: 0.05em;
+  color: var(--c-c3c0b8);
+}
+/* The states live here rather than in an inline style, which would outrank
+   :hover and leave the button flat under the cursor. Order matters: the open
+   fill has to come last so it also holds while hovered. */
+.dots-btn-header {
+  color: var(--c-a5a29a);
 }
 .dots-btn:hover {
   background: var(--c-f1efe9);
   color: var(--c-5f5c56);
+}
+.dots-btn-open,
+.dots-btn-open:hover {
+  background: var(--c-e7e4dc);
+  color: var(--c-1b1a17);
 }
 
 /* One attachment under a comment — the whole row opens the file. fit-content,

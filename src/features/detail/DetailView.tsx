@@ -151,13 +151,9 @@ export function DetailView() {
 
         <PopoverAnchor style={{ marginLeft: 'auto', flexShrink: 0 }}>
           <div
-            className="dots-btn"
+            className={cardMenuOpen ? 'dots-btn dots-btn-header dots-btn-open' : 'dots-btn dots-btn-header'}
             title="Mehr"
             onClick={() => set((s) => ({ dropdown: s.dropdown === 'card' ? null : 'card', editing: null }))}
-            style={{
-              background: cardMenuOpen ? 'var(--c-e7e4dc)' : 'transparent',
-              color: cardMenuOpen ? 'var(--c-1b1a17)' : 'var(--c-a5a29a)',
-            }}
           >
             <DotsGlyph />
           </div>

@@ -36,6 +36,10 @@ export function FactField({ fact, cardId, locked }: { fact: FactView; cardId: st
   const toggle = () => {
     if (!locked) set((s) => ({ dropdown: s.dropdown === key ? null : key, editing: null }));
   };
+  /* '—' and 'nicht angegeben' are the row's empty markers, not values, so a
+     row showing one of them has nothing to clear. */
+  const filled = fact.value !== '—' && fact.value !== 'nicht angegeben';
+  const clearValue = filled ? () => write('') : undefined;
 
   if (fact.isSalary) {
     return <SalaryField value={fact.value} cardId={cardId} locked={locked} />;
@@ -44,7 +48,15 @@ export function FactField({ fact, cardId, locked }: { fact: FactView; cardId: st
   if (fact.isSelect) {
     return (
       <PopoverAnchor style={{ marginLeft: -6 }}>
-        <FieldChip open={open} locked={locked} gap={5} onClick={toggle}>
+        <FieldChip
+          open={open}
+          locked={locked}
+          chevron
+          gap={5}
+          onClick={toggle}
+          onClear={clearValue}
+          clearTitle={fact.label + ' entfernen'}
+        >
           <span>{fact.value}</span>
         </FieldChip>
         {open && (
@@ -65,7 +77,15 @@ export function FactField({ fact, cardId, locked }: { fact: FactView; cardId: st
     const min = (selISO && selISO < today ? selISO : today).slice(0, 7);
     return (
       <PopoverAnchor style={{ marginLeft: -6 }}>
-        <FieldChip open={open} locked={locked} gap={5} onClick={toggle}>
+        <FieldChip
+          open={open}
+          locked={locked}
+          chevron
+          gap={5}
+          onClick={toggle}
+          onClear={clearValue}
+          clearTitle={fact.label + ' entfernen'}
+        >
           <span>{fact.value}</span>
         </FieldChip>
         {open && (

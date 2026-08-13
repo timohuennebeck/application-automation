@@ -46,6 +46,7 @@ export function ContactPicker({
     <>
       <FieldChip
         open={open}
+        chevron
         gap={6}
         style={{ padding: '2px 6px 2px 3px' }}
         onClick={() =>

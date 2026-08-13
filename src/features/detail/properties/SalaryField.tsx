@@ -78,10 +78,17 @@ export function SalaryField({ value, cardId, locked }: { value: string; cardId: 
           open={st.dropdown === key}
           empty={picked === null}
           locked={locked}
+          chevron
           gap={5}
           onClick={() => {
             if (!locked) set((s) => ({ dropdown: s.dropdown === key ? null : key, editing: null }));
           }}
+          onClear={
+            picked === null
+              ? undefined
+              : () => write(side === 'from' ? { ...range, from: null } : { ...range, to: null })
+          }
+          clearTitle={side === 'from' ? 'Untere Grenze entfernen' : 'Obere Grenze entfernen'}
         >
           <span>{picked === null ? placeholder : picked + 'k €'}</span>
         </FieldChip>

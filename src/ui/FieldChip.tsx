@@ -10,6 +10,9 @@ export interface FieldChipProps {
   locked?: boolean;
   chevron?: boolean;
   onClick?: () => void;
+  /* Empties the field. On a dropdown (chevron) the ✕ takes the chevron's place
+     while the pill is hovered; elsewhere it sits after the value. Leave it off
+     when the field has nothing to clear — the chevron then stays put. */
   onClear?: () => void;
   clearTitle?: string;
   title?: string;
@@ -39,6 +42,13 @@ export function FieldChip({
     e.stopPropagation();
     onClear?.();
   };
+  /* A locked chip is the agent's to change, so it offers no ✕ either. */
+  const clearable = !!onClear && !locked;
+  const clearGlyph = (
+    <span className="chip-clear" title={clearTitle} onClick={clear} style={{ flexShrink: 0 }}>
+      ✕
+    </span>
+  );
   return (
     <div
       className={locked ? 'chip-locked' : open ? 'chip chip-open' : 'chip'}
@@ -69,12 +79,19 @@ export function FieldChip({
       }}
     >
       {children}
-      {onClear && (
-        <span className="chip-clear" title={clearTitle} onClick={clear} style={{ flexShrink: 0 }}>
-          ✕
+      {clearable && chevron ? (
+        /* Both glyphs share one trailing slot, so the pill keeps its width
+           whichever of them is showing. */
+        <span className="chip-swap">
+          <Chevron className="chip-chevron" />
+          {clearGlyph}
         </span>
+      ) : (
+        <>
+          {clearable && clearGlyph}
+          {chevron && <Chevron />}
+        </>
       )}
-      {chevron && <Chevron />}
     </div>
   );
 }

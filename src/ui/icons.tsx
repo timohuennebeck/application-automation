@@ -96,15 +96,23 @@ export function ColumnIcon({
 export function Chevron({
   dir = 'down',
   size = 9,
+  className,
   style,
 }: {
   dir?: 'down' | 'right';
   size?: number;
+  className?: string;
   style?: CSSProperties;
 }) {
   const d = dir === 'down' ? 'M2 3.6 L5 6.6 L8 3.6' : 'M3.6 2 L6.6 5 L3.6 8';
   return (
-    <svg width={size} height={size} viewBox="0 0 10 10" style={{ flexShrink: 0, opacity: 0.5, ...style }}>
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 10 10"
+      className={className}
+      style={{ flexShrink: 0, opacity: 0.5, ...style }}
+    >
       <path
         d={d}
         fill="none"

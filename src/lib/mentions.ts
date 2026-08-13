@@ -1,7 +1,9 @@
 /* @-mentions in comments: detecting the query being typed, inserting a pick,
    and splitting stored text back into plain runs and mention chips. */
+import { Author, AUTHOR_LABEL } from '../shared/enums';
 
-export const KEPLER = 'Kepler';
+/* The name Kepler is mentioned by — the same one its comments are signed with. */
+export const KEPLER = AUTHOR_LABEL[Author.KEPLER];
 
 export interface Mentionable {
   key: string;

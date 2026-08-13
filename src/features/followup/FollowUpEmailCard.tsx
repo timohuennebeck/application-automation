@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { isoToDate, shiftISO, shiftYM, todayISO } from '../../lib/date';
+import { LinkKind } from '../../shared/enums';
 import { useApp } from '../../state/store-context';
 import { CalendarPopover } from '../../ui/Calendar';
 import { FieldChip } from '../../ui/FieldChip';
@@ -124,7 +125,7 @@ export function FollowUpEmailCard({ cardId, role, company, slots, sel }: {
                   company={company}
                   list={contacts}
                   onSave={(l) => setEmailContacts(cardId, l)}
-                  store="email"
+                  store={LinkKind.EMAIL}
                 />
               </div>
             </PopoverAnchor>

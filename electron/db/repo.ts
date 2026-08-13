@@ -8,17 +8,14 @@ import type {
     ApplicationPatch,
     ApplicationPersonRow,
     ApplicationRow,
-    Author,
     CommentRow,
     CompanyPatch,
     CompanyRow,
     CreateApplicationResult,
     DbSnapshot,
     DocumentRow,
-    FactKind,
     FactRow,
     FollowupRow,
-    LinkKind,
     PersonInput,
     PersonPatch,
     PersonRow,
@@ -28,6 +25,14 @@ import type {
     RoundRow,
     StageRow,
 } from "../../src/shared/db-types.ts";
+import {
+    Author,
+    DocumentKind,
+    FactKind,
+    Interest,
+    LinkKind,
+    RoundState,
+} from "../../src/shared/enums.ts";
 import {
     CANONICAL_ROUNDS,
     DEFAULT_COMMENT,
@@ -187,12 +192,12 @@ export function createRepo(
             "INSERT INTO rounds (application_id, position, state, title) VALUES (?,?,?,?)",
         );
         CANONICAL_ROUNDS.forEach((title, pos) =>
-            insRound.run(appId, pos, "open", title),
+            insRound.run(appId, pos, RoundState.OPEN, title),
         );
 
         db.prepare(
             "INSERT INTO comments (application_id, author, text, created_at) VALUES (?,?,?,?)",
-        ).run(appId, "Kepler", DEFAULT_COMMENT, now.toISOString());
+        ).run(appId, Author.KEPLER, DEFAULT_COMMENT, now.toISOString());
 
         /* The default cadence, counted from today's midnight. */
         const midnight = new Date(
@@ -215,8 +220,8 @@ export function createRepo(
         const insDoc = db.prepare(
             "INSERT INTO documents (application_id, kind, title, format, created_at, updated_at) VALUES (?,?,?,?,?,?)",
         );
-        insDoc.run(appId, "cover-letter", "Cover Letter", "docx", t, t);
-        insDoc.run(appId, "lebenslauf", "Lebenslauf", "docx", t, t);
+        insDoc.run(appId, DocumentKind.COVER_LETTER, "Cover Letter", "docx", t, t);
+        insDoc.run(appId, DocumentKind.LEBENSLAUF, "Lebenslauf", "docx", t, t);
 
         return {
             rounds: all<RoundRow>(
@@ -306,7 +311,7 @@ export function createRepo(
                     id,
                     input.role,
                     company.id,
-                    "none",
+                    Interest.NONE,
                     input.channel,
                     "interessiert",
                     0,
@@ -396,7 +401,7 @@ export function createRepo(
             applicationId: string,
             label: string,
             value: string,
-            kind: FactKind,
+            kind: FactKind | null,
         ): FactRow {
             return tx(() => {
                 const next = one<{ p: number }>(

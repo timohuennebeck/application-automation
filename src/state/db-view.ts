@@ -5,14 +5,15 @@ import type {
   ActivityRow, ApplicationPersonRow, ApplicationRow, CommentRow, CompanyRow, DbSnapshot,
   DocumentRow, FactRow, FollowupRow, PersonRow, RoundInput, RoundNoteRow, RoundPersonRow, RoundRow,
 } from '../shared/db-types';
-import { STAGE_IDS, type RoundStateKey } from '../data/config';
+import { STAGE_IDS } from '../data/config';
+import type { Author, RoundState } from '../shared/enums';
 import { dateToISO, dayDiff, isoToDate } from '../lib/date';
 
 /* One interview round as the components render it. `dbId` ties the view back
    to its row; new rounds get one once db:rounds.set responds. */
 export interface RoundView {
   dbId?: number;
-  state: RoundStateKey;
+  state: RoundState;
   title: string;
   /* German display date DD.MM.YYYY, '' when unscheduled. */
   date: string;
@@ -22,7 +23,7 @@ export interface RoundView {
   link?: string;
   /* Person ids as strings — the keys of AppState.people. */
   people: string[];
-  notes?: { author: string; text: string; time: string }[];
+  notes?: { author: Author; text: string; time: string }[];
   isNew?: boolean;
 }
 

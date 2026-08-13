@@ -3,7 +3,7 @@ import { ROUND_STATE, WHERE_OPTIONS } from '../../data/config';
 import type { Round } from '../../state/store-context';
 import { dateToISO, dayDiff, isoToDate, relLabel, shiftYM, todayISO } from '../../lib/date';
 import { KEPLER_ENTRY } from '../../lib/mentions';
-import { initials } from '../../lib/text';
+import { Author, AUTHOR_LABEL, RoundState } from '../../shared/enums';
 import { useApp } from '../../state/store-context';
 import { AddRow } from '../../ui/AddRow';
 import { CalendarPopover } from '../../ui/Calendar';
@@ -13,7 +13,7 @@ import { FieldRow } from '../../ui/FieldRow';
 import { MentionComposer } from '../../ui/MentionComposer';
 import { MentionText } from '../../ui/MentionText';
 import { MenuItem } from '../../ui/MenuItem';
-import { Popover, PopoverAnchor } from '../../ui/Popover';
+import { Popover, PopoverAnchor, PopoverVariant } from '../../ui/Popover';
 import { TimeRangePopover } from '../../ui/TimeRangePicker';
 import { Avatar, DotsGlyph } from '../../ui/icons';
 import { PeoplePicker } from '../people/PeoplePicker';
@@ -42,7 +42,7 @@ export function InterviewCard({ cardId, ri, round, company }: {
   const rISO = dateToISO(round.date || '');
   const today = todayISO();
   const diff = rISO ? dayDiff(rISO) : null;
-  const done = round.state === 'done';
+  const done = round.state === RoundState.DONE;
 
   const key = (name: string) => name + ':' + ri;
   const isOpen = (name: string) => st.dropdown === key(name);
@@ -58,7 +58,7 @@ export function InterviewCard({ cardId, ri, round, company }: {
     editRound((r) => {
       r.date = date;
       if (!date) r.time = '';
-      if (r.state !== 'done') r.state = date ? 'next' : 'open';
+      if (r.state !== RoundState.DONE) r.state = date ? RoundState.NEXT : RoundState.OPEN;
     });
     logAct(cardId, date
       ? 'hat den Termin für „' + round.title + '“ auf ' + date + ' gelegt'
@@ -282,7 +282,7 @@ export function InterviewCard({ cardId, ri, round, company }: {
                       <span style={{ color: p.role ? 'var(--c-a5a29a)' : 'var(--c-c3c0b8)' }}>{p.role || 'Position fehlt'}</span>
                     </FieldChip>
                     {editing && (
-                      <Popover variant="panel" top={29} left={-6} width={312} padding={0}>
+                      <Popover variant={PopoverVariant.PANEL} top={29} left={-6} width={312} padding={0}>
                         <PersonEditCard
                           personKey={p.key}
                           subExtra={inRounds > 1 ? ' · in ' + inRounds + ' Runden' : ''}
@@ -325,12 +325,12 @@ export function InterviewCard({ cardId, ri, round, company }: {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {(round.notes || []).map((n, i) => (
                 <div key={i} style={{ display: 'flex', gap: 9 }}>
-                  <Avatar bg={n.author === 'Kepler' ? 'var(--c-1b1a17)' : 'var(--c-5b7a5e)'} size={20} fontSize={8.5} style={{ marginTop: 1 }}>
-                    {n.author === 'Du' ? 'Du' : initials(n.author)}
+                  <Avatar bg={n.author === Author.KEPLER ? 'var(--c-1b1a17)' : 'var(--c-5b7a5e)'} size={20} fontSize={8.5} style={{ marginTop: 1 }}>
+                    {n.author === Author.KEPLER ? 'K' : AUTHOR_LABEL[n.author]}
                   </Avatar>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--c-1b1a17)' }}>{n.author}</div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--c-1b1a17)' }}>{AUTHOR_LABEL[n.author]}</div>
                       <div style={{ fontSize: 11, color: 'var(--c-a5a29a)' }}>{n.time}</div>
                     </div>
                     <MentionText text={n.text} names={mentionNames} style={{ lineHeight: 1.6, whiteSpace: 'pre-line' }} />

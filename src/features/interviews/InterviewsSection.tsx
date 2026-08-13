@@ -1,4 +1,5 @@
 import { dateToISO, dayDiff, relLabel, shortDate } from '../../lib/date';
+import { RoundState } from '../../shared/enums';
 import { useApp } from '../../state/store-context';
 import { FieldChip } from '../../ui/FieldChip';
 import { MenuItem } from '../../ui/MenuItem';
@@ -15,9 +16,9 @@ export function InterviewsSection({ cardId, company }: { cardId: string; company
 
   // Default to the upcoming round, else the first still open.
   const fallback = (() => {
-    const next = rounds.findIndex((r) => r.state === 'next');
+    const next = rounds.findIndex((r) => r.state === RoundState.NEXT);
     if (next >= 0) return next;
-    const open = rounds.findIndex((r) => r.state !== 'done');
+    const open = rounds.findIndex((r) => r.state !== RoundState.DONE);
     return open >= 0 ? open : 0;
   })();
   const idx = Math.min(st.roundSel[cardId] ?? fallback, rounds.length - 1);
@@ -33,7 +34,7 @@ export function InterviewsSection({ cardId, company }: { cardId: string; company
             open={open}
             gap={7}
             chevron
-            style={{ padding: '3px 7px', opacity: round.state === 'done' ? 0.6 : 1 }}
+            style={{ padding: '3px 7px', opacity: round.state === RoundState.DONE ? 0.6 : 1 }}
             onClick={() => set((s) => ({ dropdown: s.dropdown === 'roundsel' ? null : 'roundsel' }))}
           >
             <RoundDot index={idx} total={rounds.length} />
@@ -49,7 +50,7 @@ export function InterviewsSection({ cardId, company }: { cardId: string; company
                   <MenuItem
                     key={r.title + i}
                     selected={i === idx}
-                    dim={r.state === 'done' ? 0.6 : undefined}
+                    dim={r.state === RoundState.DONE ? 0.6 : undefined}
                     onClick={() => set((s) => ({ roundSel: { ...s.roundSel, [cardId]: i }, dropdown: null }))}
                   >
                     <RoundDot index={i} total={rounds.length} />

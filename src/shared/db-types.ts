@@ -1,8 +1,16 @@
 /* Row types for every table in bewerbungen.db, shared between the Electron
    main process (schema, seed, repo) and the renderer (snapshot state).
-   Mirrors docs/superpowers/specs/2026-08-12-sqlite-persistence-design.md. */
+   Mirrors docs/superpowers/specs/2026-08-12-sqlite-persistence-design.md.
+   The closed value sets these rows carry are the enums in ./enums.ts. */
 
-export type Author = "Du" | "Kepler";
+import type {
+    Author,
+    DocumentKind,
+    FactKind,
+    Interest,
+    LinkKind,
+    RoundState,
+} from "./enums.ts";
 
 export interface StageRow {
     id: string;
@@ -27,7 +35,7 @@ export interface ApplicationRow {
     id: string;
     role: string;
     company_id: number;
-    interest: string;
+    interest: Interest;
     channel: string | null;
     stage_id: string;
     stage_position: number;
@@ -39,14 +47,12 @@ export interface ApplicationRow {
     updated_at: string;
 }
 
-export type FactKind = "select" | "link" | null;
-
 export interface FactRow {
     id: number;
     application_id: string;
     label: string;
     value: string;
-    kind: FactKind;
+    kind: FactKind | null;
     position: number;
 }
 
@@ -63,8 +69,6 @@ export interface PersonRow {
     updated_at: string;
 }
 
-export type LinkKind = "contact" | "pool" | "email";
-
 export interface ApplicationPersonRow {
     application_id: string;
     person_id: number;
@@ -80,8 +84,6 @@ export interface CommentRow {
     created_at: string;
     edited_at: string | null;
 }
-
-export type RoundState = "done" | "next" | "open";
 
 export interface RoundRow {
     id: number;
@@ -122,8 +124,6 @@ export interface FollowupRow {
     email_text: string | null;
     generated_at: string | null;
 }
-
-export type DocumentKind = "cover-letter" | "lebenslauf" | "other";
 
 export interface DocumentRow {
     id: number;
@@ -239,7 +239,7 @@ export interface DbApi {
             applicationId: string,
             label: string,
             value: string,
-            kind: FactKind,
+            kind: FactKind | null,
         ): Promise<FactRow>;
         delete(applicationId: string, label: string): Promise<void>;
     };

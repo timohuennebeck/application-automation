@@ -1,3 +1,4 @@
+import { AgentStepKind } from '../../data/sample-data';
 import type { AgentRun, AgentStep } from '../../data/sample-data';
 import { clock } from '../../lib/date';
 import { download } from '../../lib/download';
@@ -5,16 +6,16 @@ import { useApp } from '../../state/store-context';
 import { DocGlyph, KeplerAvatar } from '../../ui/icons';
 
 const STEP_STYLE = {
-  done: {
+  [AgentStepKind.DONE]: {
     r: 0, fill: 'none', stroke: 'none', dash: '0', tick: 'M4.2 7.2 L6.2 9.2 L10 4.9', tickStroke: 'var(--c-2f7d49)',
     color: 'var(--c-5f5c56)', weight: 400, dotAnim: 'none', textAnim: 'none', textBg: 'none',
   },
-  run: {
+  [AgentStepKind.RUN]: {
     r: 5.5, fill: 'none', stroke: 'var(--c-1b1a17)', dash: '2.2 2', tick: '', tickStroke: 'none',
     color: 'transparent', weight: 600, dotAnim: 'om-spin 2.4s linear infinite', textAnim: 'om-shimmer 2.4s linear infinite',
     textBg: 'linear-gradient(90deg,var(--c-a5a29a) 0%,var(--c-a5a29a) 28%,var(--c-1b1a17) 46%,var(--c-a5a29a) 64%,var(--c-a5a29a) 100%)',
   },
-  wait: {
+  [AgentStepKind.WAIT]: {
     r: 5.5, fill: 'none', stroke: 'var(--c-dcd9d1)', dash: '2.2 2', tick: '', tickStroke: 'none',
     color: 'var(--c-a5a29a)', weight: 400, dotAnim: 'none', textAnim: 'none', textBg: 'none',
   },
@@ -40,7 +41,7 @@ function tokenize(label: string): Token[] {
 
 function StepRow({ step, elapsed, onDoc }: { step: AgentStep; elapsed: string; onDoc: () => void }) {
   const sy = STEP_STYLE[step.kind];
-  const meta = step.kind === 'run' ? 'seit ' + elapsed : step.meta;
+  const meta = step.kind === AgentStepKind.RUN ? 'seit ' + elapsed : step.meta;
 
   const textStyle = {
     fontSize: 12.5, color: sy.color, fontWeight: sy.weight, lineHeight: 1.4, whiteSpace: 'nowrap' as const,
@@ -89,7 +90,7 @@ export function AgentRunPanel({ run, card }: {
   card: { id: string; role: string; company: string };
 }) {
   const { st } = useApp();
-  const doneCount = run.steps.filter((s) => s.kind === 'done').length;
+  const doneCount = run.steps.filter((s) => s.kind === AgentStepKind.DONE).length;
 
   return (
     <div style={{

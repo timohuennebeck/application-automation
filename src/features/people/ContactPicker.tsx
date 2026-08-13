@@ -1,8 +1,9 @@
 import { initials } from '../../lib/text';
+import type { LinkKind } from '../../shared/enums';
 import { useApp } from '../../state/store-context';
 import type { ContactEntry } from '../../state/store-context';
 import { FieldChip } from '../../ui/FieldChip';
-import { Popover } from '../../ui/Popover';
+import { Popover, PopoverVariant } from '../../ui/Popover';
 import { Avatar } from '../../ui/icons';
 import { PeoplePicker } from './PeoplePicker';
 import { PersonEditCard } from './PersonEditCard';
@@ -17,7 +18,8 @@ export function ContactPicker({
   company: string;
   list: ContactEntry[];
   onSave: (list: ContactEntry[]) => void;
-  store: 'email' | 'card';
+  /* Which link list this picker writes. */
+  store: LinkKind;
   avatarRing?: string;
   avatarSize?: number;
   align?: 'left' | 'right';
@@ -70,7 +72,7 @@ export function ContactPicker({
       </FieldChip>
 
       {open && (
-        <Popover variant="panel" top={27} {...(align === 'right' ? { right: 0 } : { left: -6 })} width={288} style={{ maxWidth: 'calc(100vw - 48px)' }}>
+        <Popover variant={PopoverVariant.PANEL} top={27} {...(align === 'right' ? { right: 0 } : { left: -6 })} width={288} style={{ maxWidth: 'calc(100vw - 48px)' }}>
           {editing ? (
             <PersonEditCard
               personKey={editing.key}

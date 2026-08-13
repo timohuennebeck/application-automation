@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { COLUMNS, SKILLS, STAGE_IDS } from '../data/config';
+import { Author, FactKind, Interest, LinkKind, RoundState } from '../shared/enums';
 import type { ActivityRow, FollowupRow } from '../shared/db-types';
 import { CANONICAL_ROUNDS } from '../shared/domain';
 import { indexSnapshot, roundInput, personView } from './db-view';
@@ -73,7 +74,7 @@ const initialState = (): AppState => ({
 const CANONICAL_TITLES = new Set(CANONICAL_ROUNDS);
 
 const emptyRound = (title: string): RoundView =>
-  ({ state: 'open', title, date: '', time: '', where: '', people: [], notes: [] });
+  ({ state: RoundState.OPEN, title, date: '', time: '', where: '', people: [], notes: [] });
 
 /* Sidebar labels that live on the applications row. */
 const APP_FIELD: Record<string, 'channel' | 'applied_via' | 'applied_at' | 'last_contact_at'> = {
@@ -208,9 +209,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const append = (row: ActivityRow) => set((s) => ({
       activitiesByApp: { ...s.activitiesByApp, [id]: [...(s.activitiesByApp[id] || []), row] },
     }));
-    const p = db()?.activities.add(id, 'Du', text);
+    const p = db()?.activities.add(id, Author.DU, text);
     if (p) persist(p.then(append));
-    else append({ id: -Date.now(), application_id: id, author: 'Du', text, created_at: new Date().toISOString() });
+    else append({ id: -Date.now(), application_id: id, author: Author.DU, text, created_at: new Date().toISOString() });
   }, [set]);
 
   /* Clearing an interview blanks a canonical round but removes one the user
@@ -227,7 +228,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       const row = rs[ri];
       row.date = ''; row.time = ''; row.where = ''; row.link = '';
-      row.people = []; row.notes = []; row.state = 'open';
+      row.people = []; row.notes = []; row.state = RoundState.OPEN;
       // Dropping the id makes rounds.set replace the row, so the cascade
       // clears its note thread too — notes aren't part of RoundInput.
       row.dbId = undefined;
@@ -246,21 +247,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
       roundsState: {
         ...s.roundsState,
         [id]: (s.roundsState[id] ?? []).map((r, i) =>
-          (i === ri ? { ...r, notes: [...(r.notes || []), { author: 'Du', text: body, time: 'gerade eben' }] } : r)),
+          (i === ri ? { ...r, notes: [...(r.notes || []), { author: Author.DU, text: body, time: 'gerade eben' }] } : r)),
       },
     }));
     // A just-created round has no dbId until db:rounds.set responds — queue
     // the note behind that write instead of silently dropping it.
     const send = () => {
       const dbId = stRef.current.roundsState[id]?.[ri]?.dbId;
-      if (dbId != null) persist(db()?.roundNotes.add(dbId, 'Du', body));
+      if (dbId != null) persist(db()?.roundNotes.add(dbId, Author.DU, body));
     };
     if (round?.dbId != null) send();
     else (roundsChainRef.current[id] ?? Promise.resolve()).then(send);
     logAct(id, 'hat „' + (round?.title ?? 'Interview') + '“ kommentiert');
   }, [logAct, persist, roundsFor, set]);
 
-  const linksOf = useCallback((id: string, kind: 'contact' | 'pool' | 'email') =>
+  const linksOf = useCallback((id: string, kind: LinkKind) =>
     (stRef.current.linksByApp[id] || []).filter((l) => l.kind === kind), []);
 
   const entryFor = useCallback((personId: number): ContactEntry => {
@@ -277,9 +278,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const contactsFor = useCallback((id: string): ContactEntry[] =>
-    linksOf(id, 'contact').map((l) => entryFor(l.person_id)), [entryFor, linksOf]);
+    linksOf(id, LinkKind.CONTACT).map((l) => entryFor(l.person_id)), [entryFor, linksOf]);
 
-  const saveLinks = useCallback((id: string, kind: 'contact' | 'pool' | 'email', personIds: number[]) => {
+  const saveLinks = useCallback((id: string, kind: LinkKind, personIds: number[]) => {
     set((s) => ({
       linksByApp: {
         ...s.linksByApp,
@@ -298,17 +299,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     list.map((c) => c.personId).filter((n): n is number => Number.isFinite(n)), []);
 
   const setContacts = useCallback((id: string, list: ContactEntry[]) => {
-    saveLinks(id, 'contact', idsOf(list));
+    saveLinks(id, LinkKind.CONTACT, idsOf(list));
   }, [idsOf, saveLinks]);
 
   /* The follow-up email keeps its own recipient list. It is always explicit
      (the seed mirrors the card contacts into it) — a fallback to the card
      contacts would make an intentionally emptied list impossible. */
   const emailContactsFor = useCallback((id: string): ContactEntry[] =>
-    linksOf(id, 'email').map((l) => entryFor(l.person_id)), [entryFor, linksOf]);
+    linksOf(id, LinkKind.EMAIL).map((l) => entryFor(l.person_id)), [entryFor, linksOf]);
 
   const setEmailContacts = useCallback((id: string, list: ContactEntry[]) => {
-    saveLinks(id, 'email', idsOf(list));
+    saveLinks(id, LinkKind.EMAIL, idsOf(list));
   }, [idsOf, saveLinks]);
 
   const person = useCallback((key: string) => {
@@ -318,7 +319,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const peopleForCard = useCallback((id: string) => {
     const s = stRef.current;
-    const pool = linksOf(id, 'pool').map((l) => String(l.person_id));
+    const pool = linksOf(id, LinkKind.POOL).map((l) => String(l.person_id));
     const base = pool.length ? pool : Object.keys(s.people);
     const onRounds = roundsFor(id).flatMap((r) => r.people);
     // Dedupe, drop keys whose person has been deleted, keep pool order.
@@ -453,12 +454,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     const attachContact = (personId: number) => {
       if (!e.forContact) return;
-      const isEmail = e.contactStore === 'email';
+      const isEmail = e.contactStore === LinkKind.EMAIL;
       const cur = isEmail ? emailContactsFor(e.id) : contactsFor(e.id);
-      saveLinks(e.id, isEmail ? 'email' : 'contact', [...new Set([...idsOf(cur), personId])]);
+      saveLinks(e.id, isEmail ? LinkKind.EMAIL : LinkKind.CONTACT, [...new Set([...idsOf(cur), personId])]);
       // A contact belongs in the card's suggestion pool as well, like today.
-      const pool = linksOf(e.id, 'pool').map((l) => l.person_id);
-      if (pool.length && !pool.includes(personId)) saveLinks(e.id, 'pool', [...pool, personId]);
+      const pool = linksOf(e.id, LinkKind.POOL).map((l) => l.person_id);
+      if (pool.length && !pool.includes(personId)) saveLinks(e.id, LinkKind.POOL, [...pool, personId]);
     };
 
     if (e.isNew && !name) {
@@ -531,8 +532,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     persist(db()?.people.create({ name }).then((row) => {
       const key = String(row.id);
       set((s) => ({ people: { ...s.people, [key]: personView(row) } }));
-      const pool = linksOf(id, 'pool').map((l) => l.person_id);
-      if (pool.length) saveLinks(id, 'pool', [...pool, row.id]);
+      const pool = linksOf(id, LinkKind.POOL).map((l) => l.person_id);
+      if (pool.length) saveLinks(id, LinkKind.POOL, [...pool, row.id]);
       mutateRounds(id, (rs) => { if (rs[ri] && rs[ri].people.indexOf(key) < 0) rs[ri].people.push(key); });
       set({
         editing: null, editDraft: '',
@@ -560,7 +561,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       r.where = d.where;
       r.people = d.people.slice();
       r.link = d.where === 'Google Meet' || d.where === 'Microsoft Teams' ? d.link : '';
-      if (r.state !== 'done') r.state = d.date ? 'next' : 'open';
+      if (r.state !== RoundState.DONE) r.state = d.date ? RoundState.NEXT : RoundState.OPEN;
     });
     logAct(e.id, wasNew
       ? 'hat das Interview „' + d.title + '“' + (d.people.length ? ' mit ' + d.people.map((k) => stRef.current.people[k]?.name ?? k).join(', ') : '') + ' hinzugefügt'
@@ -611,7 +612,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     const existing = (s.factsByApp[id] || []).find((f) => f.label === label);
-    const kind = existing?.kind ?? (SELECT_FACTS.has(label) ? 'select' : null);
+    const kind = existing?.kind ?? (SELECT_FACTS.has(label) ? FactKind.SELECT : null);
     const stored = cleared ? '—' : value;
     persist(db()?.facts.upsert(id, label, stored, kind).then((row) => {
       set((s2) => {
@@ -624,7 +625,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }));
   }, [set]);
 
-  const setInterest = useCallback((id: string, interest: string) => {
+  const setInterest = useCallback((id: string, interest: Interest) => {
     set((s) => ({ applications: { ...s.applications, [id]: { ...s.applications[id], interest } } }));
     persist(db()?.applications.update(id, { interest }));
   }, [set]);
@@ -638,7 +639,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const body = text.trim();
     if (!body) return;
     set({ commentDraft: '' });
-    persist(db()?.comments.add(id, 'Du', body).then((row) => {
+    persist(db()?.comments.add(id, Author.DU, body).then((row) => {
       set((s) => ({ commentsByApp: { ...s.commentsByApp, [id]: [...(s.commentsByApp[id] || []), row] } }));
     }));
   }, [set]);

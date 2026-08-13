@@ -9,6 +9,7 @@ import {
   INITIAL_ROUNDS, SALARY,
 } from '../../src/data/sample-data.ts';
 import { CANONICAL_ROUNDS, DEFAULT_COMMENT, DEFAULT_FOLLOWUPS } from '../../src/shared/domain.ts';
+import { Author, DocumentKind, FactKind, LinkKind, RoundState } from '../../src/shared/enums.ts';
 import { STAGES } from './schema.ts';
 import {
   dayMonthToISO, germanDateToISO, looksLikePhone, relativeToISO, splitCompany, splitTimeRange,
@@ -28,7 +29,7 @@ const atNine = (isoDate: string) => `${isoDate}T09:00:00.000Z`;
 
 /* An unscheduled round in the sample-data shape the seed loop consumes. */
 const emptyRound = (title: string) =>
-  ({ state: 'open' as const, title, date: '', time: '', where: '', people: [] as string[], link: '' });
+  ({ state: RoundState.OPEN, title, date: '', time: '', where: '', people: [] as string[], link: '' });
 
 /* Local calendar date — toISOString would shift the day for users west of UTC. */
 const localDay = (d: Date) =>
@@ -156,12 +157,12 @@ export function seedIfEmpty(db: DatabaseSync, now = new Date()): boolean {
       const seen = new Set<string>();
       for (const f of DETAILS[id]?.facts ?? []) {
         if (ROUTED_LABELS.has(f[0])) continue;
-        insFact.run(id, f[0], f[1], f[2] === 's' ? 'select' : f[2] === 'l' ? 'link' : null, pos++);
+        insFact.run(id, f[0], f[1], f[2] ?? null, pos++);
         seen.add(f[0]);
       }
       const city = splitCompany(card[1]).city;
       if (!seen.has('Standort') && city) insFact.run(id, 'Standort', city, null, pos++);
-      if (!seen.has('Gehalt') && SALARY[id]) insFact.run(id, 'Gehalt', SALARY[id], 'select', pos++);
+      if (!seen.has('Gehalt') && SALARY[id]) insFact.run(id, 'Gehalt', SALARY[id], FactKind.SELECT, pos++);
     }
 
     /* People pass 1: the initials-keyed directory. */
@@ -200,16 +201,16 @@ export function seedIfEmpty(db: DatabaseSync, now = new Date()): boolean {
             row.id,
           );
         }
-        insLink.run(appId, row.id, 'contact', idx);
+        insLink.run(appId, row.id, LinkKind.CONTACT, idx);
         // The follow-up email starts with the same recipients, as its own
         // explicit list — so clearing it later actually sticks.
-        insLink.run(appId, row.id, 'email', idx);
+        insLink.run(appId, row.id, LinkKind.EMAIL, idx);
       });
     }
 
     /* Pools. */
     for (const [appId, keys] of Object.entries(INITIAL_PEOPLE_POOL)) {
-      keys.forEach((key, idx) => insLink.run(appId, personIdByKey.get(key)!, 'pool', idx));
+      keys.forEach((key, idx) => insLink.run(appId, personIdByKey.get(key)!, LinkKind.POOL, idx));
     }
 
     /* Comments — cards without DETAILS get the default Kepler comment the UI
@@ -221,7 +222,7 @@ export function seedIfEmpty(db: DatabaseSync, now = new Date()): boolean {
           insComment.run(id, author, text, relativeToISO(time, now) || nowISO);
         }
       } else {
-        insComment.run(id, 'Kepler', DEFAULT_COMMENT, new Date(now.getTime() - 2 * DAY).toISOString());
+        insComment.run(id, Author.KEPLER, DEFAULT_COMMENT, new Date(now.getTime() - 2 * DAY).toISOString());
       }
     }
 
@@ -263,8 +264,8 @@ export function seedIfEmpty(db: DatabaseSync, now = new Date()): boolean {
     /* Documents — the stub pair every card shows today; files come with the
        Agent SDK work. */
     for (const id of Object.keys(CARD_DEFS)) {
-      insDocument.run(id, 'cover-letter', 'Cover Letter', 'docx', atNine('2026-07-26'), atNine('2026-07-26'));
-      insDocument.run(id, 'lebenslauf', 'Lebenslauf', 'docx', atNine('2026-07-22'), atNine('2026-07-24'));
+      insDocument.run(id, DocumentKind.COVER_LETTER, 'Cover Letter', 'docx', atNine('2026-07-26'), atNine('2026-07-26'));
+      insDocument.run(id, DocumentKind.LEBENSLAUF, 'Lebenslauf', 'docx', atNine('2026-07-22'), atNine('2026-07-24'));
     }
 
     /* Activities — HISTORY's yearless dates, year 2026 assumed. */

@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react';
+import { DotKind } from '../data/config';
 import type { ColumnDef } from '../data/config';
 
 /* Pie-slice path for a progress ring at `frac` completion. */
@@ -9,8 +10,6 @@ function piePath(frac: number): string {
   const y = 7 + r * Math.sin(a);
   return 'M7 7 L7 ' + (7 - r) + ' A' + r + ' ' + r + ' 0 ' + (frac > 0.5 ? 1 : 0) + ' 1 ' + x.toFixed(2) + ' ' + y.toFixed(2) + ' Z';
 }
-
-export type DotKind = 'dashed' | 'pie' | 'cancel' | 'muted' | 'filled';
 
 /* The status ring used for columns, statuses, follow-ups and interview rounds. */
 export function StatusDot({ kind, accent, frac = 0.5, size = 14, style }: {
@@ -28,16 +27,16 @@ export function StatusDot({ kind, accent, frac = 0.5, size = 14, style }: {
     </svg>
   );
   switch (kind) {
-    case 'pie':
+    case DotKind.PIE:
       return ring(<path d={piePath(frac)} fill={accent} />);
-    case 'cancel':
+    case DotKind.CANCEL:
       return ring(
         <path d="M4.7 4.7 L9.3 9.3 M9.3 4.7 L4.7 9.3" fill="none" stroke="var(--c-fbfaf7)" strokeWidth="1.5" strokeLinecap="round" />,
         accent,
       );
-    case 'muted':
+    case DotKind.MUTED:
       return ring(<path d="M4.3 7 L9.7 7" fill="none" stroke={accent} strokeWidth="1.6" strokeLinecap="round" />);
-    case 'filled':
+    case DotKind.FILLED:
       return ring(null, accent);
     default:
       return ring(null, 'none', '2.2 2.2');

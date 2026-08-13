@@ -125,10 +125,10 @@ describe('seedIfEmpty', () => {
 
   it('mirrors contacts into the explicit email recipient list and clamps updated_at', () => {
     const kinds = all<{ kind: string; person_id: number }>(
-      "SELECT kind, person_id FROM application_people WHERE application_id = 'BEW-33' AND kind IN ('contact','email') ORDER BY kind",
+      "SELECT kind, person_id FROM application_people WHERE application_id = 'BEW-33' AND kind IN ('CONTACT','EMAIL') ORDER BY kind",
     );
-    expect(kinds.filter((k) => k.kind === 'email').map((k) => k.person_id))
-      .toEqual(kinds.filter((k) => k.kind === 'contact').map((k) => k.person_id));
+    expect(kinds.filter((k) => k.kind === 'EMAIL').map((k) => k.person_id))
+      .toEqual(kinds.filter((k) => k.kind === 'CONTACT').map((k) => k.person_id));
     // BEW-02: 'vor 1 Monat' would back-date updated_at before created_at.
     const app = one<{ created_at: string; updated_at: string }>(
       "SELECT created_at, updated_at FROM applications WHERE id = 'BEW-02'",

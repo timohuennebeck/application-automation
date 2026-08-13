@@ -3,6 +3,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import { openDb } from '../open.ts';
 import { seedIfEmpty } from '../seed.ts';
 import { createRepo, type Repo } from '../repo.ts';
+import { Author, FactKind, LinkKind, RoundState } from '../../../src/shared/enums.ts';
 
 const NOW = new Date('2026-08-12T12:00:00.000Z');
 
@@ -27,7 +28,7 @@ describe('repo', () => {
     expect(res.followups).toHaveLength(3);
     expect(res.documents).toHaveLength(2);
     expect(res.comments).toHaveLength(1);
-    expect(res.comments[0].author).toBe('Kepler');
+    expect(res.comments[0].author).toBe(Author.KEPLER);
 
     repo.deleteApplication('BEW-45');
     const again = repo.createApplication({ role: 'X', company: 'Acme GmbH', channel: null });
@@ -68,14 +69,14 @@ describe('repo', () => {
   });
 
   it('upserts facts in place', () => {
-    const a = repo.upsertFact('BEW-24', 'Erfahrung', '5–8', 'select');
-    const b = repo.upsertFact('BEW-24', 'Erfahrung', '8+', 'select');
+    const a = repo.upsertFact('BEW-24', 'Erfahrung', '5–8', FactKind.SELECT);
+    const b = repo.upsertFact('BEW-24', 'Erfahrung', '8+', FactKind.SELECT);
     expect(b.id).toBe(a.id);
     expect(b.value).toBe('8+');
   });
 
   it('tracks comment edits and stored email drafts', () => {
-    const c = repo.addComment('BEW-24', 'Du', 'Hallo');
+    const c = repo.addComment('BEW-24', Author.DU, 'Hallo');
     expect(c.edited_at).toBeNull();
     const edited = repo.updateComment(c.id, 'Hallo!');
     expect(edited.edited_at).toBe(NOW.toISOString());
@@ -88,11 +89,11 @@ describe('repo', () => {
 
   it('setRounds keeps notes for surviving rounds and drops removed ones', () => {
     const rounds = repo.load().rounds.filter((r) => r.application_id === 'BEW-24');
-    const note = repo.addRoundNote(rounds[1].id, 'Du', 'Merken');
+    const note = repo.addRoundNote(rounds[1].id, Author.DU, 'Merken');
     const updated = repo.setRounds('BEW-24', [
       { ...rounds[1], people: [1] },
       { ...rounds[3], people: [] },
-      { id: undefined, state: 'open', title: 'Extra', scheduled_date: null, start_time: null, end_time: null, location: null, link: null, people: [] },
+      { id: undefined, state: RoundState.OPEN, title: 'Extra', scheduled_date: null, start_time: null, end_time: null, location: null, link: null, people: [] },
     ]);
     expect(updated.rounds.map((r) => r.title)).toEqual(['Runde 1', 'Finales Gespräch', 'Extra']);
     expect(count('SELECT COUNT(*) AS n FROM round_notes WHERE id = ?', note.id)).toBe(1);
@@ -104,10 +105,10 @@ describe('repo', () => {
     const p = repo.createPerson({ name: 'Neue Person' });
     expect(p.initials).toBe('NP');
     expect(p.color).toMatch(/^var\(--c-/);
-    const links = repo.setApplicationPeople('BEW-24', 'email', [p.id]);
-    expect(links).toEqual([{ application_id: 'BEW-24', person_id: p.id, kind: 'email', position: 0 }]);
+    const links = repo.setApplicationPeople('BEW-24', LinkKind.EMAIL, [p.id]);
+    expect(links).toEqual([{ application_id: 'BEW-24', person_id: p.id, kind: LinkKind.EMAIL, position: 0 }]);
     // contact links untouched
-    expect(count("SELECT COUNT(*) AS n FROM application_people WHERE application_id = 'BEW-24' AND kind = 'pool'")).toBe(4);
+    expect(count("SELECT COUNT(*) AS n FROM application_people WHERE application_id = 'BEW-24' AND kind = 'POOL'")).toBe(4);
     repo.deletePerson(p.id);
     expect(count('SELECT COUNT(*) AS n FROM application_people WHERE person_id = ?', p.id)).toBe(0);
   });

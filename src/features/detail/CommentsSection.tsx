@@ -1,5 +1,5 @@
 import { KEPLER_ENTRY } from '../../lib/mentions';
-import { initials } from '../../lib/text';
+import { Author, AUTHOR_LABEL } from '../../shared/enums';
 import { relTime } from '../../state/db-view';
 import { useApp } from '../../state/store-context';
 import { MentionComposer } from '../../ui/MentionComposer';
@@ -28,14 +28,14 @@ export function CommentsSection({ cardId }: { cardId: string }) {
 
         return (
           <div key={c.id} style={{ display: 'flex', gap: 9 }}>
-            <Avatar bg={c.author === 'Kepler' ? 'var(--c-1b1a17)' : 'var(--c-5b7a5e)'} size={22} fontSize={9} style={{ marginTop: 1 }}>
-              {c.author === 'Kepler' ? 'K' : c.author === 'Du' ? 'Du' : initials(c.author)}
+            <Avatar bg={c.author === Author.KEPLER ? 'var(--c-1b1a17)' : 'var(--c-5b7a5e)'} size={22} fontSize={9} style={{ marginTop: 1 }}>
+              {c.author === Author.KEPLER ? 'K' : AUTHOR_LABEL[c.author]}
             </Avatar>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0, flex: '1 1 auto' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--c-1b1a17)' }}>{c.author}</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--c-1b1a17)' }}>{AUTHOR_LABEL[c.author]}</div>
                 <div style={{ fontSize: 11, color: 'var(--c-a5a29a)' }}>{relTime(c.created_at)}</div>
-                {c.author === 'Du' && (
+                {c.author === Author.DU && (
                   <PopoverAnchor style={{ marginLeft: 'auto' }}>
                     <div
                       className="cmt-menu-btn"

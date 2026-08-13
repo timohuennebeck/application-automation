@@ -2,7 +2,7 @@ import { AGENT_RUNS } from '../../../data/sample-data';
 import {
   COLUMNS, DATE_FIELDS, FACT_OPTIONS, INTEREST, INTEREST_ORDER, SECTIONS,
 } from '../../../data/config';
-import type { InterestKey } from '../../../data/config';
+import { FactKind, Interest, LinkKind } from '../../../shared/enums';
 import { isoToDate } from '../../../lib/date';
 import { useApp } from '../../../state/store-context';
 import { FieldChip } from '../../../ui/FieldChip';
@@ -59,7 +59,7 @@ export function PropertiesSidebar({ cardId, role, company, columnIndex }: Proper
     return {
       label,
       value: r?.value ?? fact?.value ?? factDefaults[label] ?? '—',
-      link: r?.link || fact?.kind === 'link',
+      link: r?.link || fact?.kind === FactKind.LINK,
       isSelect: !!FACT_OPTIONS[label],
       isDate: !!DATE_FIELDS[label],
     };
@@ -71,7 +71,7 @@ export function PropertiesSidebar({ cardId, role, company, columnIndex }: Proper
   if (rest.length) groups.push({ title: 'Weitere Angaben', items: rest });
 
   const col = COLUMNS[columnIndex];
-  const interest = (app?.interest as InterestKey) || 'none';
+  const interest = app?.interest || Interest.NONE;
   const open = st.secOpen.props !== false;
 
   const toggleSection = () => set((s) => {
@@ -167,7 +167,7 @@ export function PropertiesSidebar({ cardId, role, company, columnIndex }: Proper
                 company={company}
                 list={contactsFor(cardId)}
                 onSave={(l) => setContacts(cardId, l)}
-                store="card"
+                store={LinkKind.CONTACT}
                 avatarSize={18}
                 align="right"
               />

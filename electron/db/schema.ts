@@ -174,4 +174,18 @@ export const MIGRATIONS: string[] = [
 
   ${stageInserts}
   `,
+
+  /* Migration 2: the closed value sets move to the uppercase members of
+     src/shared/enums.ts. Stage ids stay as they are — they are foreign-key
+     targets and stable identifiers, not one of those value sets. */
+  `
+  UPDATE comments     SET author   = upper(author);
+  UPDATE round_notes  SET author   = upper(author);
+  UPDATE activities   SET author   = upper(author);
+  UPDATE rounds       SET state    = upper(state);
+  UPDATE applications SET interest = upper(interest);
+  UPDATE application_people SET kind = upper(kind);
+  UPDATE facts        SET kind     = upper(kind) WHERE kind IS NOT NULL;
+  UPDATE documents    SET kind     = upper(replace(kind, '-', '_'));
+  `,
 ];

@@ -1,7 +1,8 @@
 /* Derived views over the domain state. The board card's subtitle, interview
    chip and salary line were pre-rendered strings in the sample data; now they
    are computed from rounds, follow-ups and facts at render time. */
-import { roundStage } from '../data/config';
+import { roundStage, Urgency } from '../data/config';
+import { Interest, RoundState } from '../shared/enums';
 import { MON_DE3, DOW_DE, dateToISO, dayDiff, todayISO } from '../lib/date';
 import type { AppState } from './store-context';
 
@@ -16,7 +17,7 @@ export interface CardView {
   /* 'Vector Labs, Zürich' — name plus the Standort fact, like the old data. */
   companyLine: string;
   city: string;
-  interest: string;
+  interest: Interest;
   channel: string;
   salary: string;
   summary: string;
@@ -49,7 +50,7 @@ function nextRound(rounds: AppState['roundsState'][string]) {
   const today = todayISO();
   return rounds
     .map((r, i) => ({ r, i, iso: dateToISO(r.date) }))
-    .filter(({ r, iso }) => r.state !== 'done' && iso && iso >= today)
+    .filter(({ r, iso }) => r.state !== RoundState.DONE && iso && iso >= today)
     .sort((a, b) => (a.iso < b.iso ? -1 : 1))[0];
 }
 
@@ -76,7 +77,7 @@ export function interviewChip(st: AppState, id: string): InterviewChip | null {
 
 export interface CardSubtitle {
   text: string;
-  tone: 'due' | 'soon' | 'muted';
+  tone: Urgency;
 }
 
 /* Precedence mirrors the sample data: next interview, else a follow-up coming
@@ -88,7 +89,7 @@ export function cardSubtitle(st: AppState, id: string): CardSubtitle {
     const start = next.r.time.split(/\s*[–-]\s*/)[0] || '';
     const d = new Date(next.iso + 'T00:00:00');
     const when = diff === 0 ? 'heute' : diff === 1 ? 'morgen' : DOW_DE[d.getDay()];
-    return { text: (when + ' ' + start).trim(), tone: 'muted' };
+    return { text: (when + ' ' + start).trim(), tone: Urgency.MUTED };
   }
 
   // The next actionable follow-up: the soonest upcoming one if it is within a
@@ -98,9 +99,9 @@ export function cardSubtitle(st: AppState, id: string): CardSubtitle {
   const overdue = diffs.filter((d) => d < 0).sort((a, b) => b - a)[0];
   const due = upcoming !== undefined && upcoming <= 7 ? upcoming : overdue;
   if (due !== undefined) {
-    if (due < 0) return { text: -due + (due === -1 ? ' Tag' : ' Tage') + ' überfällig', tone: 'due' };
-    if (due === 0) return { text: 'heute fällig', tone: 'due' };
-    return { text: 'in ' + due + ' Tagen fällig', tone: 'soon' };
+    if (due < 0) return { text: -due + (due === -1 ? ' Tag' : ' Tage') + ' überfällig', tone: Urgency.DUE };
+    if (due === 0) return { text: 'heute fällig', tone: Urgency.DUE };
+    return { text: 'in ' + due + ' Tagen fällig', tone: Urgency.SOON };
   }
 
   const upd = st.applications[id]?.updated_at;
@@ -110,6 +111,6 @@ export function cardSubtitle(st: AppState, id: string): CardSubtitle {
       : days < 14 ? 'vor ' + days + ' Tagen'
         : days < 60 ? 'vor ' + Math.round(days / 7) + ' Wochen'
           : 'vor ' + Math.round(days / 30) + ' Monaten',
-    tone: 'muted',
+    tone: Urgency.MUTED,
   };
 }

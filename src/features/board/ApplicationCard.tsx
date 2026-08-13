@@ -1,6 +1,8 @@
 import { AGENT_RUNS } from '../../data/sample-data';
 import { INTEREST } from '../../data/config';
-import type { InterestKey, ColumnDef } from '../../data/config';
+import type { ColumnDef } from '../../data/config';
+import { Urgency } from '../../data/config';
+import { Interest } from '../../shared/enums';
 import { clock } from '../../lib/date';
 import { initials } from '../../lib/text';
 import { cardSubtitle, cardView, interviewChip } from '../../state/selectors';
@@ -18,13 +20,13 @@ export function ApplicationCard({ id, col, ci }: { id: string; col: ColumnDef; c
   const role = card.role;
   const company = card.companyLine;
 
-  const interest = (card.interest as InterestKey) || 'none';
+  const interest = card.interest || Interest.NONE;
   const run = AGENT_RUNS[id];
   const interview = interviewChip(st, id);
   const subtitle = cardSubtitle(st, id);
   const contacts = contactsFor(id).filter((c) => c.name && c.name !== '—');
 
-  const dueColor = subtitle.tone === 'due' ? 'var(--c-c2564c)' : subtitle.tone === 'soon' ? 'var(--c-9a7218)' : 'var(--c-9a978f)';
+  const dueColor = subtitle.tone === Urgency.DUE ? 'var(--c-c2564c)' : subtitle.tone === Urgency.SOON ? 'var(--c-9a7218)' : 'var(--c-9a978f)';
 
   return (
     <div
@@ -95,7 +97,7 @@ export function ApplicationCard({ id, col, ci }: { id: string; col: ColumnDef; c
         {!run && !interview && (
           <div style={{
             marginLeft: 'auto', paddingLeft: 12, fontSize: 10.5, color: dueColor,
-            fontWeight: subtitle.tone !== 'muted' ? 600 : 400, whiteSpace: 'nowrap', flexShrink: 0,
+            fontWeight: subtitle.tone !== Urgency.MUTED ? 600 : 400, whiteSpace: 'nowrap', flexShrink: 0,
           }}>
             {subtitle.text}
           </div>

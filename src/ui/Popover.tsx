@@ -3,11 +3,15 @@ import type { CSSProperties, ReactNode } from 'react';
 /* Floating surfaces come in two flavours in the design:
    - "menu": a compact option list (8px radius, tight padding, softer shadow)
    - "panel": a richer editor surface (10px radius, deeper shadow) */
-export type PopoverVariant = 'menu' | 'panel';
+export const PopoverVariant = {
+  MENU: 'MENU',
+  PANEL: 'PANEL',
+} as const;
+export type PopoverVariant = (typeof PopoverVariant)[keyof typeof PopoverVariant];
 
 const VARIANT: Record<PopoverVariant, CSSProperties> = {
-  menu: { borderRadius: 8, padding: 4, boxShadow: '0 10px 28px var(--s-0)' },
-  panel: { borderRadius: 10, padding: 5, boxShadow: '0 14px 34px var(--s-1)' },
+  [PopoverVariant.MENU]: { borderRadius: 8, padding: 4, boxShadow: '0 10px 28px var(--s-0)' },
+  [PopoverVariant.PANEL]: { borderRadius: 10, padding: 5, boxShadow: '0 14px 34px var(--s-1)' },
 };
 
 export interface PopoverProps {
@@ -26,7 +30,7 @@ export interface PopoverProps {
 }
 
 export function Popover({
-  variant = 'menu', top = 26, left, right, width, minWidth, zIndex = 40,
+  variant = PopoverVariant.MENU, top = 26, left, right, width, minWidth, zIndex = 40,
   stack = true, padding, style, children,
 }: PopoverProps) {
   return (

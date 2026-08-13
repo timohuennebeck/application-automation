@@ -6,6 +6,7 @@ import type {
   FactRow, FollowupRow,
 } from '../shared/db-types';
 import type { PersonView, RoundView } from './db-view';
+import type { Interest, LinkKind } from '../shared/enums';
 
 /* Components render rounds through this alias. */
 export type Round = RoundView;
@@ -29,7 +30,9 @@ export interface PersonEditState {
   isNew: boolean;
   /* Set when the editor was opened from a contact picker, naming that picker. */
   forContact?: string;
-  contactStore?: 'email' | 'card';
+  /* Which link list that picker writes: the card's contacts or the follow-up
+     email's recipients. */
+  contactStore?: LinkKind;
 }
 
 /* Position of the board context menu, in viewport coordinates. */
@@ -148,7 +151,7 @@ export interface AppStore {
   saveRound: () => void;
   /* Sidebar field write, routed to the owning table (see fact-label routing). */
   writeField: (id: string, label: string, value: string) => void;
-  setInterest: (id: string, interest: string) => void;
+  setInterest: (id: string, interest: Interest) => void;
   saveSummary: (id: string, text: string) => void;
   addComment: (id: string, text: string) => void;
   updateComment: (id: string, commentId: number, text: string) => void;

@@ -1,3 +1,4 @@
+import { DotKind } from '../../data/config';
 import { dayDiff } from '../../lib/date';
 import type { AppState } from '../../state/store-context';
 
@@ -11,7 +12,7 @@ export interface FollowUpSlot {
   /* "heute" / "in 9 Tagen" / "überfällig" */
   meta: string;
   dot: string;
-  kind: 'filled' | 'pie' | 'dashed';
+  kind: DotKind;
   /* Overdue and far-future follow-ups are de-emphasised. */
   dim: number;
   /* The stored draft; null until it has been generated once. */
@@ -33,7 +34,7 @@ export function followUpSlots(st: AppState, cardId: string): FollowUpSlot[] {
       diff,
       meta: diff === 0 ? 'heute' : diff === 1 ? 'morgen' : diff > 0 ? 'in ' + diff + ' Tagen' : 'überfällig',
       dot: diff < 0 ? 'var(--c-a8523f)' : diff <= 1 ? 'var(--c-d0a03f)' : 'var(--c-c9c5bb)',
-      kind: diff < 0 ? 'filled' : diff <= 1 ? 'pie' : 'dashed',
+      kind: diff < 0 ? DotKind.FILLED : diff <= 1 ? DotKind.PIE : DotKind.DASHED,
       dim: diff < 0 || diff > 7 ? 0.5 : 1,
       emailSubject: f.email_subject,
       emailText: f.email_text,

@@ -9,8 +9,8 @@ export const INTEREST: Record<Interest, [string, number]> = {
   [Interest.URGENT]: ['Traumjob', 4],
   [Interest.HIGH]: ['Hohes Interesse', 3],
   [Interest.MEDIUM]: ['Interessant', 2],
-  [Interest.LOW]: ['Zur Sicherheit', 1],
-  [Interest.NONE]: ['Noch offen', 0],
+  [Interest.LOW]: ['Unsicher', 1],
+  [Interest.NONE]: ['Kein Interesse', 0],
 };
 export const INTEREST_ORDER: Interest[] = [
   Interest.URGENT,
@@ -20,14 +20,23 @@ export const INTEREST_ORDER: Interest[] = [
   Interest.NONE,
 ];
 
+/* Avatar colour per channel. Declaration order is also the order the two
+   channel fields offer their options — see CHANNEL_OPTIONS. */
 export const CHANNEL_BG: Record<string, string> = {
   LinkedIn: 'var(--c-3f6ea8)',
-  Karriereseite: 'var(--c-5b7a5e)',
-  Empfehlung: 'var(--c-a4762f)',
+  Indeed: 'var(--c-5f5aa8)',
   StepStone: 'var(--c-7a5aa8)',
+  Karriereseite: 'var(--c-5b7a5e)',
+  'E-Mail': 'var(--c-3f7f9e)',
   Recruiter: 'var(--c-a8523f)',
-  Xing: 'var(--c-2f7a72)',
+  Empfehlung: 'var(--c-a4762f)',
+  Initiativbewerbung: 'var(--c-a8497a)',
+  Sonstiges: 'var(--c-8b8880)',
 };
+
+/* Where the job was found and how the application was sent are the same set of
+   channels, so both fields share one list — and every value has a colour. */
+export const CHANNEL_OPTIONS = Object.keys(CHANNEL_BG);
 
 export const ROUND_STATE: Record<
   RoundState,
@@ -78,9 +87,26 @@ export const WHERE_OPTIONS = ['In Person', 'Google Meet', 'Microsoft Teams', 'Te
 
 export const FACT_OPTIONS: Record<string, string[]> = {
   Erfahrung: ['0–2', '2–5', '5–8', '8+'],
-  Plattform: ['LinkedIn', 'Xing', 'StepStone', 'Karriereseite', 'Empfehlung', 'Recruiter'],
-  'Beworben via': ['Karriereseite', 'E-Mail', 'LinkedIn', 'Xing', 'StepStone', 'Recruiter'],
-  Branche: ['Software', 'Energie', 'Agentur', 'Gesundheit', 'Handel', 'Finanzen', 'Industrie'],
+  Plattform: CHANNEL_OPTIONS,
+  'Beworben via': CHANNEL_OPTIONS,
+  Branche: [
+    'Software',
+    'Beratung',
+    'Dienstleister',
+    'Finanzen',
+    'Versicherung',
+    'Gesundheit',
+    'Pharma',
+    'Energie',
+    'Industrie',
+    'Handel',
+    'E-Commerce',
+    'Logistik',
+    'Bildung',
+    'Immobilien',
+    'Telekommunikation',
+    'Sonstiges',
+  ],
   Mitarbeiterzahl: ['1–50', '51–200', '201–500', '501–1.000', '1.001–5.000', '5.000+'],
 };
 

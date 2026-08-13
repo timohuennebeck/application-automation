@@ -272,7 +272,7 @@ export const CARD_DEFS: Record<string, CardDef> = {
     'UX Lead, Plattform',
     'Kessler & Roth, Berlin',
     Interest.NONE,
-    'Xing',
+    'Indeed',
     'in 6 Tagen fällig',
     Urgency.SOON,
   ],
@@ -335,7 +335,14 @@ export const CARD_DEFS: Record<string, CardDef> = {
     'vor 3 Wochen',
     null,
   ],
-  'BEW-02': ['UI Designer, Marktplatz', 'Kranich Handel, Essen', Interest.NONE, 'Xing', 'vor 1 Monat', null],
+  'BEW-02': [
+    'UI Designer, Marktplatz',
+    'Kranich Handel, Essen',
+    Interest.NONE,
+    'Indeed',
+    'vor 1 Monat',
+    null,
+  ],
 };
 
 export const INITIAL_BOARD: string[][] = [
@@ -444,7 +451,7 @@ export const DETAILS: Record<string, DetailDef> = {
       ['Gehalt', '58–70k €', FactKind.SELECT],
       ['Erfahrung', '2–5', FactKind.SELECT],
       ['Plattform', 'Recruiter', FactKind.SELECT],
-      ['Branche', 'Agentur', FactKind.SELECT],
+      ['Branche', 'Dienstleister', FactKind.SELECT],
       ['Mitarbeiterzahl', '51–200', FactKind.SELECT],
       ['Karriereseite', 'brandt-digital.de/karriere', FactKind.LINK],
       ['Telefon', '+49 341 55 20 100'],

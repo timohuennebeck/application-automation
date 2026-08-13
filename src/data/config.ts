@@ -94,7 +94,6 @@ export const FACT_OPTIONS: Record<string, string[]> = {
     'Beratung',
     'Dienstleister',
     'Finanzen',
-    'Versicherung',
     'Gesundheit',
     'Pharma',
     'Energie',

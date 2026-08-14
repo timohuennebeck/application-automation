@@ -57,7 +57,7 @@ export function FactField({ fact, cardId, locked }: { fact: FactView; cardId: st
           onClear={clearValue}
           clearTitle={fact.label + ' entfernen'}
         >
-          <span>{fact.empty ? 'Festlegen' : fact.value}</span>
+          <span>{fact.empty ? 'Eintrag auswählen' : fact.value}</span>
         </FieldChip>
         {open && (
           <Popover minWidth={170}>
@@ -87,7 +87,7 @@ export function FactField({ fact, cardId, locked }: { fact: FactView; cardId: st
           onClear={clearValue}
           clearTitle={fact.label + ' entfernen'}
         >
-          <span>{fact.empty ? 'Festlegen' : fact.value}</span>
+          <span>{fact.empty ? 'Eintrag auswählen' : fact.value}</span>
         </FieldChip>
         {open && (
           <CalendarPopover

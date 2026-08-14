@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef, useState } from 'react';
 import { FACT_OPTIONS } from '../../../data/config';
 import { dateToISO, isoToDate, shiftYM, todayISO } from '../../../lib/date';
 import { useApp } from '../../../state/store-context';
@@ -22,6 +23,15 @@ export interface FactView {
   isSalary: boolean;
 }
 
+/* Longer lists (Branche) scroll inside the popover instead of growing past
+   the bottom of the window. Matches the salary picker's list height. */
+const LIST_MAX_HEIGHT = 208;
+/* Never squeeze the list below a few rows, even on tiny windows. */
+const LIST_MIN_HEIGHT = 64;
+/* The popover's padding and border around the list. */
+const POPOVER_CHROME = 10;
+const VIEWPORT_MARGIN = 12;
+
 /* One editable property value: salary range, select, date picker or free text.
    Writes go through store.writeField, which routes the label to its real
    column. */
@@ -30,6 +40,32 @@ export function FactField({ fact, cardId, locked }: { fact: FactView; cardId: st
   const key = 'fact:' + fact.label;
   const open = st.dropdown === key;
   const today = todayISO();
+
+  const listRef = useRef<HTMLDivElement>(null);
+  const [drop, setDrop] = useState({ up: false, maxHeight: LIST_MAX_HEIGHT });
+
+  /* The sidebar reaches close to the window edge, so measure what is actually
+     left below the chip; shrink the list into that space, or open it upwards
+     when the room above is the larger side. Runs before paint, so the list
+     never flashes in the wrong place. */
+  useLayoutEffect(() => {
+    if (!open) return;
+    const list = listRef.current;
+    const anchor = list?.closest('[data-dd]');
+    if (!list || !anchor) return;
+    const a = anchor.getBoundingClientRect();
+    const wanted = Math.min(list.scrollHeight, LIST_MAX_HEIGHT);
+    const below = window.innerHeight - a.bottom - VIEWPORT_MARGIN - POPOVER_CHROME;
+    const above = a.top - VIEWPORT_MARGIN - POPOVER_CHROME;
+    const up = below < wanted && above > below;
+    setDrop({ up, maxHeight: Math.max(LIST_MIN_HEIGHT, Math.min(wanted, up ? above : below)) });
+  }, [open, fact.label]);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    const index = (FACT_OPTIONS[fact.label] || []).indexOf(fact.value);
+    if (index >= 0) listRef.current?.children[index]?.scrollIntoView({ block: 'center' });
+  }, [open, drop, fact.label, fact.value]);
 
   const write = (v: string) => {
     writeField(cardId, fact.label, v);
@@ -60,12 +96,28 @@ export function FactField({ fact, cardId, locked }: { fact: FactView; cardId: st
           <span>{fact.empty ? 'Eintrag auswählen' : fact.value}</span>
         </FieldChip>
         {open && (
-          <Popover minWidth={170}>
-            {(FACT_OPTIONS[fact.label] || []).map((v) => (
-              <MenuItem key={v} selected={v === fact.value} onClick={() => write(v)}>
-                <span style={{ flex: '1 1 auto', whiteSpace: 'nowrap' }}>{v}</span>
-              </MenuItem>
-            ))}
+          <Popover
+            minWidth={170}
+            revealOnMount
+            style={drop.up ? { top: 'auto', bottom: 'calc(100% + 2px)' } : undefined}
+          >
+            <div
+              ref={listRef}
+              className="no-scrollbar"
+              style={{
+                maxHeight: drop.maxHeight,
+                overflowY: 'auto',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 1,
+              }}
+            >
+              {(FACT_OPTIONS[fact.label] || []).map((v) => (
+                <MenuItem key={v} selected={v === fact.value} onClick={() => write(v)}>
+                  <span style={{ flex: '1 1 auto', whiteSpace: 'nowrap' }}>{v}</span>
+                </MenuItem>
+              ))}
+            </div>
           </Popover>
         )}
       </PopoverAnchor>

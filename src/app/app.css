@@ -108,10 +108,12 @@
 .menu-item-selected {
   background: var(--c-f1efe9);
 }
-.menu-item:hover {
+.menu-item:hover,
+.menu-item-active {
   background: var(--c-f1efe9);
 }
-.menu-item-selected:hover {
+.menu-item-selected:hover,
+.menu-item-selected.menu-item-active {
   background: var(--c-e7e4dc);
 }
 .menu-item-danger:hover {

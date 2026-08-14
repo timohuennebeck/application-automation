@@ -6,6 +6,8 @@ export interface MenuItemProps {
   onMouseDown?: () => void;
   /* Shows the trailing checkmark and the selected row tint. */
   selected?: boolean;
+  /* Keyboard highlight: the row the arrow keys are on, picked by Enter. */
+  active?: boolean;
   /* Suppresses the checkmark while keeping the selected tint. */
   hideCheck?: boolean;
   danger?: boolean;
@@ -18,6 +20,7 @@ export function MenuItem({
   onClick,
   onMouseDown,
   selected,
+  active,
   hideCheck,
   danger,
   dim,
@@ -28,7 +31,12 @@ export function MenuItem({
     <div
       /* The selected tint is a class, not an inline style: an inline background
          would outrank the :hover rule and swallow the hover feedback. */
-      className={'menu-item' + (selected ? ' menu-item-selected' : '') + (danger ? ' menu-item-danger' : '')}
+      className={
+        'menu-item' +
+        (selected ? ' menu-item-selected' : '') +
+        (active ? ' menu-item-active' : '') +
+        (danger ? ' menu-item-danger' : '')
+      }
       onClick={onClick}
       onMouseDown={onMouseDown}
       style={{

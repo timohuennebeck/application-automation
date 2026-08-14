@@ -1,3 +1,4 @@
+import { useRef, useState } from 'react';
 import { DashedPlus } from '../../ui/AddRow';
 import { MenuItem, MenuLabel } from '../../ui/MenuItem';
 import { Avatar, PencilGlyph, SearchGlyph } from '../../ui/icons';
@@ -32,6 +33,12 @@ export function PeoplePicker({
   const q = draft.trim().toLowerCase();
   const matches = people.filter((p) => !q || p.name.toLowerCase().includes(q)).slice(0, 8);
 
+  const listRef = useRef<HTMLDivElement>(null);
+  /* Row the arrow keys are on; -1 means none, Enter then takes the first.
+     The create row sits one past the last match. */
+  const [active, setActive] = useState(-1);
+  const rows = matches.length + 1;
+
   return (
     <>
       <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 8px 7px' }}>
@@ -40,15 +47,27 @@ export function PeoplePicker({
           value={draft}
           autoFocus
           placeholder="Person suchen"
-          onChange={(e) => onDraftChange(e.target.value)}
+          onChange={(e) => {
+            onDraftChange(e.target.value);
+            setActive(-1);
+          }}
           onKeyDown={(e) => {
             if (e.key === 'Escape') {
               e.stopPropagation();
               onClose();
             }
             if (e.key === 'Enter') {
-              if (matches.length) onToggle(matches[0].key);
+              if (active >= 0 && active < matches.length) onToggle(matches[active].key);
+              else if (active === matches.length) onCreate(draft.trim());
+              else if (matches.length) onToggle(matches[0].key);
               else if (q) onCreate(draft.trim());
+            }
+            if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+              e.preventDefault();
+              const next =
+                e.key === 'ArrowDown' ? (active + 1) % rows : active <= 0 ? rows - 1 : active - 1;
+              setActive(next);
+              listRef.current?.children[next]?.scrollIntoView({ block: 'nearest' });
             }
           }}
           style={{
@@ -65,13 +84,14 @@ export function PeoplePicker({
       </div>
       <MenuLabel>Bei {company} bekannt</MenuLabel>
       <div
+        ref={listRef}
         className="no-scrollbar"
         style={{ maxHeight: 168, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 1 }}
       >
-        {matches.map((p) => {
+        {matches.map((p, i) => {
           const sel = isSelected(p.key);
           return (
-            <MenuItem key={p.key} selected={sel} onClick={() => onToggle(p.key)}>
+            <MenuItem key={p.key} selected={sel} active={i === active} onClick={() => onToggle(p.key)}>
               <Avatar bg={p.bg} size={20} fontSize={8.5}>
                 {p.initials}
               </Avatar>
@@ -123,7 +143,11 @@ export function PeoplePicker({
             </MenuItem>
           );
         })}
-        <MenuItem onClick={() => onCreate(draft.trim())} style={{ color: 'var(--c-8b8880)' }}>
+        <MenuItem
+          active={active === matches.length}
+          onClick={() => onCreate(draft.trim())}
+          style={{ color: 'var(--c-8b8880)' }}
+        >
           <DashedPlus size={20} />
           <span>{q ? '„' + draft.trim() + '“ neu anlegen' : 'Person hinzufügen'}</span>
         </MenuItem>

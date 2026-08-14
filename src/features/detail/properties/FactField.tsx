@@ -12,6 +12,8 @@ import { SalaryField } from './SalaryField';
 export interface FactView {
   label: string;
   value: string;
+  /* No value yet — the row shows its muted placeholder instead. */
+  empty: boolean;
   /* Tints the value like a link (websites, e-mail). */
   link?: boolean;
   isSelect: boolean;
@@ -36,10 +38,7 @@ export function FactField({ fact, cardId, locked }: { fact: FactView; cardId: st
   const toggle = () => {
     if (!locked) set((s) => ({ dropdown: s.dropdown === key ? null : key, editing: null }));
   };
-  /* '—' and 'nicht angegeben' are the row's empty markers, not values, so a
-     row showing one of them has nothing to clear. */
-  const filled = fact.value !== '—' && fact.value !== 'nicht angegeben';
-  const clearValue = filled ? () => write('') : undefined;
+  const clearValue = fact.empty ? undefined : () => write('');
 
   if (fact.isSalary) {
     return <SalaryField value={fact.value} cardId={cardId} locked={locked} />;
@@ -50,6 +49,7 @@ export function FactField({ fact, cardId, locked }: { fact: FactView; cardId: st
       <PopoverAnchor style={{ marginLeft: -6 }}>
         <FieldChip
           open={open}
+          empty={fact.empty}
           locked={locked}
           chevron
           gap={5}
@@ -57,7 +57,7 @@ export function FactField({ fact, cardId, locked }: { fact: FactView; cardId: st
           onClear={clearValue}
           clearTitle={fact.label + ' entfernen'}
         >
-          <span>{fact.value}</span>
+          <span>{fact.empty ? 'Festlegen' : fact.value}</span>
         </FieldChip>
         {open && (
           <Popover minWidth={170}>
@@ -79,6 +79,7 @@ export function FactField({ fact, cardId, locked }: { fact: FactView; cardId: st
       <PopoverAnchor style={{ marginLeft: -6 }}>
         <FieldChip
           open={open}
+          empty={fact.empty}
           locked={locked}
           chevron
           gap={5}
@@ -86,7 +87,7 @@ export function FactField({ fact, cardId, locked }: { fact: FactView; cardId: st
           onClear={clearValue}
           clearTitle={fact.label + ' entfernen'}
         >
-          <span>{fact.value}</span>
+          <span>{fact.empty ? 'Festlegen' : fact.value}</span>
         </FieldChip>
         {open && (
           <CalendarPopover
@@ -145,14 +146,15 @@ export function FactField({ fact, cardId, locked }: { fact: FactView; cardId: st
 
   return (
     <FieldChip
+      empty={fact.empty}
       locked={locked}
-      color={fact.link ? 'var(--c-3f6ea8)' : undefined}
+      color={fact.link && !fact.empty ? 'var(--c-3f6ea8)' : undefined}
       style={{ marginLeft: -6, cursor: locked ? 'not-allowed' : 'text' }}
       onClick={() => {
-        if (!locked) set({ editing: key, editDraft: fact.value === '—' ? '' : fact.value, dropdown: null });
+        if (!locked) set({ editing: key, editDraft: fact.value, dropdown: null });
       }}
     >
-      <span>{fact.value}</span>
+      <span>{fact.empty ? 'Hinzufügen' : fact.value}</span>
     </FieldChip>
   );
 }

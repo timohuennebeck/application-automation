@@ -797,7 +797,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       const existing = (s.factsByApp[id] || []).find((f) => f.label === label);
       const kind = existing?.kind ?? (SELECT_FACTS.has(label) ? FactKind.SELECT : null);
-      const stored = cleared ? '—' : value;
+      const stored = cleared ? '' : value;
       persist(
         db()
           ?.facts.upsert(id, label, stored, kind)

@@ -11,11 +11,11 @@ interface FieldDef {
 }
 
 const FIELDS: FieldDef[] = [
-  { label: 'Name', prop: 'name', placeholder: '—' },
-  { label: 'Position', prop: 'role', placeholder: '—' },
-  { label: 'Email', prop: 'email', placeholder: '—', link: true },
-  { label: 'Telefon', prop: 'phone', placeholder: '—' },
-  { label: 'LinkedIn', prop: 'linkedin', placeholder: '—', link: true },
+  { label: 'Name', prop: 'name', placeholder: 'Hinzufügen' },
+  { label: 'Position', prop: 'role', placeholder: 'Hinzufügen' },
+  { label: 'Email', prop: 'email', placeholder: 'Hinzufügen', link: true },
+  { label: 'Telefon', prop: 'phone', placeholder: 'Hinzufügen' },
+  { label: 'LinkedIn', prop: 'linkedin', placeholder: 'Hinzufügen', link: true },
 ];
 
 /* Inline person editor shown inside a popover, from a participant chip or a

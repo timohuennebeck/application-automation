@@ -52,24 +52,27 @@ export function PropertiesSidebar({ cardId, role, company, columnIndex }: Proper
   const routed: Record<string, { value: string; link?: boolean }> = {
     Berufsbezeichnung: { value: role },
     Firma: { value: company },
-    Plattform: { value: app?.channel || '—' },
-    'Beworben via': { value: app?.applied_via || '—' },
-    'Beworben am': { value: app?.applied_at ? isoToDate(app.applied_at) : '—' },
-    Branche: { value: comp?.sector || '—' },
-    Mitarbeiterzahl: { value: comp?.headcount || '—' },
-    Karriereseite: { value: comp?.website || '—', link: true },
-    Email: { value: comp?.email || '—', link: true },
-    Telefon: { value: comp?.phone || '—' },
+    Plattform: { value: app?.channel || '' },
+    'Beworben via': { value: app?.applied_via || '' },
+    'Beworben am': { value: app?.applied_at ? isoToDate(app.applied_at) : '' },
+    Branche: { value: comp?.sector || '' },
+    Mitarbeiterzahl: { value: comp?.headcount || '' },
+    Karriereseite: { value: comp?.website || '', link: true },
+    Email: { value: comp?.email || '', link: true },
+    Telefon: { value: comp?.phone || '' },
   };
-  /* Gehalt has no placeholder: its two dropdowns say "von"/"bis" themselves. */
-  const factDefaults: Record<string, string> = { Erfahrung: 'nicht angegeben' };
 
   const view = (label: string): FactView => {
     const r = routed[label];
     const fact = facts.find((f) => f.label === label);
+    const raw = r?.value ?? fact?.value ?? '';
+    /* Cleared facts used to be stored as '—' (and Erfahrung as 'nicht
+       angegeben'), so rows written before that changed still carry them. */
+    const value = raw === '—' || raw === 'nicht angegeben' ? '' : raw;
     return {
       label,
-      value: r?.value ?? fact?.value ?? factDefaults[label] ?? '—',
+      value,
+      empty: !value,
       link: r?.link || fact?.kind === FactKind.LINK,
       isSelect: !!FACT_OPTIONS[label],
       isDate: !!DATE_FIELDS[label],

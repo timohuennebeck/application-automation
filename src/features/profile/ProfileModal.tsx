@@ -105,7 +105,7 @@ export function ProfileModal() {
             const caption = working
               ? 'wird übernommen …'
               : info
-                ? 'HTML · ' + formatBytes(info.size) + ' · aktualisiert am ' + isoToDate(info.day)
+                ? info.name + ' · ' + formatBytes(info.size) + ' · aktualisiert am ' + isoToDate(info.day)
                 : /* Nothing is claimed about the slot until the listing lands;
                    the blank keeps the card's height. */
                   slots

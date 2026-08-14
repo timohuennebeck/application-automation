@@ -31,6 +31,8 @@ export interface DocumentUpload {
 /* What the profile dialog knows about a stored template. Read from the file
    itself on every call — there is no row that could disagree with it. */
 export interface TemplateInfo {
+  /* The file's own name as it was uploaded — what every chip and caption shows. */
+  name: string;
   size: number;
   /* Local calendar day the file was last written, as YYYY-MM-DD. */
   day: string;

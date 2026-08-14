@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -222,10 +222,26 @@ describe('purgeApplicationFiles', () => {
 });
 
 describe('templatePath', () => {
-  it('gives each kind its own fixed name under templates/', () => {
-    expect(templatePath(root, TemplateKind.LEBENSLAUF)).toBe(path.join(root, 'templates', 'lebenslauf.html'));
-    expect(templatePath(root, TemplateKind.ANSCHREIBEN)).toBe(
-      path.join(root, 'templates', 'anschreiben.html'),
+  it('is null while nothing has been uploaded', () => {
+    expect(templatePath(root, TemplateKind.LEBENSLAUF)).toBe(null);
+  });
+
+  it('points at the uploaded file under its own name', () => {
+    copyTemplate(root, TemplateKind.LEBENSLAUF, source('Mein Lebenslauf.html', 'cv'));
+
+    expect(templatePath(root, TemplateKind.LEBENSLAUF)).toBe(
+      path.join(root, 'templates', 'lebenslauf', 'Mein Lebenslauf.html'),
+    );
+  });
+
+  /* Uploads from before original names were kept sit flat in templates/ under
+     a fixed name; an existing install must keep its documents. */
+  it('falls back to the legacy flat file of an older install', () => {
+    mkdirSync(path.join(root, 'templates'), { recursive: true });
+    writeFileSync(path.join(root, 'templates', 'lebenslauf.html'), 'old cv');
+
+    expect(templatePath(root, TemplateKind.LEBENSLAUF)).toBe(
+      path.join(root, 'templates', 'lebenslauf.html'),
     );
   });
 
@@ -241,32 +257,44 @@ describe('copyTemplate', () => {
   it('stores the file under its slot and reports what landed there', () => {
     const info = copyTemplate(root, TemplateKind.LEBENSLAUF, source('Mein Lebenslauf.html', 'cv bytes'));
 
-    expect(readFileSync(templatePath(root, TemplateKind.LEBENSLAUF), 'utf8')).toBe('cv bytes');
-    expect(info).toEqual({ size: 8, day: toISO(new Date()) });
+    expect(readFileSync(templatePath(root, TemplateKind.LEBENSLAUF)!, 'utf8')).toBe('cv bytes');
+    expect(info).toEqual({ name: 'Mein Lebenslauf.html', size: 8, day: toISO(new Date()) });
   });
 
   it('overwrites the slot rather than piling up versions', () => {
     copyTemplate(root, TemplateKind.LEBENSLAUF, source('a.html', 'first'));
     const info = copyTemplate(root, TemplateKind.LEBENSLAUF, source('b.html', 'second'));
 
-    expect(readFileSync(templatePath(root, TemplateKind.LEBENSLAUF), 'utf8')).toBe('second');
-    expect(info.size).toBe(6);
+    expect(info.name).toBe('b.html');
+    expect(readdirSync(path.join(root, 'templates', 'lebenslauf'))).toEqual(['b.html']);
   });
 
-  /* A .htm source still lands under the canonical .html name, so the slot has
-     exactly one path whatever was picked. */
-  it('normalises the extension of what was picked', () => {
-    copyTemplate(root, TemplateKind.LEBENSLAUF, source('a.htm', 'cv'));
+  it('replaces the legacy flat file of an older install', () => {
+    mkdirSync(path.join(root, 'templates'), { recursive: true });
+    writeFileSync(path.join(root, 'templates', 'lebenslauf.html'), 'old cv');
 
-    expect(readFileSync(templatePath(root, TemplateKind.LEBENSLAUF), 'utf8')).toBe('cv');
+    copyTemplate(root, TemplateKind.LEBENSLAUF, source('Neu.html', 'new cv'));
+
+    expect(existsSync(path.join(root, 'templates', 'lebenslauf.html'))).toBe(false);
+    expect(templatePath(root, TemplateKind.LEBENSLAUF)).toBe(
+      path.join(root, 'templates', 'lebenslauf', 'Neu.html'),
+    );
+  });
+
+  /* The name the user picked is the point — a .htm stays a .htm. */
+  it('keeps the picked name, extension included', () => {
+    const info = copyTemplate(root, TemplateKind.LEBENSLAUF, source('a.htm', 'cv'));
+
+    expect(info.name).toBe('a.htm');
+    expect(readFileSync(templatePath(root, TemplateKind.LEBENSLAUF)!, 'utf8')).toBe('cv');
   });
 
   it('keeps the two slots apart', () => {
     copyTemplate(root, TemplateKind.LEBENSLAUF, source('a.html', 'cv'));
     copyTemplate(root, TemplateKind.ANSCHREIBEN, source('b.html', 'letter'));
 
-    expect(readFileSync(templatePath(root, TemplateKind.LEBENSLAUF), 'utf8')).toBe('cv');
-    expect(readFileSync(templatePath(root, TemplateKind.ANSCHREIBEN), 'utf8')).toBe('letter');
+    expect(readFileSync(templatePath(root, TemplateKind.LEBENSLAUF)!, 'utf8')).toBe('cv');
+    expect(readFileSync(templatePath(root, TemplateKind.ANSCHREIBEN)!, 'utf8')).toBe('letter');
   });
 
   /* The agent edits the markup and exports the PDF from it, so a finished PDF
@@ -284,12 +312,12 @@ describe('listTemplates', () => {
     expect(listTemplates(root)).toEqual({ LEBENSLAUF: null, ANSCHREIBEN: null });
   });
 
-  it('reports size and day for the slot that is filled', () => {
+  it('reports name, size and day for the slot that is filled', () => {
     copyTemplate(root, TemplateKind.ANSCHREIBEN, source('a.html', 'letter'));
 
     expect(listTemplates(root)).toEqual({
       LEBENSLAUF: null,
-      ANSCHREIBEN: { size: 6, day: toISO(new Date()) },
+      ANSCHREIBEN: { name: 'a.html', size: 6, day: toISO(new Date()) },
     });
   });
 
@@ -297,7 +325,7 @@ describe('listTemplates', () => {
      rather than offering a file that cannot be opened. */
   it('treats a file that vanished as an empty slot', () => {
     copyTemplate(root, TemplateKind.LEBENSLAUF, source('a.html'));
-    rmSync(templatePath(root, TemplateKind.LEBENSLAUF));
+    rmSync(templatePath(root, TemplateKind.LEBENSLAUF)!);
 
     expect(listTemplates(root).LEBENSLAUF).toBe(null);
   });

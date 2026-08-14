@@ -5,7 +5,7 @@
    Everything here takes the userData root as its first argument rather than
    reaching for Electron's app.getPath, which keeps it testable and keeps the
    Electron import out of the pure parts. */
-import { copyFileSync, existsSync, mkdirSync, rmSync, statSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { toISO } from '../src/lib/date.ts';
 import type { TemplateInfo } from '../src/shared/domain.ts';
@@ -163,40 +163,71 @@ export function removeStoredFile(userDataPath: string, storedPath: string): void
 
 /* ── Profile templates ────────────────────────────────────────────────────
    The CV and cover letter kept once for the whole profile, in userData/templates.
-   There is no table behind them: the file being there *is* the state, and its
-   size and date come from the filesystem. That leaves nothing to keep in sync
-   and no row that can outlive its file. */
+   There is no table behind them: the file being there *is* the state — its
+   name, size and date come from the filesystem. That leaves nothing to keep in
+   sync and no row that can outlive its file. Each slot is a directory holding
+   the one uploaded file under its own name, so what the user picked is what
+   every chip and caption shows. */
 
-const TEMPLATE_FILE_NAMES: Record<TemplateKind, string> = {
+const TEMPLATE_DIRS: Record<TemplateKind, string> = {
+  [TemplateKind.LEBENSLAUF]: 'lebenslauf',
+  [TemplateKind.ANSCHREIBEN]: 'anschreiben',
+};
+
+/* Where uploads landed before original names were kept: one fixed file per
+   slot. Still read so an existing install keeps its documents. */
+const LEGACY_TEMPLATE_FILES: Record<TemplateKind, string> = {
   [TemplateKind.LEBENSLAUF]: 'lebenslauf.html',
   [TemplateKind.ANSCHREIBEN]: 'anschreiben.html',
 };
 
-/* Absolute path of a slot. The kind comes from the renderer, so an unknown one
-   is rejected here rather than joined into the path as `undefined`. */
-export function templatePath(userDataPath: string, kind: TemplateKind): string {
-  const name = TEMPLATE_FILE_NAMES[kind];
-  if (!name) throw new Error(`unknown template kind: ${kind}`);
-  return path.join(userDataPath, 'templates', name);
+/* Absolute path of a slot's directory. The kind comes from the renderer, so an
+   unknown one is rejected here rather than joined into the path as `undefined`. */
+function templateDir(userDataPath: string, kind: TemplateKind): string {
+  const dir = TEMPLATE_DIRS[kind];
+  if (!dir) throw new Error(`unknown template kind: ${kind}`);
+  return path.join(userDataPath, 'templates', dir);
 }
 
-/* Puts a picked file into its slot, replacing whatever was there, and reports
-   what now sits in it so the dialog can redraw without a second round trip. */
+/* The file sitting in a slot, or null while nothing has been uploaded. */
+export function templatePath(userDataPath: string, kind: TemplateKind): string | null {
+  const dir = templateDir(userDataPath, kind);
+  try {
+    const entry = readdirSync(dir).find(isHtml);
+    if (entry) return path.join(dir, entry);
+  } catch {
+    /* no slot directory yet — fall through to the legacy location */
+  }
+  const legacy = path.join(userDataPath, 'templates', LEGACY_TEMPLATE_FILES[kind]);
+  return existsSync(legacy) ? legacy : null;
+}
+
+/* Puts a picked file into its slot under its own name, replacing whatever was
+   there, and reports what now sits in it so the dialog can redraw without a
+   second round trip. */
 export function copyTemplate(userDataPath: string, kind: TemplateKind, sourcePath: string): TemplateInfo {
   if (!isHtml(sourcePath)) throw new Error(`not an HTML file: ${sourcePath}`);
-  const target = templatePath(userDataPath, kind);
-  mkdirSync(path.dirname(target), { recursive: true });
+  const dir = templateDir(userDataPath, kind);
+  /* One file per slot: clear the directory and the legacy flat file, or the
+     replaced upload would shadow the new one. */
+  rmSync(dir, { recursive: true, force: true });
+  rmSync(path.join(userDataPath, 'templates', LEGACY_TEMPLATE_FILES[kind]), { force: true });
+  mkdirSync(dir, { recursive: true });
+  const target = path.join(dir, path.basename(sourcePath));
   copyFileSync(sourcePath, target);
-  return describe(statSync(target));
+  return describe(target);
 }
 
-function describe(s: { size: number; mtime: Date }): TemplateInfo {
-  return { size: s.size, day: toISO(s.mtime) };
+function describe(filePath: string): TemplateInfo {
+  const s = statSync(filePath);
+  return { name: path.basename(filePath), size: s.size, day: toISO(s.mtime) };
 }
 
 function templateInfo(userDataPath: string, kind: TemplateKind): TemplateInfo | null {
+  const filePath = templatePath(userDataPath, kind);
+  if (!filePath) return null;
   try {
-    return describe(statSync(templatePath(userDataPath, kind)));
+    return describe(filePath);
   } catch {
     return null;
   }

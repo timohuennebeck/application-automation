@@ -182,9 +182,10 @@ ipcMain.handle('templates:save', (_e, kind: TemplateKind, sourcePath: string) =>
   copyTemplate(app.getPath('userData'), kind, sourcePath),
 );
 
-ipcMain.handle('templates:open', (_e, kind: TemplateKind) =>
-  shell.openPath(templatePath(app.getPath('userData'), kind)),
-);
+ipcMain.handle('templates:open', (_e, kind: TemplateKind) => {
+  const filePath = templatePath(app.getPath('userData'), kind);
+  return filePath ? shell.openPath(filePath) : 'Noch keine Datei hochgeladen.';
+});
 
 /* The database must be usable before any window exists; a broken store means
    quit with an error rather than silently running in-memory and losing edits. */

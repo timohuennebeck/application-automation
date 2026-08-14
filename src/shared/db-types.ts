@@ -35,6 +35,10 @@ export interface ApplicationRow {
   summary: string | null;
   applied_at: string | null;
   applied_via: string | null;
+  /* The job listing's source from the create dialog: its URL, or the pasted
+     listing text when there was no link. At most one is set. */
+  posting_url: string | null;
+  posting_text: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -194,8 +198,8 @@ export interface CreateApplicationResult {
   followups: FollowupRow[];
   documents: DocumentRow[];
   comments: CommentRow[];
-  /* Links for the people picked in the dialog — contacts and, mirrored onto
-       them, the follow-up email's recipients. */
+  /* The card's people links — empty on create, filled as contacts are added
+       at the card. */
   people: ApplicationPersonRow[];
   /* Stage siblings whose position shifted to make room. */
   applications: ApplicationRow[];
@@ -229,8 +233,8 @@ export interface DbApi {
       role: string;
       company: string;
       channel: string | null;
-      summary?: string | null;
-      people?: number[];
+      postingUrl?: string | null;
+      postingText?: string | null;
     }): Promise<CreateApplicationResult>;
     update(id: string, patch: ApplicationPatch): Promise<ApplicationRow>;
     move(id: string, toStageId: string, toIndex: number): Promise<ApplicationRow[]>;

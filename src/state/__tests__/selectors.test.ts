@@ -23,6 +23,8 @@ const application = (
   summary: null,
   applied_at: null,
   applied_via: null,
+  posting_url: null,
+  posting_text: null,
   created_at: 't',
   updated_at: 't',
 });

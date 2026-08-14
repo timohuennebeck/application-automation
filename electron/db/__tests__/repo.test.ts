@@ -62,30 +62,36 @@ describe('repo', () => {
     expect(row.file_path).toBe('documents/BEW-45/cover-letter.html');
   });
 
-  it('stores the dialog description and links the picked people', () => {
-    const people = repo
-      .load()
-      .people.slice(0, 2)
-      .map((p) => p.id);
+  it('starts without summary, posting source or links when the dialog gave none', () => {
+    const res = repo.createApplication({ role: 'Designer', company: 'Acme GmbH', channel: null });
+    expect(res.application.summary).toBeNull();
+    expect(res.people).toEqual([]);
+    expect(res.application.posting_url).toBeNull();
+    expect(res.application.posting_text).toBeNull();
+  });
+
+  it('stores the posting URL for Kepler to read later', () => {
     const res = repo.createApplication({
       role: 'Designer',
       company: 'Acme GmbH',
       channel: null,
-      summary: 'Rolle mit Fokus auf Design-Systeme.',
-      people,
+      postingUrl: 'https://acme.de/jobs/designer',
     });
-    expect(res.application.summary).toBe('Rolle mit Fokus auf Design-Systeme.');
-
-    const byKind = (kind: LinkKind) => res.people.filter((l) => l.kind === kind).map((l) => l.person_id);
-    expect(byKind(LinkKind.CONTACT)).toEqual(people);
-    // The follow-up email starts with the same recipients, like a seeded card.
-    expect(byKind(LinkKind.EMAIL)).toEqual(people);
+    expect(res.application.posting_url).toBe('https://acme.de/jobs/designer');
+    expect(res.application.posting_text).toBeNull();
   });
 
-  it('leaves summary and links empty when the dialog fields were', () => {
-    const res = repo.createApplication({ role: 'Designer', company: 'Acme GmbH', channel: null });
-    expect(res.application.summary).toBeNull();
-    expect(res.people).toEqual([]);
+  it('stores the pasted posting text when there was no link', () => {
+    const res = repo.createApplication({
+      role: 'Designer',
+      company: 'Acme GmbH',
+      channel: null,
+      postingText: 'Wir suchen eine:n Designer:in mit Fokus auf Design-Systeme.',
+    });
+    expect(res.application.posting_text).toBe(
+      'Wir suchen eine:n Designer:in mit Fokus auf Design-Systeme.',
+    );
+    expect(res.application.posting_url).toBeNull();
   });
 
   it('cascade-deletes children but keeps people and companies', () => {

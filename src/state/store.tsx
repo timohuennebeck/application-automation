@@ -26,8 +26,10 @@ export const EMPTY_FILTER: BoardFilter = {
    reset the whole form after each card without listing the fields twice. */
 const EMPTY_DRAFT = {
   jobUrl: '',
-  jobDescription: '',
-  jobPeople: [] as string[],
+  jobChannel: '',
+  jobChannelOpen: false,
+  jobHasUrl: true,
+  jobText: '',
 } satisfies Partial<AppState>;
 
 const initialState = (): AppState => ({
@@ -474,8 +476,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const createCard = useCallback(() => {
     const s = stRef.current;
-    const { role, company } = parsePosting(s.jobUrl);
-    const people = s.jobPeople.map(Number).filter((n) => Number.isFinite(n));
+    const url = s.jobHasUrl ? s.jobUrl.trim() : '';
+    const text = s.jobHasUrl ? '' : s.jobText.trim();
+    // Without a posting source there is nothing for Kepler to work with —
+    // the dialog's button is disabled, and ⌘Enter lands here directly.
+    if (!url && !text) return;
+    // With pasted text there is no URL to guess from, so the card starts on
+    // the generic placeholders and Kepler names it from the text later.
+    const { role, company } = parsePosting(url);
     // Keep the dialog open for the next card, but always start it empty.
     set((s2) => ({ modalOpen: s2.multiple, ...EMPTY_DRAFT }));
     persist(
@@ -483,9 +491,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ?.applications.create({
           role,
           company,
-          channel: 'Karriereseite',
-          summary: s.jobDescription.trim() || null,
-          people,
+          channel: s.jobChannel || null,
+          postingUrl: url || null,
+          postingText: text || null,
         })
         .then((res) => {
           set((s2) => ({

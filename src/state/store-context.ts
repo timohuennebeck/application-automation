@@ -131,11 +131,16 @@ export interface AppState {
   cardContact: CardPointerState | null;
   modalOpen: boolean;
   multiple: boolean;
-  /* The create dialog's inputs: posting URL, free-text description and the
-     people to attach as contacts (person ids, as AppState.people is keyed). */
+  /* The create dialog's inputs: the posting's URL and the channel
+     ("Plattform") it was found on. */
   jobUrl: string;
-  jobDescription: string;
-  jobPeople: string[];
+  jobChannel: string;
+  /* Whether the dialog's channel dropdown is open. */
+  jobChannelOpen: boolean;
+  /* Whether the posting is given as a link; off means jobText carries the
+     listing pasted by hand. */
+  jobHasUrl: boolean;
+  jobText: string;
   /* Ticks once a second to drive the running-agent timers. */
   tick: number;
   /* Key of the single open dropdown, or null. */

@@ -1,23 +1,23 @@
+import { CHANNEL_BG, CHANNEL_OPTIONS } from '../../data/config';
 import { useApp } from '../../state/store-context';
+import { FieldChip } from '../../ui/FieldChip';
+import { MenuItem } from '../../ui/MenuItem';
 import { FieldHint, FieldLabel, ModalShell, SubmitButton } from '../../ui/ModalShell';
-import { Avatar, Check, KeplerAvatar } from '../../ui/icons';
+import { Popover, PopoverAnchor } from '../../ui/Popover';
+import { Switch } from '../../ui/Switch';
+import { Avatar, KeplerAvatar } from '../../ui/icons';
 
-/* ⌘C dialog: paste a posting URL, describe the role and pick the people the
-   card should carry as contacts. */
+/* ⌘C dialog: paste a posting URL — or, without one, the listing text itself —
+   and pick the channel the posting was found on. */
 export function NewApplicationModal() {
-  const { st, set, createCard, person } = useApp();
+  const { st, set, createCard } = useApp();
   const close = () => set({ modalOpen: false });
-
-  const directory = Object.keys(st.people).map(person);
-
-  const togglePerson = (key: string) =>
-    set((s) => ({
-      jobPeople: s.jobPeople.includes(key) ? s.jobPeople.filter((k) => k !== key) : [...s.jobPeople, key],
-    }));
+  const valid = !!(st.jobHasUrl ? st.jobUrl.trim() : st.jobText.trim());
 
   return (
     <ModalShell
       onClose={close}
+      overflowVisible={st.jobChannelOpen}
       header={
         <div
           style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: 14, color: 'var(--c-5f5c56)' }}
@@ -58,132 +58,115 @@ export function NewApplicationModal() {
             </div>
             <span style={{ fontSize: 13.5, color: 'var(--c-5f5c56)' }}>Erstelle mehrere</span>
           </div>
-          <SubmitButton label="Erstellen" onClick={createCard} />
+          <SubmitButton label="Erstellen" enabled={valid} onClick={createCard} />
         </>
       }
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <input
-          value={st.jobUrl}
-          autoFocus
-          placeholder="https://…"
-          onChange={(e) => set({ jobUrl: e.target.value })}
-          style={{
-            fontSize: 15,
-            color: 'var(--c-1b1a17)',
-            lineHeight: 1.5,
-            border: 'none',
-            outline: 'none',
-            background: 'transparent',
-            width: '100%',
-            minWidth: 0,
-            padding: 0,
-          }}
-        />
-        <FieldHint>
-          Link zur Stellenanzeige einfügen. Kepler liest Titel, Unternehmen und Anforderungen automatisch aus.
-        </FieldHint>
-      </div>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 4 }}>
-        <FieldLabel>Beschreibung</FieldLabel>
-        {/* Borderless, like the URL field above it — the label carries the
-            framing, so the box would only add noise. */}
-        <textarea
-          value={st.jobDescription}
-          rows={3}
-          placeholder="Beschreibung hinzufügen…"
-          onChange={(e) => set({ jobDescription: e.target.value })}
-          style={{
-            fontSize: 13.5,
-            color: 'var(--c-1b1a17)',
-            lineHeight: 1.55,
-            fontFamily: 'inherit',
-            border: 'none',
-            outline: 'none',
-            resize: 'vertical',
-            background: 'transparent',
-            padding: 0,
-            width: '100%',
-            minWidth: 0,
-            boxSizing: 'border-box',
-          }}
+        <Switch
+          on={st.jobHasUrl}
+          label="Link zur Stellenanzeige vorhanden"
+          onClick={() => set((s) => ({ jobHasUrl: !s.jobHasUrl }))}
         />
       </div>
 
+      {st.jobHasUrl ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <input
+            value={st.jobUrl}
+            autoFocus
+            placeholder="https://…"
+            onChange={(e) => set({ jobUrl: e.target.value })}
+            style={{
+              fontSize: 15,
+              color: 'var(--c-1b1a17)',
+              lineHeight: 1.5,
+              border: 'none',
+              outline: 'none',
+              background: 'transparent',
+              width: '100%',
+              minWidth: 0,
+              padding: 0,
+            }}
+          />
+          <FieldHint>
+            Link zur Stellenanzeige einfügen. Kepler liest Titel, Unternehmen und Kernanforderungen automatisch aus.
+          </FieldHint>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <textarea
+            value={st.jobText}
+            autoFocus
+            rows={6}
+            placeholder="Stellenanzeige hier einfügen…"
+            onChange={(e) => set({ jobText: e.target.value })}
+            style={{
+              fontSize: 13.5,
+              color: 'var(--c-1b1a17)',
+              lineHeight: 1.55,
+              fontFamily: 'inherit',
+              border: 'none',
+              outline: 'none',
+              resize: 'vertical',
+              background: 'transparent',
+              padding: 0,
+              width: '100%',
+              minWidth: 0,
+              boxSizing: 'border-box',
+            }}
+          />
+          <FieldHint>
+            Text der Stellenanzeigenbeschreibung einfügen. Kepler liest Titel, Unternehmen und Kernanforderungen daraus aus.
+          </FieldHint>
+        </div>
+      )}
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 4 }}>
-        <FieldLabel>Kontaktpersonen</FieldLabel>
-        {directory.length === 0 ? (
-          <FieldHint>Noch keine Personen angelegt. Kontakte lassen sich an der Karte hinzufügen.</FieldHint>
-        ) : (
-          <div
-            style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 3 }}
+        <FieldLabel>Plattform</FieldLabel>
+        <PopoverAnchor style={{ width: 'fit-content' }}>
+          <FieldChip
+            open={st.jobChannelOpen}
+            empty={!st.jobChannel}
+            chevron
+            gap={7}
+            style={{ padding: '3px 7px' }}
+            onClick={() => set((s) => ({ jobChannelOpen: !s.jobChannelOpen }))}
+            onClear={st.jobChannel ? () => set({ jobChannel: '', jobChannelOpen: false }) : undefined}
+            clearTitle="Plattform entfernen"
           >
-            {directory.map((p) => {
-              const sel = st.jobPeople.includes(p.key);
-              return (
-                <div
-                  key={p.key}
-                  className="menu-item"
-                  onClick={() => togglePerson(p.key)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 9,
-                    padding: '5px 8px',
-                    borderRadius: 7,
-                    minWidth: 0,
-                    background: sel ? 'var(--c-f1efe9)' : 'transparent',
-                  }}
+            {st.jobChannel ? (
+              <>
+                <Avatar bg={CHANNEL_BG[st.jobChannel]} size={16} fontSize={8}>
+                  {st.jobChannel.charAt(0)}
+                </Avatar>
+                <span>{st.jobChannel}</span>
+              </>
+            ) : (
+              <span style={{ color: 'var(--c-a5a29a)' }}>Eintrag auswählen</span>
+            )}
+          </FieldChip>
+          {st.jobChannelOpen && (
+            <Popover top={28} minWidth={200} zIndex={70}>
+              {CHANNEL_OPTIONS.map((c) => (
+                <MenuItem
+                  key={c}
+                  selected={st.jobChannel === c}
+                  onClick={() => set({ jobChannel: c, jobChannelOpen: false })}
                 >
-                  <div
-                    style={{
-                      width: 15,
-                      height: 15,
-                      borderRadius: 4,
-                      boxSizing: 'border-box',
-                      border: '1px solid ' + (sel ? 'var(--c-1b1a17)' : 'var(--c-cfccc3)'),
-                      background: sel ? 'var(--c-1b1a17)' : 'var(--c-fff)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexShrink: 0,
-                    }}
-                  >
-                    {sel && <Check size={9} stroke="var(--c-fff)" strokeWidth={1.9} />}
-                  </div>
-                  <Avatar bg={p.bg} size={20} fontSize={8.5}>
-                    {p.initials}
+                  <Avatar bg={CHANNEL_BG[c]} size={16} fontSize={8}>
+                    {c.charAt(0)}
                   </Avatar>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
-                    <div
-                      style={{
-                        fontSize: 12.5,
-                        color: 'var(--c-28261f)',
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                      }}
-                    >
-                      {p.name}
-                    </div>
-                    <div
-                      style={{
-                        fontSize: 11,
-                        color: 'var(--c-a5a29a)',
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                      }}
-                    >
-                      {p.role || 'Position fehlt'}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+                  <span style={{ whiteSpace: 'nowrap' }}>{c}</span>
+                  <span style={{ flex: '1 1 auto' }} />
+                </MenuItem>
+              ))}
+            </Popover>
+          )}
+        </PopoverAnchor>
+        <FieldHint>
+          Falls du hier nichts auswählst, ergänzt Kepler die Plattform automatisch.
+        </FieldHint>
       </div>
     </ModalShell>
   );

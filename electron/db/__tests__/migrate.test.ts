@@ -275,6 +275,25 @@ describe('migrations', () => {
     ]);
   });
 
+  /* Migration 11: the posting source (URL or pasted text) is kept on the
+     application instead of being parsed once and thrown away. */
+  it('adds the posting source columns and leaves existing rows empty', () => {
+    const db = dbAtVersion(10);
+    db.exec(`
+      INSERT INTO companies (id, name, created_at, updated_at) VALUES (1, 'Acme', 't', 't');
+      INSERT INTO applications (id, role, company_id, interest, stage_id, stage_position, created_at, updated_at)
+        VALUES ('BEW-1', 'Designer', 1, 'HIGH', 'interessiert', 0, 't', 't');
+    `);
+
+    migrate(db);
+
+    const row = db.prepare('SELECT posting_url, posting_text FROM applications').get() as {
+      posting_url: string | null;
+      posting_text: string | null;
+    };
+    expect(row).toEqual({ posting_url: null, posting_text: null });
+  });
+
   it('enforces foreign keys', () => {
     const db = openDb(':memory:');
     expect(() =>

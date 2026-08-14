@@ -220,10 +220,10 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
       role: string;
       company: string;
       channel: string | null;
-      /* The dialog's description; null when it was left empty. */
-      summary?: string | null;
-      /* People picked in the dialog, linked as the card's contacts. */
-      people?: number[];
+      /* The posting's source — its URL, or the pasted listing text when there
+         was no link. At most one is set. */
+      postingUrl?: string | null;
+      postingText?: string | null;
     }): CreateApplicationResult {
       return tx(() => {
         const now = nowFn();
@@ -237,8 +237,8 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
           'interessiert',
         );
         db.prepare(
-          `INSERT INTO applications (id, role, company_id, interest, channel, stage_id, stage_position, summary, created_at, updated_at)
-           VALUES (?,?,?,?,?,?,?,?,?,?)`,
+          `INSERT INTO applications (id, role, company_id, interest, channel, stage_id, stage_position, posting_url, posting_text, created_at, updated_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
         ).run(
           id,
           input.role,
@@ -247,20 +247,11 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
           input.channel,
           'interessiert',
           0,
-          input.summary || null,
+          input.postingUrl || null,
+          input.postingText || null,
           t,
           t,
         );
-
-        /* Contacts double as the follow-up email's recipients, the way
-                   seeded cards start out — that list is never derived later. */
-        const insLink = db.prepare(
-          'INSERT INTO application_people (application_id, person_id, kind, position) VALUES (?,?,?,?)',
-        );
-        [...new Set(input.people ?? [])].forEach((pid, i) => {
-          insLink.run(id, pid, LinkKind.CONTACT, i);
-          insLink.run(id, pid, LinkKind.EMAIL, i);
-        });
 
         const children = insertDefaultChildren(id, now);
         return {

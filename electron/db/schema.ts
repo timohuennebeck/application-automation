@@ -290,4 +290,13 @@ export const MIGRATIONS: string[] = [
     WHEN 'Finales Gespräch' THEN 'Finales Gespräch'
   END;
   `,
+
+  /* Migration 11: the posting source from the create dialog — the listing's
+     URL or, when there was no link, its pasted text — is kept on the
+     application for Kepler to read, instead of being parsed once and thrown
+     away. */
+  `
+  ALTER TABLE applications ADD COLUMN posting_url TEXT;
+  ALTER TABLE applications ADD COLUMN posting_text TEXT;
+  `,
 ];

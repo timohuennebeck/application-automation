@@ -1,9 +1,21 @@
+import { useEffect, useState } from 'react';
 import { AgentStepKind } from '../../data/sample-data';
 import type { AgentRun, AgentStep } from '../../data/sample-data';
 import { clock } from '../../lib/date';
-import { download } from '../../lib/download';
+import type { TemplateInfo } from '../../shared/domain';
+import type { TemplateKind } from '../../shared/enums';
 import { useApp } from '../../state/store-context';
-import { DocGlyph, KeplerAvatar } from '../../ui/icons';
+import { AttachmentChip } from '../../ui/AttachmentChip';
+import { KeplerAvatar } from '../../ui/icons';
+
+type Templates = Record<TemplateKind, TemplateInfo | null>;
+
+/* What a doc chip says while its slot has no upload yet: the slot itself,
+   named as the profile dialog names it. */
+const SLOT_TITLES: Record<TemplateKind, string> = {
+  LEBENSLAUF: 'Lebenslauf',
+  ANSCHREIBEN: 'Cover Letter',
+};
 
 const STEP_STYLE = {
   [AgentStepKind.DONE]: {
@@ -66,7 +78,15 @@ function tokenize(label: string): Token[] {
     );
 }
 
-function StepRow({ step, elapsed, onDoc }: { step: AgentStep; elapsed: string; onDoc: () => void }) {
+function StepRow({
+  step,
+  elapsed,
+  templates,
+}: {
+  step: AgentStep;
+  elapsed: string;
+  templates: Templates | null;
+}) {
   const sy = STEP_STYLE[step.kind];
   const meta = step.kind === AgentStepKind.RUN ? 'seit ' + elapsed : step.meta;
 
@@ -138,19 +158,21 @@ function StepRow({ step, elapsed, onDoc }: { step: AgentStep; elapsed: string; o
           );
         }
         if (t.kind === 'doc') {
+          const doc = step.doc;
+          if (!doc) return null;
           return (
-            <div
+            <AttachmentChip
               key={i}
-              className="step-doc"
-              title="Dokument herunterladen"
+              name={templates?.[doc]?.name ?? SLOT_TITLES[doc]}
+              size={templates?.[doc]?.size}
+              title="Im Browser öffnen"
+              // Cancel out the chip padding so it doesn't grow the step row.
+              style={{ margin: '-3px 0', flexShrink: 0 }}
               onClick={(e) => {
                 e.stopPropagation();
-                onDoc();
+                window.desktop?.templates.open(doc);
               }}
-            >
-              <DocGlyph width={10} height={12} strokeWidth={2.4} lineWidth={3} />
-              <span>{step.doc}</span>
-            </div>
+            />
           );
         }
         return (
@@ -176,15 +198,25 @@ function StepRow({ step, elapsed, onDoc }: { step: AgentStep; elapsed: string; o
 }
 
 /* Kepler's live progress on a card, inside the animated running border. */
-export function AgentRunPanel({
-  run,
-  card,
-}: {
-  run: AgentRun;
-  card: { id: string; role: string; company: string };
-}) {
+export function AgentRunPanel({ run }: { run: AgentRun }) {
   const { st } = useApp();
   const doneCount = run.steps.filter((s) => s.kind === AgentStepKind.DONE).length;
+
+  /* The doc chips show the profile templates as they really are on disk. A
+     missing listing (still loading, no desktop) just leaves the size off. */
+  const [templates, setTemplates] = useState<Templates | null>(null);
+  useEffect(() => {
+    let live = true;
+    window.desktop?.templates
+      .list()
+      .then((s) => {
+        if (live) setTemplates(s);
+      })
+      .catch((err) => console.error('[templates]', err));
+    return () => {
+      live = false;
+    };
+  }, []);
 
   return (
     <div
@@ -212,12 +244,7 @@ export function AgentRunPanel({
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
         {run.steps.map((s, i) => (
-          <StepRow
-            key={i}
-            step={s}
-            elapsed={clock(run.started + st.tick)}
-            onDoc={() => download((s.doc || '').replace('.docx', ''), card)}
-          />
+          <StepRow key={i} step={s} elapsed={clock(run.started + st.tick)} templates={templates} />
         ))}
       </div>
     </div>

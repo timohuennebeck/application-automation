@@ -1,4 +1,3 @@
-import { formatBytes } from '../../lib/bytes';
 import { KEPLER_ENTRY } from '../../lib/mentions';
 import { Author, AUTHOR_LABEL } from '../../shared/enums';
 import { relTime } from '../../state/db-view';
@@ -8,7 +7,8 @@ import { MentionText } from '../../ui/MentionText';
 import { MenuItem } from '../../ui/MenuItem';
 import { Popover, PopoverAnchor } from '../../ui/Popover';
 import { Section } from '../../ui/Section';
-import { Avatar, DotsGlyph, PaperclipGlyph } from '../../ui/icons';
+import { AttachmentChip } from '../../ui/AttachmentChip';
+import { Avatar, DotsGlyph } from '../../ui/icons';
 
 export function CommentsSection({ cardId }: { cardId: string }) {
   const {
@@ -126,28 +126,14 @@ export function CommentsSection({ cardId }: { cardId: string }) {
               {attachments.length > 0 && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 2 }}>
                   {attachments.map((a) => (
-                    <div
+                    <AttachmentChip
                       key={a.id}
-                      className="cmt-attachment"
+                      name={a.name}
+                      size={a.size}
                       title="Anhang öffnen"
+                      style={{ marginLeft: -6 }}
                       onClick={() => openAttachment(a.file_path)}
-                    >
-                      <PaperclipGlyph />
-                      <span
-                        style={{
-                          fontSize: 12,
-                          color: 'var(--c-1b1a17)',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {a.name}
-                      </span>
-                      <span style={{ fontSize: 11, color: 'var(--c-a5a29a)', whiteSpace: 'nowrap' }}>
-                        {formatBytes(a.size)}
-                      </span>
-                    </div>
+                    />
                   ))}
                 </div>
               )}

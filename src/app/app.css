@@ -381,25 +381,6 @@
   background: var(--c-f7f5f0) !important;
 }
 
-/* Doc chip in agent steps */
-.step-doc {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  background: var(--c-e9eff8);
-  border-radius: 4px;
-  padding: 1px 6px;
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--c-28261f);
-  cursor: pointer;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-.step-doc:hover {
-  background: color-mix(in srgb, var(--c-e9eff8) 80%, var(--c-3f6ea8));
-}
-
 /* Round "more" button */
 .dots-btn {
   width: 24px;
@@ -432,20 +413,20 @@
 
 /* One attachment under a comment — the whole row opens the file. fit-content,
    so the hover fill hugs the name instead of spanning the thread. */
-.cmt-attachment {
+.attachment-chip {
   display: flex;
   align-items: center;
   gap: 6px;
   padding: 3px 6px;
-  margin-left: -6px;
   border-radius: 6px;
   cursor: pointer;
   width: fit-content;
   max-width: 100%;
   box-sizing: border-box;
-}
-.cmt-attachment:hover {
   background: var(--c-f1efe9);
+}
+.attachment-chip:hover {
+  background: var(--c-eae7e0);
 }
 
 /* Comment ⋯ button */

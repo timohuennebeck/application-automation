@@ -3,7 +3,7 @@
    config.ts; live domain data comes from the database. The '.ts' extensions
    matter: the electron tree compiles this file under nodenext. */
 import { Urgency } from './config.ts';
-import { Author, FactKind, Interest, RoundState } from '../shared/enums.ts';
+import { Author, FactKind, Interest, RoundState, TemplateKind } from '../shared/enums.ts';
 
 export const SALARY: Record<string, string> = {
   'BEW-41': '78–92k €',
@@ -31,14 +31,16 @@ export interface AgentStep {
   kind: AgentStepKind;
   label: string;
   meta: string;
-  doc?: string;
+  /* Which profile template the step reads — name and size come from the real
+     file on disk when the panel renders. */
+  doc?: TemplateKind;
 }
 export interface AgentRun {
   label: string;
   started: number;
   steps: AgentStep[];
 }
-const step = (kind: AgentStepKind, label: string, meta = '', doc?: string): AgentStep => ({
+const step = (kind: AgentStepKind, label: string, meta = '', doc?: TemplateKind): AgentStep => ({
   kind,
   label,
   meta,
@@ -53,8 +55,8 @@ export const AGENT_RUNS: Record<string, AgentRun> = {
       step(AgentStepKind.RUN, 'LinkedIn-Stellenanzeige wird ausgelesen…'),
       step(AgentStepKind.WAIT, 'Firmendetails ergänzen'),
       step(AgentStepKind.WAIT, 'Kontaktdetails ergänzen'),
-      step(AgentStepKind.WAIT, 'Hochgeladenen {doc} einlesen', '', 'Lebenslauf.docx'),
-      step(AgentStepKind.WAIT, 'Hochgeladenen {doc} einlesen', '', 'Cover-Letter.docx'),
+      step(AgentStepKind.WAIT, 'Hochgeladenen {doc} einlesen', '', TemplateKind.LEBENSLAUF),
+      step(AgentStepKind.WAIT, 'Hochgeladenen {doc} einlesen', '', TemplateKind.ANSCHREIBEN),
       step(AgentStepKind.WAIT, 'Lebenslauf für Nordlicht Systems erstellen'),
       step(AgentStepKind.WAIT, 'Cover Letter für Nordlicht Systems erstellen'),
       step(AgentStepKind.WAIT, 'Daten und Formate prüfen'),
@@ -68,8 +70,8 @@ export const AGENT_RUNS: Record<string, AgentRun> = {
       step(AgentStepKind.DONE, 'Stellenanzeige auf der Karriereseite ausgelesen', 'vor 9 Min'),
       step(AgentStepKind.DONE, 'Firmendetails ergänzt', 'vor 8 Min'),
       step(AgentStepKind.DONE, 'Kontaktdetails ergänzt', 'vor 7 Min'),
-      step(AgentStepKind.DONE, 'Hochgeladenen {doc} eingelesen', 'vor 5 Min', 'Lebenslauf.docx'),
-      step(AgentStepKind.DONE, 'Hochgeladenen {doc} eingelesen', 'vor 3 Min', 'Cover-Letter.docx'),
+      step(AgentStepKind.DONE, 'Hochgeladenen {doc} eingelesen', 'vor 5 Min', TemplateKind.LEBENSLAUF),
+      step(AgentStepKind.DONE, 'Hochgeladenen {doc} eingelesen', 'vor 3 Min', TemplateKind.ANSCHREIBEN),
       step(AgentStepKind.RUN, 'Lebenslauf für Aurel Mobility wird erstellt…'),
       step(AgentStepKind.WAIT, 'Cover Letter für Aurel Mobility erstellen'),
       step(AgentStepKind.WAIT, 'Daten und Formate prüfen'),
@@ -83,8 +85,8 @@ export const AGENT_RUNS: Record<string, AgentRun> = {
       step(AgentStepKind.DONE, 'Stellenanzeige auf LinkedIn ausgelesen', 'vor 3 Min'),
       step(AgentStepKind.DONE, 'Firmendetails ergänzt', 'vor 1 Min'),
       step(AgentStepKind.RUN, 'Kontaktdetails werden ergänzt…'),
-      step(AgentStepKind.WAIT, 'Hochgeladenen {doc} einlesen', '', 'Lebenslauf.docx'),
-      step(AgentStepKind.WAIT, 'Hochgeladenen {doc} einlesen', '', 'Cover-Letter.docx'),
+      step(AgentStepKind.WAIT, 'Hochgeladenen {doc} einlesen', '', TemplateKind.LEBENSLAUF),
+      step(AgentStepKind.WAIT, 'Hochgeladenen {doc} einlesen', '', TemplateKind.ANSCHREIBEN),
       step(AgentStepKind.WAIT, 'Lebenslauf für Helios Energie erstellen'),
       step(AgentStepKind.WAIT, 'Cover Letter für Helios Energie erstellen'),
       step(AgentStepKind.WAIT, 'Daten und Formate prüfen'),

@@ -246,7 +246,7 @@ export function DetailView() {
               }}
             >
               {/* The agent panel grows with every step, so it scrolls. */}
-              {run && <AgentRunPanel run={run} card={docCard} />}
+              {run && <AgentRunPanel run={run} />}
               <FollowUpSection cardId={cardId} role={card.role} company={card.company} />
               <InterviewsSection cardId={cardId} company={card.company} />
               <DocumentsSection card={docCard} />

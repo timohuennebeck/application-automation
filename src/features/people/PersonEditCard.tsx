@@ -135,7 +135,7 @@ export function PersonEditCard({
           without a name is undone by savePerson anyway. */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
         {canDelete && (
-          <div className="btn-ghost" onClick={onDelete} title="Aus allen Bewerbungen entfernen">
+          <div className="btn-ghost btn-bare" onClick={onDelete} title="Aus allen Bewerbungen entfernen">
             Person löschen
           </div>
         )}

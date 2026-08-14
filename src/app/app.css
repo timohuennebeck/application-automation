@@ -180,6 +180,10 @@
   background: var(--c-f1efe9);
   color: var(--c-28261f);
 }
+/* Hover feedback through the text colour alone — no pill behind it. */
+.btn-ghost.btn-bare:hover {
+  background: transparent;
+}
 
 /* Calendar day cells */
 .cal-day {

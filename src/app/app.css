@@ -167,6 +167,14 @@
 .btn-dark:hover {
   background: var(--c-33302a);
 }
+.btn-dark.disabled {
+  color: var(--c-c6c3ba);
+  background: var(--c-f1efe9);
+  cursor: not-allowed;
+}
+.btn-dark.disabled:hover {
+  background: var(--c-f1efe9);
+}
 .btn-ghost {
   font-size: 11.5px;
   font-weight: 600;

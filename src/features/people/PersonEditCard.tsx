@@ -139,7 +139,13 @@ export function PersonEditCard({
             Person löschen
           </div>
         )}
-        <div className="btn-dark" onClick={onDone}>
+        {/* Without a name there is nothing to save: a new person would be
+            discarded, an existing one would keep its old name anyway. */}
+        <div
+          className={liveName ? 'btn-dark' : 'btn-dark disabled'}
+          onClick={liveName ? onDone : undefined}
+          title={liveName ? undefined : 'Name fehlt'}
+        >
           Fertig
         </div>
       </div>

@@ -191,23 +191,27 @@ export function PencilGlyph({ size = 12, style }: { size?: number; style?: CSSPr
   );
 }
 
-/* What a document glyph stands for. EMPTY is a slot with nothing in it yet —
+/* What a document glyph stands for. FILE is anything else — a scan, an image,
+   a Word file — drawn in plain ink. EMPTY is a slot with nothing in it yet —
    the same sheet of paper, drained of colour. */
 export const DocFormat = {
   HTML: 'HTML',
   PDF: 'PDF',
+  FILE: 'FILE',
   EMPTY: 'EMPTY',
 } as const;
 export type DocFormat = (typeof DocFormat)[keyof typeof DocFormat];
 
 /* Every format is the same lines of a written page; only their colour differs.
-   Orange for HTML, red for PDF, grey for a slot with nothing in it. The paper
+   Orange for HTML, red for PDF, ink for any other file, grey for a slot with
+   nothing in it. The paper
    itself stays neutral — tinting the whole sheet blue is what made this read as
    a Word icon. */
 const DOC_LINES = 'M7 15 h12 M7 19 h12 M7 23 h8';
 const DOC_INK: Record<DocFormat, string> = {
   [DocFormat.HTML]: 'var(--c-d1782f)',
   [DocFormat.PDF]: 'var(--c-c2564c)',
+  [DocFormat.FILE]: 'var(--c-8b8880)',
   [DocFormat.EMPTY]: 'var(--c-c9c5bb)',
 };
 

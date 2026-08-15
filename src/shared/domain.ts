@@ -37,3 +37,8 @@ export interface TemplateInfo {
   /* Local calendar day the file was last written, as YYYY-MM-DD. */
   day: string;
 }
+
+/* A file in the profile's document folder — Immatrikulationsbescheinigung,
+   Zeugnisse, whatever should be kept in one place. Same shape as a template,
+   and read from disk in the same way; the name doubles as its id. */
+export type ProfileDocumentInfo = TemplateInfo;

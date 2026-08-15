@@ -7,13 +7,17 @@ import { seedIfEmpty } from './db/seed.ts';
 import { createRepo } from './db/repo.ts';
 import { registerDbIpc } from './db/ipc.ts';
 import {
+  addProfileDocuments,
   copyCommentAttachment,
   copyDocument,
   copyTemplate,
   documentPaths,
   documentSize,
+  listProfileDocuments,
   listTemplates,
+  profileDocumentPath,
   purgeApplicationFiles,
+  removeProfileDocument,
   removeStoredFile,
   resolveDocumentPath,
   templatePath,
@@ -186,6 +190,28 @@ ipcMain.handle('templates:open', (_e, kind: TemplateKind) => {
   const filePath = templatePath(app.getPath('userData'), kind);
   return filePath ? shell.openPath(filePath) : 'Noch keine Datei hochgeladen.';
 });
+
+/* Profile documents: any further files kept with the profile. The picker is
+   the unfiltered multi-select one; the bytes are copied in straight away, so
+   the folder listing is all the state there is. */
+ipcMain.handle('profileDocuments:list', () => listProfileDocuments(app.getPath('userData')));
+
+ipcMain.handle('profileDocuments:add', async (_e, title: string) => {
+  const res = await dialog.showOpenDialog(win!, {
+    title,
+    properties: ['openFile', 'multiSelections'],
+  });
+  if (res.canceled || res.filePaths.length === 0) return null;
+  return addProfileDocuments(app.getPath('userData'), res.filePaths);
+});
+
+ipcMain.handle('profileDocuments:open', (_e, name: string) =>
+  shell.openPath(profileDocumentPath(app.getPath('userData'), name)),
+);
+
+ipcMain.handle('profileDocuments:remove', (_e, name: string) =>
+  removeProfileDocument(app.getPath('userData'), name),
+);
 
 /* The database must be usable before any window exists; a broken store means
    quit with an error rather than silently running in-memory and losing edits. */

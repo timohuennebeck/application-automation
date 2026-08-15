@@ -7,6 +7,7 @@ import { CLOSED_PROFILE, useApp } from '../../state/store-context';
 import { DocumentCard } from '../../ui/DocumentCard';
 import { FieldGroup, ModalShell } from '../../ui/ModalShell';
 import { FactList } from './FactList';
+import { ProfileDocuments } from './ProfileDocuments';
 import { MenuItem } from '../../ui/MenuItem';
 import { Popover, PopoverAnchor } from '../../ui/Popover';
 import { DocFormat, DotsGlyph } from '../../ui/icons';
@@ -171,6 +172,13 @@ export function ProfileModal() {
             );
           })}
         </div>
+      </FieldGroup>
+
+      <FieldGroup
+        label="Dokumente"
+        hint="Weitere Unterlagen, die du griffbereit haben willst — Immatrikulationsbescheinigung, etc. Beliebiges Format."
+      >
+        <ProfileDocuments />
       </FieldGroup>
 
       <FieldGroup

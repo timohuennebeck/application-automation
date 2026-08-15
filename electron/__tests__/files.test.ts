@@ -1,18 +1,30 @@
-import { mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
+import {
+  mkdtempSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+  existsSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { DocumentKind, TemplateKind } from '../../src/shared/enums.ts';
 import { toISO } from '../../src/lib/date.ts';
 import {
+  addProfileDocuments,
   copyCommentAttachment,
   copyDocument,
   copyTemplate,
   documentFileName,
   documentPaths,
   isHtml,
+  listProfileDocuments,
   listTemplates,
+  profileDocumentPath,
   purgeApplicationFiles,
+  removeProfileDocument,
   removeStoredFile,
   resolveDocumentPath,
   templatePath,
@@ -240,9 +252,7 @@ describe('templatePath', () => {
     mkdirSync(path.join(root, 'templates'), { recursive: true });
     writeFileSync(path.join(root, 'templates', 'lebenslauf.html'), 'old cv');
 
-    expect(templatePath(root, TemplateKind.LEBENSLAUF)).toBe(
-      path.join(root, 'templates', 'lebenslauf.html'),
-    );
+    expect(templatePath(root, TemplateKind.LEBENSLAUF)).toBe(path.join(root, 'templates', 'lebenslauf.html'));
   });
 
   /* The kind arrives from the renderer, so an unknown one must not fall through
@@ -328,5 +338,92 @@ describe('listTemplates', () => {
     rmSync(templatePath(root, TemplateKind.LEBENSLAUF)!);
 
     expect(listTemplates(root).LEBENSLAUF).toBe(null);
+  });
+});
+
+describe('addProfileDocuments', () => {
+  it('copies each picked file under its own name and reports what landed', () => {
+    const infos = addProfileDocuments(root, [
+      source('Immatrikulation.pdf', 'imma bytes'),
+      source('Zeugnis.jpg', 'jpg'),
+    ]);
+
+    expect(infos).toEqual([
+      { name: 'Immatrikulation.pdf', size: 10, day: toISO(new Date()) },
+      { name: 'Zeugnis.jpg', size: 3, day: toISO(new Date()) },
+    ]);
+    expect(readFileSync(path.join(root, 'profile-documents', 'Immatrikulation.pdf'), 'utf8')).toBe(
+      'imma bytes',
+    );
+  });
+
+  /* Two uploads of the same name are both kept — a newer Zeugnis must not
+     silently overwrite the older one. */
+  it('keeps a second file of the same name beside the first', () => {
+    addProfileDocuments(root, [source('a.pdf', 'first')]);
+    const [info] = addProfileDocuments(root, [source('a.pdf', 'second')]);
+
+    expect(info.name).toBe('a-2.pdf');
+    expect(readFileSync(path.join(root, 'profile-documents', 'a.pdf'), 'utf8')).toBe('first');
+    expect(readFileSync(path.join(root, 'profile-documents', 'a-2.pdf'), 'utf8')).toBe('second');
+  });
+
+  it('sanitizes a name that would not survive as one path segment', () => {
+    const [info] = addProfileDocuments(root, [source('a:b?.pdf', 'x')]);
+
+    expect(info.name).toBe('a-b-.pdf');
+    expect(readdirSync(path.join(root, 'profile-documents'))).toEqual(['a-b-.pdf']);
+  });
+});
+
+describe('listProfileDocuments', () => {
+  it('is empty before anything is uploaded', () => {
+    expect(listProfileDocuments(root)).toEqual([]);
+  });
+
+  it('lists what is on disk, sorted by name', () => {
+    addProfileDocuments(root, [source('b.pdf', 'bb'), source('a.pdf', 'a')]);
+
+    expect(listProfileDocuments(root)).toEqual([
+      { name: 'a.pdf', size: 1, day: toISO(new Date()) },
+      { name: 'b.pdf', size: 2, day: toISO(new Date()) },
+    ]);
+  });
+
+  /* Finder litters the folder with .DS_Store; that is not a document. */
+  it('skips hidden files', () => {
+    addProfileDocuments(root, [source('a.pdf', 'a')]);
+    writeFileSync(path.join(root, 'profile-documents', '.DS_Store'), '');
+
+    expect(listProfileDocuments(root).map((d) => d.name)).toEqual(['a.pdf']);
+  });
+});
+
+describe('profileDocumentPath', () => {
+  it('resolves a stored name to its absolute path', () => {
+    addProfileDocuments(root, [source('a.pdf', 'a')]);
+
+    expect(profileDocumentPath(root, 'a.pdf')).toBe(path.join(root, 'profile-documents', 'a.pdf'));
+  });
+
+  /* The name arrives from the renderer; a '..' would hand the OS any file. */
+  it('refuses a name that is not one path segment', () => {
+    for (const bad of ['../bewerbungen.db', 'x/y.pdf', '/etc/passwd']) {
+      expect(() => profileDocumentPath(root, bad), bad).toThrow(/unsafe/);
+    }
+  });
+});
+
+describe('removeProfileDocument', () => {
+  it('deletes the one file and leaves the others', () => {
+    addProfileDocuments(root, [source('a.pdf', 'a'), source('b.pdf', 'b')]);
+
+    removeProfileDocument(root, 'a.pdf');
+
+    expect(listProfileDocuments(root).map((d) => d.name)).toEqual(['b.pdf']);
+  });
+
+  it('tolerates a file that is already gone', () => {
+    expect(() => removeProfileDocument(root, 'nope.pdf')).not.toThrow();
   });
 });

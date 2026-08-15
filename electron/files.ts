@@ -8,7 +8,7 @@
 import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { toISO } from '../src/lib/date.ts';
-import type { TemplateInfo } from '../src/shared/domain.ts';
+import type { ProfileDocumentInfo, TemplateInfo } from '../src/shared/domain.ts';
 import { DocumentKind, TemplateKind } from '../src/shared/enums.ts';
 
 /* The one format the whole pipeline starts from: the agent edits the markup and
@@ -141,6 +141,17 @@ export function copyCommentAttachment(
   sourcePath: string,
 ): AttachmentCopy {
   const dir = path.join(applicationDir(userDataPath, applicationId), 'attachments');
+  const name = copyUnderFreeName(dir, sourcePath);
+  return {
+    filePath: path.join('documents', applicationId, 'attachments', name),
+    name: path.basename(sourcePath),
+    size: statSync(path.join(dir, name)).size,
+  };
+}
+
+/* Copies a picked file into dir under its sanitized name, stepping to x-2.pdf,
+   x-3.pdf while the name is taken. Returns the name it landed under. */
+function copyUnderFreeName(dir: string, sourcePath: string): string {
   mkdirSync(dir, { recursive: true });
   const safe = sanitizeAttachmentName(sourcePath);
   const ext = path.extname(safe);
@@ -148,11 +159,7 @@ export function copyCommentAttachment(
   let name = safe;
   for (let n = 2; existsSync(path.join(dir, name)); n++) name = `${stem}-${n}${ext}`;
   copyFileSync(sourcePath, path.join(dir, name));
-  return {
-    filePath: path.join('documents', applicationId, 'attachments', name),
-    name: path.basename(sourcePath),
-    size: statSync(path.join(dir, name)).size,
-  };
+  return name;
 }
 
 /* Removes one stored file, e.g. when its comment is deleted. Tolerates a file
@@ -240,4 +247,57 @@ export function listTemplates(userDataPath: string): Record<TemplateKind, Templa
     [TemplateKind.LEBENSLAUF]: templateInfo(userDataPath, TemplateKind.LEBENSLAUF),
     [TemplateKind.ANSCHREIBEN]: templateInfo(userDataPath, TemplateKind.ANSCHREIBEN),
   };
+}
+
+/* ── Profile documents ────────────────────────────────────────────────────
+   Everything else worth keeping in one place — Immatrikulationsbescheinigung,
+   Zeugnisse, Zertifikate — in userData/profile-documents. Like the templates
+   there is no table: the folder listing is the state, and a file's name is
+   its id. Any file type; several may be added at once, so names are sanitized
+   and de-collided the way comment attachments are, never overwritten. */
+
+function profileDocumentsDir(userDataPath: string): string {
+  return path.join(userDataPath, 'profile-documents');
+}
+
+/* Absolute path of a stored document. The name arrives from the renderer, so
+   anything but one plain path segment is refused rather than joined. */
+export function profileDocumentPath(userDataPath: string, name: string): string {
+  const dir = profileDocumentsDir(userDataPath);
+  const resolved = path.join(dir, name);
+  if (path.dirname(resolved) !== dir || path.basename(resolved) !== name || !name) {
+    throw new Error(`unsafe profile document name: ${name}`);
+  }
+  return resolved;
+}
+
+/* Copies the picked files in and reports what now sits there, in pick order. */
+export function addProfileDocuments(userDataPath: string, sourcePaths: string[]): ProfileDocumentInfo[] {
+  const dir = profileDocumentsDir(userDataPath);
+  return sourcePaths.map((sourcePath) => describe(path.join(dir, copyUnderFreeName(dir, sourcePath))));
+}
+
+/* Everything in the folder, by name. Dotfiles are Finder's, not the user's. */
+export function listProfileDocuments(userDataPath: string): ProfileDocumentInfo[] {
+  let names: string[];
+  try {
+    names = readdirSync(profileDocumentsDir(userDataPath));
+  } catch {
+    return []; // nothing added yet
+  }
+  return names
+    .filter((n) => !n.startsWith('.'))
+    .sort((a, b) => a.localeCompare(b))
+    .flatMap((n) => {
+      try {
+        return [describe(path.join(profileDocumentsDir(userDataPath), n))];
+      } catch {
+        return []; // vanished between readdir and stat
+      }
+    });
+}
+
+/* Removes one document. Tolerates a file that is already gone. */
+export function removeProfileDocument(userDataPath: string, name: string): void {
+  rmSync(profileDocumentPath(userDataPath, name), { force: true });
 }

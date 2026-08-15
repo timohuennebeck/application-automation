@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { AttachmentInput, DbApi } from '../src/shared/db-types.ts';
-import type { DocumentUpload, TemplateInfo } from '../src/shared/domain.ts';
+import type { DocumentUpload, ProfileDocumentInfo, TemplateInfo } from '../src/shared/domain.ts';
 import type { DocumentKind, TemplateKind } from '../src/shared/enums.ts';
 
 const invoke =
@@ -97,6 +97,19 @@ const api = {
       ipcRenderer.invoke('templates:save', kind, sourcePath),
     /* Hands the slot's file to the OS; '' on success, else the reason. */
     open: (kind: TemplateKind): Promise<string> => ipcRenderer.invoke('templates:open', kind),
+  },
+  /* Further profile documents (Immatrikulationsbescheinigung, Zeugnisse, …).
+     Like the templates there is no database — the folder listing is the state
+     and a file's name is its id. */
+  profileDocuments: {
+    list: (): Promise<ProfileDocumentInfo[]> => ipcRenderer.invoke('profileDocuments:list'),
+    /* Native multi-select picker; copies the picks straight in and resolves to
+       what landed, or null when the dialog was cancelled. */
+    add: (title: string): Promise<ProfileDocumentInfo[] | null> =>
+      ipcRenderer.invoke('profileDocuments:add', title),
+    /* Hands the file to the OS; '' on success, else the reason. */
+    open: (name: string): Promise<string> => ipcRenderer.invoke('profileDocuments:open', name),
+    remove: (name: string): Promise<void> => ipcRenderer.invoke('profileDocuments:remove', name),
   },
 };
 

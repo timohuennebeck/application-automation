@@ -1,9 +1,9 @@
-/* Seed input for the SQLite database (electron/db/seed.ts) plus the agent-run
-   stubs the AgentRunPanel still renders. Presentation constants live in
-   config.ts; live domain data comes from the database. The '.ts' extensions
-   matter: the electron tree compiles this file under nodenext. */
+/* Seed input for the SQLite database (electron/db/seed.ts). Presentation
+   constants live in config.ts; live domain data comes from the database. The
+   '.ts' extensions matter: the electron tree compiles this file under
+   nodenext. */
 import { Urgency } from './config.ts';
-import { Author, FactKind, Interest, RoundState, TemplateKind } from '../shared/enums.ts';
+import { Author, FactKind, Interest, RoundState } from '../shared/enums.ts';
 
 export const SALARY: Record<string, string> = {
   'BEW-41': '78–92k €',
@@ -19,80 +19,6 @@ export const SALARY: Record<string, string> = {
   'BEW-07': '80–95k €',
   'BEW-04': '62–74k €',
   'BEW-02': '55–65k €',
-};
-
-export const AgentStepKind = {
-  DONE: 'DONE',
-  RUN: 'RUN',
-  WAIT: 'WAIT',
-} as const;
-export type AgentStepKind = (typeof AgentStepKind)[keyof typeof AgentStepKind];
-export interface AgentStep {
-  kind: AgentStepKind;
-  label: string;
-  meta: string;
-  /* Which profile template the step reads — name and size come from the real
-     file on disk when the panel renders. */
-  doc?: TemplateKind;
-}
-export interface AgentRun {
-  label: string;
-  started: number;
-  steps: AgentStep[];
-}
-const step = (kind: AgentStepKind, label: string, meta = '', doc?: TemplateKind): AgentStep => ({
-  kind,
-  label,
-  meta,
-  doc,
-});
-
-export const AGENT_RUNS: Record<string, AgentRun> = {
-  'BEW-41': {
-    label: 'LinkedIn-Stellenanzeige wird ausgelesen…',
-    started: 96,
-    steps: [
-      step(AgentStepKind.RUN, 'LinkedIn-Stellenanzeige wird ausgelesen…'),
-      step(AgentStepKind.WAIT, 'Firmendetails ergänzen'),
-      step(AgentStepKind.WAIT, 'Kontaktdetails ergänzen'),
-      step(AgentStepKind.WAIT, 'Hochgeladenen {doc} einlesen', '', TemplateKind.LEBENSLAUF),
-      step(AgentStepKind.WAIT, 'Hochgeladenen {doc} einlesen', '', TemplateKind.ANSCHREIBEN),
-      step(AgentStepKind.WAIT, 'Lebenslauf für Nordlicht Systems erstellen'),
-      step(AgentStepKind.WAIT, 'Cover Letter für Nordlicht Systems erstellen'),
-      step(AgentStepKind.WAIT, 'Daten und Formate prüfen'),
-      step(AgentStepKind.WAIT, 'Kommentar an {m} mit Bewerbungslink hinterlassen'),
-    ],
-  },
-  'BEW-38': {
-    label: 'Lebenslauf für Aurel Mobility wird erstellt…',
-    started: 214,
-    steps: [
-      step(AgentStepKind.DONE, 'Stellenanzeige auf der Karriereseite ausgelesen', 'vor 9 Min'),
-      step(AgentStepKind.DONE, 'Firmendetails ergänzt', 'vor 8 Min'),
-      step(AgentStepKind.DONE, 'Kontaktdetails ergänzt', 'vor 7 Min'),
-      step(AgentStepKind.DONE, 'Hochgeladenen {doc} eingelesen', 'vor 5 Min', TemplateKind.LEBENSLAUF),
-      step(AgentStepKind.DONE, 'Hochgeladenen {doc} eingelesen', 'vor 3 Min', TemplateKind.ANSCHREIBEN),
-      step(AgentStepKind.RUN, 'Lebenslauf für Aurel Mobility wird erstellt…'),
-      step(AgentStepKind.WAIT, 'Cover Letter für Aurel Mobility erstellen'),
-      step(AgentStepKind.WAIT, 'Daten und Formate prüfen'),
-      step(AgentStepKind.WAIT, 'Kommentar an {m} mit Bewerbungslink hinterlassen'),
-    ],
-  },
-  'BEW-35': {
-    label: 'Kontaktdetails werden ergänzt…',
-    started: 47,
-    steps: [
-      step(AgentStepKind.DONE, 'Stellenanzeige auf LinkedIn ausgelesen', 'vor 3 Min'),
-      step(AgentStepKind.DONE, 'Firmendetails ergänzt', 'vor 1 Min'),
-      step(AgentStepKind.RUN, 'Kontaktdetails werden ergänzt…'),
-      step(AgentStepKind.WAIT, 'Hochgeladenen {doc} einlesen', '', TemplateKind.LEBENSLAUF),
-      step(AgentStepKind.WAIT, 'Hochgeladenen {doc} einlesen', '', TemplateKind.ANSCHREIBEN),
-      step(AgentStepKind.WAIT, 'Lebenslauf für Helios Energie erstellen'),
-      step(AgentStepKind.WAIT, 'Cover Letter für Helios Energie erstellen'),
-      step(AgentStepKind.WAIT, 'Daten und Formate prüfen'),
-      step(AgentStepKind.WAIT, 'Kommentar an {m} mit Bewerbungslink hinterlassen'),
-    ],
-  },
 };
 
 export interface PersonDef {
@@ -395,7 +321,7 @@ export const DETAILS: Record<string, DetailDef> = {
       [
         Author.KEPLER,
         'vor 3 Tagen',
-        'Alle Schritte erledigt: Stellenanzeige ausgelesen, Firmen- und Kontaktdetails ergänzt, Lebenslauf und Cover Letter für Vector Labs erstellt und geprüft. Hier bewerben: vectorlabs.ch/careers/design-systems-engineer',
+        'Alle Schritte erledigt: Stellenanzeige ausgelesen, Firmen- und Kontaktdetails ergänzt, Lebenslauf und Anschreiben für Vector Labs erstellt und geprüft. Hier bewerben: vectorlabs.ch/careers/design-systems-engineer',
         'var(--c-1b1a17)',
       ],
       [
@@ -480,7 +406,7 @@ export const DETAILS: Record<string, DetailDef> = {
 export const HISTORY: Record<string, [Author, string, string][]> = {
   'BEW-33': [
     [Author.KEPLER, 'hat die Karte aus der StepStone-Anzeige angelegt', '24.07.'],
-    [Author.KEPLER, 'hat Cover Letter und Lebenslauf erstellt', '26.07.'],
+    [Author.KEPLER, 'hat Anschreiben und Lebenslauf erstellt', '26.07.'],
     [Author.DU, 'hat die Bewerbung eingereicht', '26.07.'],
   ],
   'BEW-35': [

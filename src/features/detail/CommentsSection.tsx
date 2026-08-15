@@ -1,4 +1,4 @@
-import { KEPLER_ENTRY } from '../../lib/mentions';
+import { KEPLER_ENTRY, USER_ENTRY } from '../../lib/mentions';
 import { Author, AUTHOR_LABEL } from '../../shared/enums';
 import { relTime } from '../../state/db-view';
 import { useApp } from '../../state/store-context';
@@ -25,7 +25,7 @@ export function CommentsSection({ cardId }: { cardId: string }) {
   } = useApp();
 
   // Kepler is always mentionable; everyone attached to this card as well.
-  const mentionable = [KEPLER_ENTRY, ...peopleForCard(cardId)];
+  const mentionable = [KEPLER_ENTRY, USER_ENTRY, ...peopleForCard(cardId)];
   const names = mentionable.map((p) => p.name);
 
   const comments = st.commentsByApp[cardId] || [];

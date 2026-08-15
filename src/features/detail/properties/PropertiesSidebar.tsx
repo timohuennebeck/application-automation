@@ -1,19 +1,20 @@
-import { AGENT_RUNS } from '../../../data/sample-data';
 import { COLUMNS, DATE_FIELDS, FACT_OPTIONS, INTEREST, INTEREST_ORDER, SECTIONS } from '../../../data/config';
-import { FactKind, Interest, LinkKind } from '../../../shared/enums';
+import { agentLocked, keplerHoldReason } from '../../../state/selectors';
+import { Assignee, FactKind, Interest, LinkKind } from '../../../shared/enums';
 import { isoToDate } from '../../../lib/date';
 import { useApp } from '../../../state/store-context';
 import { FieldChip } from '../../../ui/FieldChip';
 import { FieldRow } from '../../../ui/FieldRow';
+import { FIELD_GLYPH_SLOT, FieldGlyph } from '../../../ui/field-glyphs';
 import { MenuItem } from '../../../ui/MenuItem';
 import { Popover, PopoverAnchor } from '../../../ui/Popover';
-import { Chevron, ColumnIcon, PriorityBars } from '../../../ui/icons';
+import { Avatar, Chevron, ColumnIcon, KeplerAvatar, PriorityBars } from '../../../ui/icons';
 import { ContactPicker } from '../../people/ContactPicker';
 import { FactField, type FactView } from './FactField';
 
-/* Wide enough for the longest catalog label ("Berufsbezeichnung"); anything
-   longer wraps instead of being clipped. */
-const SIDEBAR_LABEL_WIDTH = 118;
+/* Wide enough for the longest catalog label ("Berufsbezeichnung") plus the
+   glyph in front of it; anything longer wraps instead of being clipped. */
+const SIDEBAR_LABEL_WIDTH = 118 + FIELD_GLYPH_SLOT;
 
 const GroupTitle = ({ children }: { children: string }) => (
   <div
@@ -30,6 +31,27 @@ const GroupTitle = ({ children }: { children: string }) => (
   </div>
 );
 
+/* Nobody first, then everyone who can own a card — Kepler is the only one. */
+const ASSIGNEE_OPTIONS: (Assignee | null)[] = [null, Assignee.KEPLER];
+
+/* Avatar + name for the Bearbeiter chip and its menu entries. */
+function AssigneeLabel({ assignee }: { assignee: Assignee | null }) {
+  return (
+    <>
+      {assignee === Assignee.KEPLER ? (
+        <KeplerAvatar size={16} fontSize={8} />
+      ) : (
+        <Avatar bg="var(--c-b3b0a8)" size={16}>
+          –
+        </Avatar>
+      )}
+      <span style={{ flex: '1 1 auto', whiteSpace: 'nowrap' }}>
+        {assignee === Assignee.KEPLER ? 'Kepler' : 'Kein Bearbeiter ausgewählt'}
+      </span>
+    </>
+  );
+}
+
 export interface PropertiesSidebarProps {
   cardId: string;
   role: string;
@@ -41,10 +63,12 @@ export interface PropertiesSidebarProps {
    Most labels are windows onto real DB columns (see the fact-label routing in
    the design spec); only the free-form POSITION fields live in facts rows. */
 export function PropertiesSidebar({ cardId, role, company, columnIndex }: PropertiesSidebarProps) {
-  const { st, set, contactsFor, setContacts, moveCard, logAct, setInterest } = useApp();
-  const locked = !!AGENT_RUNS[cardId];
+  const { st, set, contactsFor, setContacts, moveCard, logAct, setInterest, setAssignee } = useApp();
+  const locked = agentLocked(st, cardId);
+  const keplerHold = keplerHoldReason(st, cardId);
 
   const app = st.applications[cardId];
+  const assignee = app?.assignee ?? null;
   const comp = app ? st.companies[app.company_id] : undefined;
   const facts = st.factsByApp[cardId] || [];
 
@@ -61,7 +85,7 @@ export function PropertiesSidebar({ cardId, role, company, columnIndex }: Proper
     Branche: { value: comp?.sector || '' },
     Mitarbeiterzahl: { value: comp?.headcount || '' },
     Firmenseite: { value: comp?.homepage || '', link: true },
-    Email: { value: comp?.email || '', link: true },
+    Email: { value: comp?.email || '' },
     Telefon: { value: comp?.phone || '' },
   };
 
@@ -159,7 +183,12 @@ export function PropertiesSidebar({ cardId, role, company, columnIndex }: Proper
         <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
           <GroupTitle>Bewerbung</GroupTitle>
 
-          <FieldRow label="Status" labelWidth={SIDEBAR_LABEL_WIDTH} minHeight={24}>
+          <FieldRow
+            label="Status"
+            glyph={<FieldGlyph label="Status" />}
+            labelWidth={SIDEBAR_LABEL_WIDTH}
+            minHeight={24}
+          >
             <PopoverAnchor style={{ marginLeft: -6 }}>
               <FieldChip
                 open={st.dropdown === 'status'}
@@ -193,7 +222,12 @@ export function PropertiesSidebar({ cardId, role, company, columnIndex }: Proper
             </PopoverAnchor>
           </FieldRow>
 
-          <FieldRow label="Interesse" labelWidth={SIDEBAR_LABEL_WIDTH} minHeight={24}>
+          <FieldRow
+            label="Interesse"
+            glyph={<FieldGlyph label="Interesse" />}
+            labelWidth={SIDEBAR_LABEL_WIDTH}
+            minHeight={24}
+          >
             <PopoverAnchor style={{ marginLeft: -6 }}>
               <FieldChip
                 open={st.dropdown === 'interest'}
@@ -226,10 +260,61 @@ export function PropertiesSidebar({ cardId, role, company, columnIndex }: Proper
             </PopoverAnchor>
           </FieldRow>
 
+          <FieldRow
+            label="Bearbeiter"
+            glyph={<FieldGlyph label="Bearbeiter" />}
+            labelWidth={SIDEBAR_LABEL_WIDTH}
+            minHeight={24}
+          >
+            <PopoverAnchor style={{ marginLeft: -6 }}>
+              <FieldChip
+                open={st.dropdown === 'assignee'}
+                gap={7}
+                chevron
+                onClick={() =>
+                  set((s) => ({ dropdown: s.dropdown === 'assignee' ? null : 'assignee', editing: null }))
+                }
+              >
+                <AssigneeLabel assignee={assignee} />
+              </FieldChip>
+              {st.dropdown === 'assignee' && (
+                <Popover minWidth={180}>
+                  {/* While Kepler cannot be taken off the card, the menu still
+                      opens but nothing in it is pickable: every row shows the
+                      forbidden cursor and the reason. */}
+                  {ASSIGNEE_OPTIONS.map((a) => (
+                    <MenuItem
+                      key={a ?? 'none'}
+                      selected={a === assignee}
+                      disabled={!!keplerHold}
+                      title={keplerHold ?? undefined}
+                      onClick={() => {
+                        if (keplerHold) return;
+                        setAssignee(cardId, a);
+                        set({ dropdown: null });
+                      }}
+                    >
+                      <AssigneeLabel assignee={a} />
+                    </MenuItem>
+                  ))}
+                </Popover>
+              )}
+            </PopoverAnchor>
+          </FieldRow>
+
           <PopoverAnchor style={{ display: 'flex', gap: 12, alignItems: 'center', minHeight: 24 }}>
             <div
-              style={{ width: SIDEBAR_LABEL_WIDTH, flexShrink: 0, fontSize: 12, color: 'var(--c-9a978f)' }}
+              style={{
+                width: SIDEBAR_LABEL_WIDTH,
+                flexShrink: 0,
+                fontSize: 12,
+                color: 'var(--c-9a978f)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 7,
+              }}
             >
+              <FieldGlyph label="Kontaktperson" />
               Kontaktperson
             </div>
             <div style={{ marginLeft: -6, minWidth: 0 }}>
@@ -247,7 +332,13 @@ export function PropertiesSidebar({ cardId, role, company, columnIndex }: Proper
           </PopoverAnchor>
 
           {SECTIONS[0][1].map(view).map((f) => (
-            <FieldRow key={f.label} label={f.label} labelWidth={SIDEBAR_LABEL_WIDTH} minHeight={24}>
+            <FieldRow
+              key={f.label}
+              label={f.label}
+              glyph={<FieldGlyph label={f.label} />}
+              labelWidth={SIDEBAR_LABEL_WIDTH}
+              minHeight={24}
+            >
               <FactField fact={f} cardId={cardId} locked={locked} />
             </FieldRow>
           ))}
@@ -257,7 +348,13 @@ export function PropertiesSidebar({ cardId, role, company, columnIndex }: Proper
           <div key={g.title} style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
             <GroupTitle>{g.title}</GroupTitle>
             {g.items.map((f) => (
-              <FieldRow key={f.label} label={f.label} labelWidth={SIDEBAR_LABEL_WIDTH} minHeight={24}>
+              <FieldRow
+                key={f.label}
+                label={f.label}
+                glyph={<FieldGlyph label={f.label} />}
+                labelWidth={SIDEBAR_LABEL_WIDTH}
+                minHeight={24}
+              >
                 <FactField fact={f} cardId={cardId} locked={locked} />
               </FieldRow>
             ))}

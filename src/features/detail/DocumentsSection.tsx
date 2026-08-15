@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { formatBytes } from '../../lib/bytes';
-import { isoToDate } from '../../lib/date';
 import { openDocument } from '../../lib/download';
+import { documentCaption } from './document-caption';
 import { useApp } from '../../state/store-context';
 import { DocumentCard } from '../../ui/DocumentCard';
 import { MenuItem } from '../../ui/MenuItem';
@@ -41,12 +41,6 @@ export function DocumentsSection({ card }: { card: { id: string; role: string; c
 
   if (!docs.length) return null;
 
-  const caption = (d: (typeof docs)[number]) => {
-    const updated = d.updated_at > d.created_at;
-    const day = isoToDate((updated ? d.updated_at : d.created_at).slice(0, 10));
-    return (updated ? 'aktualisiert am ' : 'erstellt am ') + day;
-  };
-
   const open = (d: (typeof docs)[number], filePath: string | null) => {
     set({ dropdown: null });
     openDocument(filePath, d.title, card).then(setError);
@@ -64,7 +58,7 @@ export function DocumentsSection({ card }: { card: { id: string; role: string; c
               /* Red once there is a PDF to hand over, orange for HTML only. */
               format={d.pdf_path ? DocFormat.PDF : DocFormat.HTML}
               title={d.title}
-              caption={caption(d)}
+              caption={documentCaption(d)}
               hint="Öffnen"
               /* The HTML is what a plain click opens, so the document lands in
                  the browser the way a template does in the profile. The PDF

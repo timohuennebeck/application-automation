@@ -1,7 +1,7 @@
-import { AGENT_RUNS } from '../../data/sample-data';
 import { CHANNEL_BG, COLUMNS } from '../../data/config';
 import { isHttpUrl } from '../../lib/url';
-import { cardView } from '../../state/selectors';
+import { AgentRunStatus } from '../../shared/enums';
+import { agentLocked, agentRunFor, cardView } from '../../state/selectors';
 import { useApp } from '../../state/store-context';
 import { MenuItem } from '../../ui/MenuItem';
 import { LinkChip } from '../../ui/MentionText';
@@ -120,14 +120,19 @@ function RoleHeading({ cardId, role, locked }: { cardId: string; role: string; l
 const TITLE_KEY = 'title';
 
 export function DetailView() {
-  const { st, set, deleteCard } = useApp();
+  const { st, set, deleteCard, startAgent } = useApp();
   const cardId = st.openCardId!;
   const card = useCard(cardId);
   if (!card) return null;
 
   const cardMenuOpen = st.dropdown === 'card';
   const col = COLUMNS[card.columnIndex];
-  const run = AGENT_RUNS[cardId];
+  /* The panel stays visible for a failed run (it carries the error); once a
+     run is done the Kepler comment documents what happened. */
+  const runView = agentRunFor(st, cardId);
+  const showRun = !!runView && runView.run.status !== AgentRunStatus.DONE;
+  const locked = agentLocked(st, cardId);
+  const app = st.applications[cardId];
   const summary = card.summary;
   const docCard = { id: cardId, role: card.role, company: card.companyFull };
 
@@ -161,6 +166,20 @@ export function DetailView() {
           </div>
           {cardMenuOpen && (
             <Popover top={29} right={0} width={196}>
+              {/* Re-run needs a stored posting and a free record — while a run
+                  is active the second start would be refused anyway. */}
+              {!locked && !!(app?.posting_url || app?.posting_text) && (
+                <MenuItem
+                  style={{ whiteSpace: 'nowrap' }}
+                  title="Überschreibt generierte Unterlagen und aktualisiert Firmendaten aus der Anzeige."
+                  onClick={() => {
+                    set({ dropdown: null });
+                    startAgent(cardId);
+                  }}
+                >
+                  Kepler erneut ausführen
+                </MenuItem>
+              )}
               <MenuItem danger style={{ whiteSpace: 'nowrap' }} onClick={() => deleteCard(cardId)}>
                 Bewerbung löschen
               </MenuItem>
@@ -197,7 +216,7 @@ export function DetailView() {
               {card.company[0]}
             </Avatar>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0, flex: '1 1 0' }}>
-              <RoleHeading cardId={cardId} role={card.role} locked={!!run} />
+              <RoleHeading cardId={cardId} role={card.role} locked={locked} />
               <div
                 style={{
                   fontSize: 12.5,
@@ -226,7 +245,7 @@ export function DetailView() {
               flexShrink: 0,
             }}
           >
-            <SummaryField cardId={cardId} summary={summary} locked={!!run} />
+            <SummaryField cardId={cardId} summary={summary} locked={locked} />
           </div>
 
           <div
@@ -251,7 +270,7 @@ export function DetailView() {
               }}
             >
               {/* The agent panel grows with every step, so it scrolls. */}
-              {run && <AgentRunPanel run={run} />}
+              {showRun && <AgentRunPanel view={runView} />}
               <FollowUpSection cardId={cardId} role={card.role} company={card.company} />
               <InterviewsSection cardId={cardId} company={card.company} />
               <DocumentsSection card={docCard} />

@@ -8,6 +8,10 @@ import { PopoverAnchor } from '../../../ui/Popover';
 import { SelectPopover } from '../../../ui/SelectPopover';
 import { LinkGlyph } from '../../../ui/icons';
 import { SalaryField } from './SalaryField';
+import { UNKNOWN_COMPANY, UNKNOWN_ROLE } from '../../../shared/domain';
+import { CompanyPopover } from '../../companies/CompanyPopover';
+import { LocationPopover } from './LocationPopover';
+import { RolePopover } from './RolePopover';
 
 /* What the sidebar renders for one property row. Routed labels are windows
    onto application/company columns; the rest come from facts rows. */
@@ -16,7 +20,7 @@ export interface FactView {
   value: string;
   /* No value yet — the row shows its muted placeholder instead. */
   empty: boolean;
-  /* Tints the value like a link (websites, e-mail). */
+  /* Tints the value like a link (websites). */
   link?: boolean;
   isSelect: boolean;
   isDate: boolean;
@@ -37,8 +41,8 @@ const ELLIPSIS = {
   minWidth: 0,
 } as const;
 
-/* Where a link value opens: web addresses as they are, e-mail addresses in
-   the mail client. */
+/* Where a link value opens: web addresses as they are, anything else (an
+   e-mail address in an older LINK fact) in the mail client. */
 function linkTarget(value: string): string {
   return isHttpUrl(value) ? value : 'mailto:' + value;
 }
@@ -75,6 +79,90 @@ export function FactField({ fact, cardId, locked }: { fact: FactView; cardId: st
 
   if (fact.isSalary) {
     return <SalaryField value={fact.value} cardId={cardId} locked={locked} />;
+  }
+
+  /* Berufsbezeichnung picks from (or adds to) the role list. A card always
+     has a role, so ✕ resets it to the placeholder, which the row shows as
+     empty — like Firma. */
+  if (fact.label === 'Berufsbezeichnung') {
+    const unknown = fact.value === UNKNOWN_ROLE;
+    return (
+      <PopoverAnchor style={{ marginLeft: -6, minWidth: 0 }}>
+        <FieldChip
+          open={open}
+          empty={unknown}
+          locked={locked}
+          chevron
+          gap={5}
+          onClick={toggle}
+          onClear={unknown ? undefined : () => write(UNKNOWN_ROLE)}
+          clearTitle="Berufsbezeichnung entfernen"
+        >
+          <span style={ELLIPSIS}>{unknown ? 'Berufsbezeichnung auswählen' : fact.value}</span>
+        </FieldChip>
+        {open && (
+          <RolePopover
+            value={unknown ? '' : fact.value}
+            onPick={write}
+            onClose={() => set({ dropdown: null })}
+          />
+        )}
+      </PopoverAnchor>
+    );
+  }
+
+  /* Standort picks from (or adds to) the location list. */
+  if (fact.label === 'Standort') {
+    return (
+      <PopoverAnchor style={{ marginLeft: -6, minWidth: 0 }}>
+        <FieldChip
+          open={open}
+          empty={fact.empty}
+          locked={locked}
+          chevron
+          gap={5}
+          onClick={toggle}
+          onClear={clearValue}
+          clearTitle={fact.label + ' entfernen'}
+        >
+          <span style={ELLIPSIS}>{fact.empty ? 'Standort auswählen' : fact.value}</span>
+        </FieldChip>
+        {open && (
+          <LocationPopover value={fact.value} onPick={write} onClose={() => set({ dropdown: null })} />
+        )}
+      </PopoverAnchor>
+    );
+  }
+
+  /* Firma picks from (or adds to) the company list; the write re-links the
+     card, creating the company when the name is new. A card always points at
+     some company, so ✕ files it under the placeholder, which the row shows
+     as empty. */
+  if (fact.label === 'Firma') {
+    const unknown = fact.value === UNKNOWN_COMPANY;
+    return (
+      <PopoverAnchor style={{ marginLeft: -6, minWidth: 0 }}>
+        <FieldChip
+          open={open}
+          empty={unknown}
+          locked={locked}
+          chevron
+          gap={5}
+          onClick={toggle}
+          onClear={unknown ? undefined : () => write(UNKNOWN_COMPANY)}
+          clearTitle="Firma entfernen"
+        >
+          <span style={ELLIPSIS}>{unknown ? 'Firma auswählen' : fact.value}</span>
+        </FieldChip>
+        {open && (
+          <CompanyPopover
+            value={unknown ? '' : fact.value}
+            onPick={write}
+            onClose={() => set({ dropdown: null })}
+          />
+        )}
+      </PopoverAnchor>
+    );
   }
 
   if (fact.isSelect) {

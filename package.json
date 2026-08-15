@@ -15,6 +15,7 @@
     "dist": "npm run build && electron-builder --mac"
   },
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.232",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },
@@ -39,6 +40,9 @@
     "files": [
       "dist/**/*",
       "dist-electron/**/*"
+    ],
+    "asarUnpack": [
+      "node_modules/@anthropic-ai/claude-agent-sdk/**"
     ],
     "directories": {
       "output": "release"

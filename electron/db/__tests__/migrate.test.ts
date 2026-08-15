@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
 import { openDb } from '../open.ts';
@@ -13,6 +14,17 @@ function dbAtVersion(version: number): DatabaseSync {
   for (let v = 0; v < version; v++) db.exec(MIGRATIONS[v]);
   db.exec(`PRAGMA user_version = ${version}`);
   return db;
+}
+
+/* The company and application almost every upgrade test starts from. The
+   interest casing is the only thing that varies by schema era ('high' before
+   migration 2 uppercased the enums). */
+function seedApp(db: DatabaseSync, interest = 'HIGH'): void {
+  db.exec(`
+    INSERT INTO companies (id, name, created_at, updated_at) VALUES (1, 'Acme', 't', 't');
+    INSERT INTO applications (id, role, company_id, interest, stage_id, stage_position, created_at, updated_at)
+      VALUES ('BEW-1', 'Designer', 1, '${interest}', 'interessiert', 0, 't', 't');
+  `);
 }
 
 const TABLES = [
@@ -70,10 +82,8 @@ describe('migrations', () => {
      insert those rows, and let migration 2 catch up with them. */
   it('uppercases the pre-enum value sets', () => {
     const db = dbAtVersion(1);
+    seedApp(db, 'high');
     db.exec(`
-      INSERT INTO companies (id, name, created_at, updated_at) VALUES (1, 'Acme', 't', 't');
-      INSERT INTO applications (id, role, company_id, interest, stage_id, stage_position, created_at, updated_at)
-        VALUES ('BEW-1', 'Designer', 1, 'high', 'interessiert', 0, 't', 't');
       INSERT INTO comments (application_id, author, text, created_at) VALUES ('BEW-1', 'Kepler', 'x', 't');
       INSERT INTO rounds (application_id, position, state, title) VALUES ('BEW-1', 0, 'done', 'Screening');
       INSERT INTO facts (application_id, label, value, kind, position) VALUES ('BEW-1', 'Gehalt', '60k', 'select', 0);
@@ -101,10 +111,8 @@ describe('migrations', () => {
      and let migration 3 catch up with it. */
   it('opens every existing follow-up when it adds completed_at', () => {
     const db = dbAtVersion(2);
+    seedApp(db);
     db.exec(`
-      INSERT INTO companies (id, name, created_at, updated_at) VALUES (1, 'Acme', 't', 't');
-      INSERT INTO applications (id, role, company_id, interest, stage_id, stage_position, created_at, updated_at)
-        VALUES ('BEW-1', 'Designer', 1, 'HIGH', 'interessiert', 0, 't', 't');
       INSERT INTO followups (application_id, label, due_at, position)
         VALUES ('BEW-1', 'Follow up', '2026-08-09', 0);
     `);
@@ -163,10 +171,8 @@ describe('migrations', () => {
      and the PDF rendered from it. */
   it('adds pdf_path, retires format and lets go of the .docx uploads', () => {
     const db = dbAtVersion(5);
+    seedApp(db);
     db.exec(`
-      INSERT INTO companies (id, name, created_at, updated_at) VALUES (1, 'Acme', 't', 't');
-      INSERT INTO applications (id, role, company_id, interest, stage_id, stage_position, created_at, updated_at)
-        VALUES ('BEW-1', 'Designer', 1, 'HIGH', 'interessiert', 0, 't', 't');
       INSERT INTO documents (application_id, kind, title, format, file_path, created_at, updated_at)
         VALUES ('BEW-1', 'LEBENSLAUF', 'Lebenslauf', 'DOCX', 'documents/BEW-1/lebenslauf.docx', 't', 't');
       INSERT INTO documents (application_id, kind, title, format, file_path, created_at, updated_at)
@@ -196,11 +202,7 @@ describe('migrations', () => {
      application, which is why the table has no application_id to cascade from. */
   it('adds profile_facts without touching what is already there', () => {
     const db = dbAtVersion(6);
-    db.exec(`
-      INSERT INTO companies (id, name, created_at, updated_at) VALUES (1, 'Acme', 't', 't');
-      INSERT INTO applications (id, role, company_id, interest, stage_id, stage_position, created_at, updated_at)
-        VALUES ('BEW-1', 'Designer', 1, 'HIGH', 'interessiert', 0, 't', 't');
-    `);
+    seedApp(db);
 
     migrate(db);
 
@@ -219,10 +221,8 @@ describe('migrations', () => {
      goes — a date, a participant, a note, or a finished state keeps it. */
   it('deletes rounds that were never touched and keeps every other one', () => {
     const db = dbAtVersion(8);
+    seedApp(db);
     db.exec(`
-      INSERT INTO companies (id, name, created_at, updated_at) VALUES (1, 'Acme', 't', 't');
-      INSERT INTO applications (id, role, company_id, interest, stage_id, stage_position, created_at, updated_at)
-        VALUES ('BEW-1', 'Designer', 1, 'HIGH', 'interessiert', 0, 't', 't');
       INSERT INTO people (id, name, color, created_at, updated_at) VALUES (1, 'Ines', 'c', 't', 't');
       INSERT INTO rounds (id, application_id, position, state, title) VALUES (1, 'BEW-1', 0, 'OPEN', 'Screening');
       INSERT INTO rounds (id, application_id, position, state, title, scheduled_date)
@@ -249,10 +249,8 @@ describe('migrations', () => {
      matching board stage; custom titles stay unstaged. */
   it('backfills the stage from legacy preset titles', () => {
     const db = dbAtVersion(9);
+    seedApp(db);
     db.exec(`
-      INSERT INTO companies (id, name, created_at, updated_at) VALUES (1, 'Acme', 't', 't');
-      INSERT INTO applications (id, role, company_id, interest, stage_id, stage_position, created_at, updated_at)
-        VALUES ('BEW-1', 'Designer', 1, 'HIGH', 'interessiert', 0, 't', 't');
       INSERT INTO rounds (application_id, position, state, title, scheduled_date)
         VALUES ('BEW-1', 0, 'DONE', 'Screening', '2026-08-01');
       INSERT INTO rounds (application_id, position, state, title, scheduled_date)
@@ -281,11 +279,7 @@ describe('migrations', () => {
      application instead of being parsed once and thrown away. */
   it('adds the posting source columns and leaves existing rows empty', () => {
     const db = dbAtVersion(10);
-    db.exec(`
-      INSERT INTO companies (id, name, created_at, updated_at) VALUES (1, 'Acme', 't', 't');
-      INSERT INTO applications (id, role, company_id, interest, stage_id, stage_position, created_at, updated_at)
-        VALUES ('BEW-1', 'Designer', 1, 'HIGH', 'interessiert', 0, 't', 't');
-    `);
+    seedApp(db);
 
     migrate(db);
 
@@ -298,12 +292,8 @@ describe('migrations', () => {
 
   /* Migration 15: who owns the card. New and existing rows start unassigned. */
   it('adds the assignee column and leaves existing rows unassigned', () => {
-    const db = dbAtVersion(14);
-    db.exec(`
-      INSERT INTO companies (id, name, created_at, updated_at) VALUES (1, 'Acme', 't', 't');
-      INSERT INTO applications (id, role, company_id, interest, stage_id, stage_position, created_at, updated_at)
-        VALUES ('BEW-1', 'Designer', 1, 'HIGH', 'interessiert', 0, 't', 't');
-    `);
+    const db = dbAtVersion(12);
+    seedApp(db);
 
     migrate(db);
 
@@ -311,15 +301,11 @@ describe('migrations', () => {
     expect(row).toEqual({ assignee: null });
   });
 
-  /* Migration 12: Kepler's runs become real rows. Both tables arrive empty and
+  /* Migration 21: Kepler's runs become real rows. Both tables arrive empty and
      cascade away with their application. */
   it('adds the agent run tables wired to cascade with the application', () => {
-    const db = dbAtVersion(11);
-    db.exec(`
-      INSERT INTO companies (id, name, created_at, updated_at) VALUES (1, 'Acme', 't', 't');
-      INSERT INTO applications (id, role, company_id, interest, stage_id, stage_position, created_at, updated_at)
-        VALUES ('BEW-1', 'Designer', 1, 'HIGH', 'interessiert', 0, 't', 't');
-    `);
+    const db = dbAtVersion(18);
+    seedApp(db);
 
     migrate(db);
 
@@ -335,10 +321,10 @@ describe('migrations', () => {
     expect((db.prepare('SELECT * FROM agent_steps').all() as unknown[]).length).toBe(0);
   });
 
-  /* Migration 13: the fetched listing text is kept on the run so a retried
+  /* Migration 22: the fetched listing text is kept on the run so a retried
      step downstream of the fetch never has to scrape again. */
   it('adds the listing column to agent runs', () => {
-    const db = dbAtVersion(12);
+    const db = dbAtVersion(19);
     migrate(db);
     const columns = (db.prepare('PRAGMA table_info(agent_runs)').all() as { name: string }[]).map(
       (c) => c.name,
@@ -349,7 +335,7 @@ describe('migrations', () => {
   /* Migration 14: the company homepage gets its own column next to the
      careers page, so Kepler can record both. */
   it('adds the company homepage column', () => {
-    const db = dbAtVersion(13);
+    const db = dbAtVersion(11);
     db.exec("INSERT INTO companies (id, name, created_at, updated_at) VALUES (1, 'Acme', 't', 't')");
     migrate(db);
     const row = db.prepare('SELECT homepage, website FROM companies').get() as {
@@ -357,6 +343,62 @@ describe('migrations', () => {
       website: string | null;
     };
     expect(row.homepage).toBeNull();
+  });
+
+  /* migrate() applies by array index, so shipped history is append-only: an
+     entry that is edited, moved or inserted mid-array silently breaks every
+     database that already ran the old order (its user_version then points at
+     the wrong entries). New migrations go at the END and get appended here. */
+  it('never rewrites shipped migrations — the array is append-only', () => {
+    const shipped = [
+      '2d9d1434f2151d1d',
+      '51b15c67a1c16a27',
+      'fc88e4356ce8339d',
+      '846af40d0a210b67',
+      'bd5fcf459cc7e279',
+      'a74d3b834b33b994',
+      '364f87119253b0fc',
+      '828b28e24c53c208',
+      'bd56af40692c04cb',
+      'a047d02d1b3f52a7',
+      'b45a8258f8ca73f2',
+      '574937fb6bd6fd77',
+      '627f9a89ff6052ec',
+      'c6608a2063b21349',
+      '8a6d5bf8dd64b45d',
+      '5e23bfe96f3d9939',
+      '61e095a97edc9efe',
+      '7ddea38829a6734d',
+      '9c1a6d865251bca0',
+      '6ceff5f94b3e1f9e',
+    ];
+    expect(MIGRATIONS.length).toBeGreaterThanOrEqual(shipped.length);
+    const hashes = MIGRATIONS.slice(0, shipped.length).map((sql) =>
+      createHash('sha256').update(sql).digest('hex').slice(0, 16),
+    );
+    expect(hashes).toEqual(shipped);
+  });
+
+  /* The exact upgrade a real install performs: a database from the release
+     before Kepler (user_version 12, homepage already applied) must come up
+     with the agent tables and every later column. */
+  it('upgrades a database from the shipped pre-Kepler release', () => {
+    const db = dbAtVersion(12);
+    seedApp(db);
+
+    migrate(db);
+
+    const v = db.prepare('PRAGMA user_version').get() as { user_version: number };
+    expect(Number(v.user_version)).toBe(MIGRATIONS.length);
+    const tables = (
+      db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as { name: string }[]
+    ).map((r) => r.name);
+    expect(tables).toContain('agent_runs');
+    expect(tables).toContain('agent_steps');
+    const appColumns = (db.prepare('PRAGMA table_info(applications)').all() as { name: string }[]).map(
+      (c) => c.name,
+    );
+    expect(appColumns).toContain('assignee');
   });
 
   it('enforces foreign keys', () => {
@@ -375,7 +417,7 @@ describe('migrations', () => {
    roles, once each, trimmed. */
 describe('migration 18', () => {
   it('collects the distinct roles of cards and people', () => {
-    const db = dbAtVersion(17);
+    const db = dbAtVersion(15);
     const t = '2026-08-01T00:00:00.000Z';
     db.prepare('INSERT INTO companies (id, name, created_at, updated_at) VALUES (1, ?, ?, ?)').run(
       'Gemini',
@@ -411,7 +453,7 @@ describe('migration 18', () => {
    use, once each, trimmed. */
 describe('migration 17', () => {
   it('collects the distinct Standort values', () => {
-    const db = dbAtVersion(16);
+    const db = dbAtVersion(14);
     const t = '2026-08-01T00:00:00.000Z';
     db.prepare('INSERT INTO companies (id, name, created_at, updated_at) VALUES (1, ?, ?, ?)').run(
       'Gemini',
@@ -444,7 +486,7 @@ describe('migration 17', () => {
    unfiled. */
 describe('migration 16', () => {
   it('backfills people from their card links', () => {
-    const db = dbAtVersion(15);
+    const db = dbAtVersion(13);
     const t = '2026-08-01T00:00:00.000Z';
     db.prepare('INSERT INTO companies (id, name, created_at, updated_at) VALUES (1, ?, ?, ?)').run(
       'Gemini',
@@ -480,11 +522,9 @@ describe('migration 20', () => {
   /* Migration 20: generated documents remember the Fassung they came from, and
      the letter is called by its German name like everything else. */
   it('adds template_label and renames the letter rows to Anschreiben', () => {
-    const db = dbAtVersion(19);
+    const db = dbAtVersion(17);
+    seedApp(db);
     db.exec(`
-      INSERT INTO companies (id, name, created_at, updated_at) VALUES (1, 'Acme', 't', 't');
-      INSERT INTO applications (id, role, company_id, interest, channel, stage_id, stage_position, created_at, updated_at)
-        VALUES ('BEW-1', 'Dev', 1, 'NONE', NULL, 'interessiert', 0, 't', 't');
       INSERT INTO documents (application_id, kind, title, created_at, updated_at)
         VALUES ('BEW-1', 'COVER_LETTER', 'Cover Letter', 't', 't');
       INSERT INTO documents (application_id, kind, title, created_at, updated_at)

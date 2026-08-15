@@ -300,46 +300,6 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE applications ADD COLUMN posting_text TEXT;
   `,
 
-  /* Migration 12: Kepler's runs become rows instead of the renderer stub. One
-     run per launch — re-runs append, so older rows are the run history. Steps
-     are created up front as WAIT and advanced in place; labels are stored
-     fully rendered (the main process knows the company name at transition
-     time), keeping only the {m}/{doc} placeholders the panel turns into chips.
-     "vor 9 Min" is never stored — the renderer counts from finished_at. */
-  `
-  CREATE TABLE agent_runs (
-    id              INTEGER PRIMARY KEY,
-    application_id  TEXT NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
-    status          TEXT NOT NULL,
-    label           TEXT NOT NULL,
-    error           TEXT,
-    started_at      TEXT NOT NULL,
-    finished_at     TEXT
-  );
-  CREATE INDEX idx_agent_runs_app ON agent_runs(application_id);
-
-  CREATE TABLE agent_steps (
-    id           INTEGER PRIMARY KEY,
-    run_id       INTEGER NOT NULL REFERENCES agent_runs(id) ON DELETE CASCADE,
-    position     INTEGER NOT NULL,
-    key          TEXT NOT NULL,
-    status       TEXT NOT NULL,
-    label        TEXT NOT NULL,
-    doc          TEXT,
-    error        TEXT,
-    started_at   TEXT,
-    finished_at  TEXT,
-    UNIQUE (run_id, position)
-  );
-  `,
-
-  /* Migration 13: the listing text the run worked from is kept on the run.
-     Retrying a failed step downstream of the fetch then reads it from here
-     instead of scraping the page again (which may be walled by now). */
-  `
-  ALTER TABLE agent_runs ADD COLUMN listing TEXT;
-  `,
-
   /* Migration 14: the company homepage, separate from the careers page —
      Kepler records both, and the sidebar shows them as Website and
      Karriereseite. */
@@ -413,5 +373,48 @@ export const MIGRATIONS: string[] = [
   `
   ALTER TABLE documents ADD COLUMN template_label TEXT;
   UPDATE documents SET title = 'Anschreiben' WHERE kind = 'COVER_LETTER' AND title = 'Cover Letter';
+  `,
+
+  /* Migration 21: Kepler's runs become rows instead of the renderer stub. One
+     run per launch — re-runs append, so older rows are the run history. Steps
+     are created up front as WAIT and advanced in place; labels are stored
+     fully rendered (the main process knows the company name at transition
+     time), keeping only the {m}/{doc} placeholders the panel turns into chips.
+     "vor 9 Min" is never stored — the renderer counts from finished_at.
+     Sits after migration 20 although Kepler shipped earlier: migrations are
+     applied by array index, so shipped history is append-only — inserting in
+     the middle would break every database migrated before the insertion. */
+  `
+  CREATE TABLE agent_runs (
+    id              INTEGER PRIMARY KEY,
+    application_id  TEXT NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
+    status          TEXT NOT NULL,
+    label           TEXT NOT NULL,
+    error           TEXT,
+    started_at      TEXT NOT NULL,
+    finished_at     TEXT
+  );
+  CREATE INDEX idx_agent_runs_app ON agent_runs(application_id);
+
+  CREATE TABLE agent_steps (
+    id           INTEGER PRIMARY KEY,
+    run_id       INTEGER NOT NULL REFERENCES agent_runs(id) ON DELETE CASCADE,
+    position     INTEGER NOT NULL,
+    key          TEXT NOT NULL,
+    status       TEXT NOT NULL,
+    label        TEXT NOT NULL,
+    doc          TEXT,
+    error        TEXT,
+    started_at   TEXT,
+    finished_at  TEXT,
+    UNIQUE (run_id, position)
+  );
+  `,
+
+  /* Migration 22: the listing text the run worked from is kept on the run.
+     Retrying a failed step downstream of the fetch then reads it from here
+     instead of scraping the page again (which may be walled by now). */
+  `
+  ALTER TABLE agent_runs ADD COLUMN listing TEXT;
   `,
 ];

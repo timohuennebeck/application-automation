@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { useApp } from '../state/store-context';
+import { Chevron } from './icons';
 
 /* Collapsible section with a chevron header and a count, as used throughout
    the detail view. Collapsed state is persisted in localStorage. */
@@ -57,26 +58,10 @@ export function Section({
           width: 'fit-content',
         }}
       >
-        <svg
-          width="10"
-          height="10"
-          viewBox="0 0 10 10"
-          style={{
-            flexShrink: 0,
-            opacity: 0.5,
-            transform: open ? 'none' : 'rotate(-90deg)',
-            transition: 'transform 140ms ease',
-          }}
-        >
-          <path
-            d="M2 3.6 L5 6.6 L8 3.6"
-            fill="none"
-            stroke="var(--c-5f5c56)"
-            strokeWidth="1.4"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
+        <Chevron
+          size={10}
+          style={{ transform: open ? 'none' : 'rotate(-90deg)', transition: 'transform 140ms ease' }}
+        />
         <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--c-1b1a17)' }}>{title}</div>
         {/* The count only earns its brackets once there is something to count. */}
         {count !== undefined && count !== 0 && (

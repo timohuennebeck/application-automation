@@ -43,14 +43,11 @@ const DD_KEYS = new Set(Object.values(DD_KEY));
    `personDraft` on blur (or by savePerson when the popover is dismissed). */
 export function PersonEditCard({
   personKey,
-  subExtra,
   canDelete,
   onDelete,
   onDone,
 }: {
   personKey: string;
-  /* e.g. " · in 3 Runden" appended after the name. */
-  subExtra?: string;
   canDelete: boolean;
   onDelete: () => void;
   onDone: () => void;
@@ -93,7 +90,7 @@ export function PersonEditCard({
               textOverflow: 'ellipsis',
             }}
           >
-            {liveName ? liveName + (subExtra || '') : 'Person hinzufügen'}
+            {liveName || 'Person hinzufügen'}
           </div>
           <div style={{ fontSize: 10.5, color: 'var(--c-c3c0b8)', whiteSpace: 'nowrap' }}>
             {stored?.updatedAt
@@ -210,7 +207,7 @@ export function PersonEditCard({
           without a name is undone by savePerson anyway. */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
         {canDelete && (
-          <div className="btn-ghost btn-bare" onClick={onDelete} title="Aus allen Bewerbungen entfernen">
+          <div className="btn-ghost" onClick={onDelete} title="Aus allen Bewerbungen entfernen">
             Person löschen
           </div>
         )}

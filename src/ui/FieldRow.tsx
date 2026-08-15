@@ -1,6 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react';
 
-export interface FieldRowProps {
+interface FieldRowProps {
   label: ReactNode;
   /* A small glyph in front of the label (the properties sidebar). */
   glyph?: ReactNode;

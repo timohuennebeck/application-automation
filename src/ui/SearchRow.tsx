@@ -25,10 +25,7 @@ export function SearchRow({
   containerRef?: Ref<HTMLDivElement>;
 }) {
   return (
-    <div
-      ref={containerRef}
-      style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 8px 7px' }}
-    >
+    <div ref={containerRef} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 8px 7px' }}>
       <SearchGlyph />
       <input
         value={value}

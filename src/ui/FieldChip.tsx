@@ -1,7 +1,7 @@
 import type { CSSProperties, MouseEvent, ReactNode } from 'react';
 import { Chevron } from './icons';
 
-export interface FieldChipProps {
+interface FieldChipProps {
   /* Renders in the darker "open" tone while its popover is showing. */
   open?: boolean;
   /* Renders muted when the value is a placeholder rather than real content. */

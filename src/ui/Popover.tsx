@@ -15,7 +15,7 @@ const VARIANT: Record<PopoverVariant, CSSProperties> = {
   [PopoverVariant.PANEL]: { borderRadius: 10, padding: 5, boxShadow: '0 14px 34px var(--s-1)' },
 };
 
-export interface PopoverProps {
+interface PopoverProps {
   variant?: PopoverVariant;
   top?: number;
   left?: number;

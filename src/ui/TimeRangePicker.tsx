@@ -1,7 +1,7 @@
 import { fmtMins, minsOf, timeRange } from '../lib/date';
 import { Popover } from './Popover';
 
-export interface TimeRangePickerProps {
+interface TimeRangePickerProps {
   /* Current value, e.g. "10:00 – 11:00". */
   value: string;
   /* Which end is being picked. Held by the caller so it survives re-renders. */
@@ -49,7 +49,7 @@ const GroupLabel = ({ children, top = 0 }: { children: string; top?: number }) =
 
 /* Von/Bis picker: half-hour start slots, then 15-minute end slots capped at
    five hours after the start. */
-export function TimeRangePicker({
+function TimeRangePicker({
   value,
   step,
   startOverride,

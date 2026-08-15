@@ -2,7 +2,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import { formatBytes } from '../lib/bytes';
 import { Check } from './icons';
 
-export interface MenuItemProps {
+interface MenuItemProps {
   onClick?: () => void;
   onMouseDown?: () => void;
   /* Shows the trailing checkmark and the selected row tint. */

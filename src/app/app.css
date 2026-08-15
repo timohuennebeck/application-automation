@@ -246,13 +246,9 @@
   padding: 4px 11px;
   cursor: pointer;
 }
-.btn-ghost:hover {
-  background: var(--c-f1efe9);
-  color: var(--c-28261f);
-}
 /* Hover feedback through the text colour alone — no pill behind it. */
-.btn-ghost.btn-bare:hover {
-  background: transparent;
+.btn-ghost:hover {
+  color: var(--c-28261f);
 }
 
 /* Calendar day cells */
@@ -433,14 +429,6 @@
   color: var(--c-5f5c56);
 }
 
-/* Editable fact value */
-.fact-val:hover {
-  background: var(--c-e7e4dc) !important;
-}
-.fact-val.locked:hover {
-  background: var(--c-f7f5f0) !important;
-}
-
 /* Round "more" button */
 .dots-btn {
   width: 24px;
@@ -530,24 +518,6 @@
 }
 .pop-x:hover {
   color: var(--c-1b1a17);
-}
-
-/* Person field value (in person popover) */
-.pfield {
-  font-size: 12px;
-  line-height: 1.45;
-  border-radius: 5px;
-  padding: 2px 6px;
-  margin-left: -6px;
-  cursor: text;
-  background: var(--c-f1efe9);
-  max-width: 100%;
-  min-width: 0;
-  /* Wraps instead of clipping: a truncated address is not a usable one. */
-  overflow-wrap: anywhere;
-}
-.pfield:hover {
-  background: var(--c-eae7df);
 }
 
 /* Collapsed email body row */

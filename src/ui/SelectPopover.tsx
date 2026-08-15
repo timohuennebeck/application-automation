@@ -19,7 +19,7 @@ const LIST_MIN_HEIGHT = 64;
 const POPOVER_CHROME = 10;
 const VIEWPORT_MARGIN = 12;
 
-export interface SelectPopoverProps {
+interface SelectPopoverProps {
   options: string[];
   /* The current selection; '' when nothing is picked yet. */
   value: string;

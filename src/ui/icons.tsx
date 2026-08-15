@@ -94,17 +94,14 @@ export function ColumnIcon({
 }
 
 export function Chevron({
-  dir = 'down',
   size = 9,
   className,
   style,
 }: {
-  dir?: 'down' | 'right';
   size?: number;
   className?: string;
   style?: CSSProperties;
 }) {
-  const d = dir === 'down' ? 'M2 3.6 L5 6.6 L8 3.6' : 'M3.6 2 L6.6 5 L3.6 8';
   return (
     <svg
       width={size}
@@ -114,7 +111,7 @@ export function Chevron({
       style={{ flexShrink: 0, opacity: 0.5, ...style }}
     >
       <path
-        d={d}
+        d="M2 3.6 L5 6.6 L8 3.6"
         fill="none"
         stroke="var(--c-5f5c56)"
         strokeWidth="1.4"
@@ -334,26 +331,13 @@ export function Avatar({
   );
 }
 
-/* Kepler's avatar — the agent is always rendered in the ink tone. */
+/* Kepler's avatar — the agent is always rendered in the ink tone. Avatar
+   spreads `style` last, so the paler ink wins over its default white. */
 export function KeplerAvatar({ size = 18, fontSize = 9 }: { size?: number; fontSize?: number }) {
   return (
-    <div
-      style={{
-        width: size,
-        height: size,
-        borderRadius: '50%',
-        background: 'var(--c-1b1a17)',
-        color: 'var(--c-fbfaf7)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontSize,
-        fontWeight: 600,
-        flexShrink: 0,
-      }}
-    >
+    <Avatar bg="var(--c-1b1a17)" size={size} fontSize={fontSize} style={{ color: 'var(--c-fbfaf7)' }}>
       K
-    </div>
+    </Avatar>
   );
 }
 

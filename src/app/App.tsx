@@ -66,7 +66,7 @@ function Shell() {
   );
 }
 
-export default function App() {
+export function App() {
   return (
     <AppProvider>
       <Shell />

@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { CAL_DOWS, MONTHS_DE, shiftISO, todayISO, toISO } from '../lib/date';
 import { Popover } from './Popover';
 
-export interface CalendarProps {
+interface CalendarProps {
   selectedISO: string;
   /* First and last month rendered, as 'YYYY-MM'. */
   fromYM: string;
@@ -44,7 +44,7 @@ function buildMonths(fromYM: string, toYM: string): MonthCells[] {
 }
 
 /* Vertically scrolling month calendar, sized for a 222px popover. */
-export function Calendar({ selectedISO, fromYM, toYM, isDisabled, onPick, quick = true }: CalendarProps) {
+function Calendar({ selectedISO, fromYM, toYM, isDisabled, onPick, quick = true }: CalendarProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const today = todayISO();
   const months = buildMonths(fromYM, toYM);

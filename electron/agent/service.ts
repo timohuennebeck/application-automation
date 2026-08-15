@@ -9,7 +9,7 @@ import type { AgentEvent, AgentStartResult } from '../../src/shared/agent.ts';
 import { AgentRunStatus, AgentStepStatus } from '../../src/shared/enums.ts';
 import { QUEUE_HEADLINE, STOP_ERROR, stepPlan } from './labels.ts';
 
-export interface AgentServiceDeps {
+interface AgentServiceDeps {
   repo: Repo;
   runs: RunStore;
   emit(event: AgentEvent): void;

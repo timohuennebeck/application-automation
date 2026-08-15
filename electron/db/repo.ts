@@ -217,7 +217,9 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
     insDoc.run(appId, DocumentKind.LEBENSLAUF, 'Lebenslauf', t, t);
 
     return {
-      rounds: all<RoundRow>('SELECT * FROM rounds WHERE application_id = ? ORDER BY position', appId),
+      /* Nothing pre-seeds rounds since migration 9, and this function inserts
+         none — a query here could only ever come back empty. */
+      rounds: [] as RoundRow[],
       followups: all<FollowupRow>(
         'SELECT * FROM followups WHERE application_id = ? ORDER BY position',
         appId,

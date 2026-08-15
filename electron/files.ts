@@ -137,7 +137,7 @@ function sanitizeAttachmentName(name: string): string {
   return base.slice(0, 120 - ext.length) + ext;
 }
 
-export interface AttachmentCopy {
+interface AttachmentCopy {
   /* Relative to userData, what comment_attachments.file_path stores. */
   filePath: string;
   /* The name the file was picked under, for display. */
@@ -211,7 +211,7 @@ const LEGACY_TEMPLATE_FILES: Record<TemplateKind, string> = {
 
 /* The label a slot's first Fassung gets, and the stem further ones are
    numbered from. */
-export const FIRST_TEMPLATE_LABEL = 'Standard';
+const FIRST_TEMPLATE_LABEL = 'Standard';
 const AUTO_LABEL_PREFIX = 'Fassung ';
 const SELECTED_MARKER = '.selected';
 const MAX_LABEL_LENGTH = 40;
@@ -259,13 +259,15 @@ function markerPath(userDataPath: string, kind: TemplateKind): string {
 function migrateSlot(userDataPath: string, kind: TemplateKind): void {
   const dir = templateDir(userDataPath, kind);
   const target = path.join(dir, FIRST_TEMPLATE_LABEL);
-  let entries: string[] = [];
+  let flat: string | undefined;
   try {
-    entries = readdirSync(dir);
+    /* statSync has to sit inside the guard too: an entry deleted between the
+       readdir and the stat throws ENOENT out through listTemplates and takes
+       the whole profile panel with it, rather than skipping one file. */
+    flat = readdirSync(dir).find((e) => isHtml(e) && statSync(path.join(dir, e)).isFile());
   } catch {
-    /* no slot directory yet */
+    /* no slot directory yet, or an entry vanished mid-scan */
   }
-  const flat = entries.find((e) => isHtml(e) && statSync(path.join(dir, e)).isFile());
   const legacy = path.join(userDataPath, 'templates', LEGACY_TEMPLATE_FILES[kind]);
   const from = flat ? path.join(dir, flat) : existsSync(legacy) ? legacy : null;
   if (!from) return;

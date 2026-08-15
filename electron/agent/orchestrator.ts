@@ -473,7 +473,12 @@ async function generateDocument(
   let storedPdf: string | null = pdfRel;
   try {
     await deps.renderPdf(htmlAbs, pdfAbs);
-  } catch {
+  } catch (err) {
+    /* Keeping the HTML is the right trade — losing it because Chromium could
+       not print would be worse. Discarding the reason as well is not: this is
+       the failure a template with a blur shadow hits, and the run otherwise
+       reports success with a document that silently has no PDF. */
+    console.error('[agent] PDF-Export fehlgeschlagen', kind, err);
     rmSync(pdfAbs, { force: true });
     storedPdf = null;
   }
@@ -488,6 +493,11 @@ async function generateDocument(
       storedPdf,
       templateLabel,
     );
+  } else {
+    /* Both document rows are inserted at application creation, so this is a
+       guard rather than a path — but silently orphaning the files it just
+       wrote is not something to find out about from an empty card. */
+    console.error('[agent] Kein Dokument-Row für', applicationId, kind);
   }
   return html;
 }

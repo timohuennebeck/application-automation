@@ -111,6 +111,9 @@ function createWindow() {
 
 // Keeps the window chrome in sync when the renderer toggles the theme.
 ipcMain.on('theme:set', (_e, theme: 'light' | 'dark') => {
+  /* An unexpected value would throw inside an ipcMain.on handler, which is an
+     uncaught main-process exception rather than a rejected promise. */
+  if (theme !== 'light' && theme !== 'dark') return;
   nativeTheme.themeSource = theme;
   win?.setBackgroundColor(theme === 'dark' ? '#0f1012' : '#fbfaf7');
 });
@@ -174,9 +177,7 @@ ipcMain.handle(
 );
 
 /* Sizes for the document menu, in one round trip. */
-ipcMain.handle('documents:sizes', (_e, filePaths: string[]) =>
-  filePaths.map((p) => documentSize(root(), p)),
-);
+ipcMain.handle('documents:sizes', (_e, filePaths: string[]) => filePaths.map((p) => documentSize(root(), p)));
 
 /* Opens the stored file in whatever the OS uses for .docx. Returns the error
    string openPath gives on failure ('' means it opened). */
@@ -208,11 +209,18 @@ ipcMain.handle('attachments:openSource', (_e, sourcePath: string) => {
   return shell.openPath(sourcePath);
 });
 
+function requirePickedAttachment(sourcePath: string): void {
+  if (!pickedAttachmentSources.has(sourcePath)) throw new Error('Unbekannte Datei.');
+}
+
 /* Copies the staged sources into userData at send time; the comment's rows are
    only written from what this returns, so a row never points at missing bytes. */
-ipcMain.handle('attachments:copy', (_e, applicationId: string, sourcePaths: string[]) =>
-  sourcePaths.map((p) => copyCommentAttachment(root(), applicationId, p)),
-);
+ipcMain.handle('attachments:copy', (_e, applicationId: string, sourcePaths: string[]) => {
+  /* Same gate the other three ingest channels use: without it any path the
+     renderer names gets copied in and listed as an attachment. */
+  sourcePaths.forEach(requirePickedAttachment);
+  return sourcePaths.map((p) => copyCommentAttachment(root(), applicationId, p));
+});
 
 /* Profile templates: the Fassungen of the two documents that are not tied to
    an application. They share the picker above, so the extension is checked

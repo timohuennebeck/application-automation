@@ -14,7 +14,7 @@ function sealed(text: string): string {
   return text.replace(/<\/(anzeige|vorlage|profil|kontakte|lebenslauf)>/gi, '');
 }
 
-export function clipListing(text: string): string {
+function clipListing(text: string): string {
   return sealed(text.length > MAX_LISTING ? text.slice(0, MAX_LISTING) : text);
 }
 
@@ -172,7 +172,7 @@ const ENTITIES: Record<string, string> = {
   '&mdash;': '—',
 };
 
-export function documentText(html: string): string {
+function documentText(html: string): string {
   return html
     .replace(/<!--[\s\S]*?-->/g, ' ')
     .replace(/<(style|script)[\s\S]*?<\/\1>/gi, ' ')

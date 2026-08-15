@@ -10,7 +10,7 @@ const WIDTH = 288;
 const HEIGHT = 300;
 const EDGE = 8;
 
-export const CARD_CONTACT_KEY = 'card-contact';
+const CARD_CONTACT_KEY = 'card-contact';
 
 /* Contact picker for a board card. The board scroller clips its columns, so
    this floats at the cursor in viewport coordinates and is rendered at the

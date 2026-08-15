@@ -4,7 +4,7 @@ import type { ContactEntry } from '../../state/store-context';
 import { PeoplePicker } from './PeoplePicker';
 import { PersonEditCard } from './PersonEditCard';
 
-export interface ContactPickerBodyProps {
+interface ContactPickerBodyProps {
   /* Names this picker, so two open at once cannot edit each other's draft. */
   popKey: string;
   cardId: string;

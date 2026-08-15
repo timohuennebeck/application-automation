@@ -20,7 +20,7 @@ export const DOW_DE = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
 /* Calendar grids start on Monday. */
 export const CAL_DOWS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 
-export function pad2(n: number): string {
+function pad2(n: number): string {
   return (n < 10 ? '0' : '') + n;
 }
 

@@ -49,7 +49,7 @@ export function moveTarget(
 /* Where the rows of `container` currently sit, in viewport coordinates. Read
    fresh on every dragover: the list reorders as you drag, so a cached set of
    boxes would describe the arrangement before the last move. */
-export function rowBoxes(container: HTMLElement): { top: number; height: number }[] {
+function rowBoxes(container: HTMLElement): { top: number; height: number }[] {
   return Array.from(container.querySelectorAll('[data-fact]')).map((el) => {
     const r = el.getBoundingClientRect();
     return { top: r.top, height: r.height };

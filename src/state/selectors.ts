@@ -59,7 +59,7 @@ export function usedRoles(st: AppState): Set<string> {
   ]);
 }
 
-export function factOf(st: AppState, id: string, label: string): string {
+function factOf(st: AppState, id: string, label: string): string {
   const v = (st.factsByApp[id] || []).find((f) => f.label === label)?.value;
   return v && v !== '—' && v !== 'nicht angegeben' ? v : '';
 }
@@ -102,10 +102,6 @@ export function cardView(st: AppState, id: string): CardView | null {
    toolbar button. */
 export function activeFilterCount(st: AppState): number {
   return st.boardFilter.interests.length;
-}
-
-export function isFiltered(st: AppState): boolean {
-  return activeFilterCount(st) > 0;
 }
 
 /* A sort replaces the board's own order, so the columns can no longer be

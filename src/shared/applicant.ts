@@ -4,7 +4,7 @@
    PDF into a folder full of other people's "Lebenslauf.pdf", so the file must
    say whose it is on its own. Underscores rather than spaces, so the name
    survives ATS uploads and mail links without turning into %20s. */
-export const APPLICANT_FILE_STEM = 'Timo_Huennebeck';
+const APPLICANT_FILE_STEM = 'Timo_Huennebeck';
 
 /* The German labels are used regardless of the posting's language — the two
    file names on the profile and on every card stay predictable. */

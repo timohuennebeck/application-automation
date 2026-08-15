@@ -99,12 +99,12 @@ export function relTime(createdAt: string, now = new Date()): string {
   return 'vor ' + -d + ' Tagen';
 }
 
-export function timeRangeText(start: string | null, end: string | null): string {
+function timeRangeText(start: string | null, end: string | null): string {
   if (!start) return '';
   return end ? start + ' – ' + end : start;
 }
 
-export function boardFrom(applications: ApplicationRow[]): string[][] {
+function boardFrom(applications: ApplicationRow[]): string[][] {
   return STAGE_IDS.map((sid) =>
     applications
       .filter((a) => a.stage_id === sid)
@@ -136,7 +136,7 @@ export function personView(p: PersonRow): PersonView {
   };
 }
 
-export function roundView(
+function roundView(
   row: RoundRow,
   people: RoundPersonRow[],
   notes: RoundNoteRow[],

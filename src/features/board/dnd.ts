@@ -58,7 +58,7 @@ export function makeGhost(store: AppStore, e: DragEvent) {
   }
 }
 
-export function clearGhost(store: AppStore) {
+function clearGhost(store: AppStore) {
   const g = store.ghostRef.current;
   g?.parentNode?.removeChild(g);
   store.ghostRef.current = null;

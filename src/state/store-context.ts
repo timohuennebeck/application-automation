@@ -187,7 +187,9 @@ export interface AppState {
   profileDragId: number | null;
 }
 
-export type Patch = Partial<AppState> | ((s: AppState) => Partial<AppState>);
+/* An updater returns null to mean "nothing changed" — `set` skips the state
+   object entirely rather than spreading an empty patch into a fresh one. */
+export type Patch = Partial<AppState> | null | ((s: AppState) => Partial<AppState> | null);
 
 /* Everything the profile dialog owns, cleared together. Closing it has to drop
    the half-typed fact and the inline edit with it, or reopening resumes a
@@ -239,8 +241,8 @@ export interface AppStore {
   saveRound: () => void;
   /* Sidebar field write, routed to the owning table (see fact-label routing). */
   writeField: (id: string, label: string, value: string) => void;
-  /* Picks a .docx and points the document row at it. Resolves to the reason
-     it failed, or null on success and on cancel. */
+  /* Picks an HTML file and points the document row at it. Resolves to the
+     reason it failed, or null on success and on cancel. */
   replaceDocument: (
     id: string,
     documentId: number,

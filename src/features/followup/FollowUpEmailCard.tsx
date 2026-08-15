@@ -7,7 +7,7 @@ import { FieldChip } from '../../ui/FieldChip';
 import { PopoverAnchor } from '../../ui/Popover';
 import { Caret, Check, ClipboardGlyph, KeplerAvatar, RegenGlyph } from '../../ui/icons';
 import { ContactPicker } from '../people/ContactPicker';
-import { draftEmail, type FollowUpSlot } from './schedule';
+import { draftEmail, dueColor, dueLabel, type FollowUpSlot } from './schedule';
 
 const COPIED_MS = 1400;
 
@@ -113,25 +113,6 @@ export function FollowUpEmailCard({
     if (!stored) saveEmailDraft(cardId, slot.id, subject, body);
   }, [stored, cardId, slot.id, subject, body, saveEmailDraft]);
 
-  /* A sent follow-up is not late for anything, so the red urgency gives way to
-     the date it went out. */
-  const rel = slot.done
-    ? '· ' + slot.meta
-    : slot.diff === 0
-      ? '· heute'
-      : slot.diff === 1
-        ? '· morgen'
-        : slot.diff > 0
-          ? '· in ' + slot.diff + ' Tagen'
-          : '· seit ' + -slot.diff + ' Tagen überfällig';
-  const relColor = slot.done
-    ? 'var(--c-8b8880)'
-    : slot.diff <= 0
-      ? 'var(--c-c2564c)'
-      : slot.diff <= 2
-        ? 'var(--c-9a7218)'
-        : 'var(--c-9a978f)';
-
   const preview = body.split('\n').filter(Boolean)[1] || body;
   const words = body.trim().split(/\s+/).length + ' Wörter';
 
@@ -181,7 +162,7 @@ export function FollowUpEmailCard({
                 }
               >
                 <span style={{ fontSize: 12 }}>{isoToDate(slot.iso)}</span>
-                <span style={{ fontSize: 12, color: relColor }}>{rel}</span>
+                <span style={{ fontSize: 12, color: dueColor(slot) }}>{'· ' + dueLabel(slot)}</span>
               </FieldChip>
               {dueOpen && (
                 <CalendarPopover

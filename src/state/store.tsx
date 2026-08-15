@@ -333,7 +333,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const res = await api.rounds.set(id, latest.map(roundInput));
         set((s) => {
           const list = s.roundsState[id] ?? [];
-          if (list.length !== res.rounds.length) return {}; // superseded; the queued send re-syncs
+          /* Superseded; the queued send re-syncs. null, not {} — an empty patch
+             is still a patch and would spread into a fresh state object. */
+          if (list.length !== res.rounds.length) return null;
           return {
             roundsState: {
               ...s.roundsState,
@@ -1555,7 +1557,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       removeCommentAttachment,
       openStagedAttachment,
       openAttachment,
+      replaceDocument,
       setFollowupDue,
+      setFollowupCompleted,
       saveEmailDraft,
       regenerateEmail,
       addProfileFact,

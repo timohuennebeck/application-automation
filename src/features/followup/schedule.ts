@@ -70,6 +70,24 @@ export function followUpSlots(st: AppState, cardId: string): FollowUpSlot[] {
   });
 }
 
+/* The email card's version of `meta`. It says the same thing in more words —
+   an overdue follow-up is counted out in days there, where the list only marks
+   it "überfällig" — so the two ladders live side by side and stay in step. */
+export function dueLabel(slot: FollowUpSlot): string {
+  if (slot.done) return slot.meta;
+  if (slot.diff === 0) return 'heute';
+  if (slot.diff === 1) return 'morgen';
+  return slot.diff > 0 ? 'in ' + slot.diff + ' Tagen' : 'seit ' + -slot.diff + ' Tagen überfällig';
+}
+
+/* A sent follow-up is not late for anything, so the red urgency gives way to
+   the date it went out. */
+export function dueColor(slot: FollowUpSlot): string {
+  if (slot.done) return 'var(--c-8b8880)';
+  if (slot.diff <= 0) return 'var(--c-c2564c)';
+  return slot.diff <= 2 ? 'var(--c-9a7218)' : 'var(--c-9a978f)';
+}
+
 /* Chip and menu label: names the role in full. Where it does not fit, the
    layout truncates it with a real ellipsis — a character budget here would cut
    mid-word even when there was room to spare. */

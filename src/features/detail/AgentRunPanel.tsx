@@ -208,12 +208,13 @@ function StepRow({
         if (t.kind === 'doc') {
           const doc = step.doc;
           if (!doc) return null;
+          const selected = selectedOf(templates, doc);
           return (
             <AttachmentChip
               key={i}
               /* Falls back to the slot's own name while nothing is uploaded. */
-              name={selectedOf(templates, doc)?.name ?? TEMPLATE_TITLES[doc]}
-              size={selectedOf(templates, doc)?.size}
+              name={selected?.name ?? TEMPLATE_TITLES[doc]}
+              size={selected?.size}
               title="Im Browser öffnen"
               // Cancel out the chip padding so it doesn't grow the step row.
               style={{ margin: '-3px 0', flexShrink: 0 }}

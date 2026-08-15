@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { COLUMNS, DATE_FIELDS, FACT_OPTIONS, INTEREST, INTEREST_ORDER, SECTIONS } from '../../../data/config';
 import { agentLocked, keplerHoldReason } from '../../../state/selectors';
 import { Assignee, FactKind, Interest, LinkKind } from '../../../shared/enums';
@@ -31,6 +32,21 @@ const GroupTitle = ({ children }: { children: string }) => (
   </div>
 );
 
+/* Every sidebar row is the same FieldRow: its label, that label's glyph, the
+   sidebar's label column, and a 24px floor so the rows keep their rhythm. */
+function PropertyRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <FieldRow
+      label={label}
+      glyph={<FieldGlyph label={label} />}
+      labelWidth={SIDEBAR_LABEL_WIDTH}
+      minHeight={24}
+    >
+      {children}
+    </FieldRow>
+  );
+}
+
 /* Nobody first, then everyone who can own a card — Kepler is the only one. */
 const ASSIGNEE_OPTIONS: (Assignee | null)[] = [null, Assignee.KEPLER];
 
@@ -52,7 +68,7 @@ function AssigneeLabel({ assignee }: { assignee: Assignee | null }) {
   );
 }
 
-export interface PropertiesSidebarProps {
+interface PropertiesSidebarProps {
   cardId: string;
   role: string;
   company: string;
@@ -183,12 +199,7 @@ export function PropertiesSidebar({ cardId, role, company, columnIndex }: Proper
         <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
           <GroupTitle>Bewerbung</GroupTitle>
 
-          <FieldRow
-            label="Status"
-            glyph={<FieldGlyph label="Status" />}
-            labelWidth={SIDEBAR_LABEL_WIDTH}
-            minHeight={24}
-          >
+          <PropertyRow label="Status">
             <PopoverAnchor style={{ marginLeft: -6 }}>
               <FieldChip
                 open={st.dropdown === 'status'}
@@ -220,14 +231,9 @@ export function PropertiesSidebar({ cardId, role, company, columnIndex }: Proper
                 </Popover>
               )}
             </PopoverAnchor>
-          </FieldRow>
+          </PropertyRow>
 
-          <FieldRow
-            label="Interesse"
-            glyph={<FieldGlyph label="Interesse" />}
-            labelWidth={SIDEBAR_LABEL_WIDTH}
-            minHeight={24}
-          >
+          <PropertyRow label="Interesse">
             <PopoverAnchor style={{ marginLeft: -6 }}>
               <FieldChip
                 open={st.dropdown === 'interest'}
@@ -258,14 +264,9 @@ export function PropertiesSidebar({ cardId, role, company, columnIndex }: Proper
                 </Popover>
               )}
             </PopoverAnchor>
-          </FieldRow>
+          </PropertyRow>
 
-          <FieldRow
-            label="Bearbeiter"
-            glyph={<FieldGlyph label="Bearbeiter" />}
-            labelWidth={SIDEBAR_LABEL_WIDTH}
-            minHeight={24}
-          >
+          <PropertyRow label="Bearbeiter">
             <PopoverAnchor style={{ marginLeft: -6 }}>
               <FieldChip
                 open={st.dropdown === 'assignee'}
@@ -300,7 +301,7 @@ export function PropertiesSidebar({ cardId, role, company, columnIndex }: Proper
                 </Popover>
               )}
             </PopoverAnchor>
-          </FieldRow>
+          </PropertyRow>
 
           <PopoverAnchor style={{ display: 'flex', gap: 12, alignItems: 'center', minHeight: 24 }}>
             <div
@@ -332,15 +333,9 @@ export function PropertiesSidebar({ cardId, role, company, columnIndex }: Proper
           </PopoverAnchor>
 
           {SECTIONS[0][1].map(view).map((f) => (
-            <FieldRow
-              key={f.label}
-              label={f.label}
-              glyph={<FieldGlyph label={f.label} />}
-              labelWidth={SIDEBAR_LABEL_WIDTH}
-              minHeight={24}
-            >
+            <PropertyRow key={f.label} label={f.label}>
               <FactField fact={f} cardId={cardId} locked={locked} />
-            </FieldRow>
+            </PropertyRow>
           ))}
         </div>
 
@@ -348,15 +343,9 @@ export function PropertiesSidebar({ cardId, role, company, columnIndex }: Proper
           <div key={g.title} style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
             <GroupTitle>{g.title}</GroupTitle>
             {g.items.map((f) => (
-              <FieldRow
-                key={f.label}
-                label={f.label}
-                glyph={<FieldGlyph label={f.label} />}
-                labelWidth={SIDEBAR_LABEL_WIDTH}
-                minHeight={24}
-              >
+              <PropertyRow key={f.label} label={f.label}>
                 <FactField fact={f} cardId={cardId} locked={locked} />
-              </FieldRow>
+              </PropertyRow>
             ))}
           </div>
         ))}

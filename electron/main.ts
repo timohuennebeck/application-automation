@@ -117,6 +117,9 @@ ipcMain.on('theme:set', (_e, theme: 'light' | 'dark') => {
 
 ipcMain.handle('shell:openExternal', (_e, url: string) => openExternal(url));
 
+/* The app's file root — where the database, documents and templates live. */
+const root = () => app.getPath('userData');
+
 /* Document files. The picker runs here because the renderer, with context
    isolation on, never sees a real path — and because the dialog's file-type
    filter is a suggestion on macOS, the extension is checked again in
@@ -128,13 +131,24 @@ const FILE_TYPES: Record<string, { name: string; extensions: string[] }> = {
   html: { name: 'HTML-Datei', extensions: ['html', 'htm'] },
 };
 
+/* Every source picked this session. The copy channels refuse anything else,
+   so the renderer can only ingest OS paths the user chose in the dialog —
+   the same stance attachments:openSource takes. */
+const pickedDocumentSources = new Set<string>();
+
+function requirePicked(sourcePath: string): void {
+  if (!pickedDocumentSources.has(sourcePath)) throw new Error('Unbekannte Datei.');
+}
+
 ipcMain.handle('documents:pick', async (_e, title: string, type: string) => {
   const res = await dialog.showOpenDialog(win!, {
     title,
     properties: ['openFile'],
     filters: [FILE_TYPES[type] ?? FILE_TYPES.docx],
   });
-  return res.canceled ? null : (res.filePaths[0] ?? null);
+  const picked = res.canceled ? null : (res.filePaths[0] ?? null);
+  if (picked) pickedDocumentSources.add(picked);
+  return picked;
 });
 
 /* Takes in the HTML and renders the PDF beside it in one step, so a row never
@@ -144,7 +158,8 @@ ipcMain.handle('documents:pick', async (_e, title: string, type: string) => {
 ipcMain.handle(
   'documents:copy',
   async (_e, applicationId: string, kind: DocumentKind, sourcePath: string): Promise<DocumentUpload> => {
-    const userData = app.getPath('userData');
+    requirePicked(sourcePath);
+    const userData = root();
     const filePath = copyDocument(userData, applicationId, kind, sourcePath);
     const { htmlAbs, pdfAbs, pdfRel } = documentPaths(userData, applicationId, kind);
     try {
@@ -160,13 +175,13 @@ ipcMain.handle(
 
 /* Sizes for the document menu, in one round trip. */
 ipcMain.handle('documents:sizes', (_e, filePaths: string[]) =>
-  filePaths.map((p) => documentSize(app.getPath('userData'), p)),
+  filePaths.map((p) => documentSize(root(), p)),
 );
 
 /* Opens the stored file in whatever the OS uses for .docx. Returns the error
    string openPath gives on failure ('' means it opened). */
 ipcMain.handle('documents:open', (_e, filePath: string) =>
-  shell.openPath(resolveDocumentPath(app.getPath('userData'), filePath)),
+  shell.openPath(resolveDocumentPath(root(), filePath)),
 );
 
 /* Comment attachments: any file type, several at once. Unlike documents there
@@ -196,70 +211,86 @@ ipcMain.handle('attachments:openSource', (_e, sourcePath: string) => {
 /* Copies the staged sources into userData at send time; the comment's rows are
    only written from what this returns, so a row never points at missing bytes. */
 ipcMain.handle('attachments:copy', (_e, applicationId: string, sourcePaths: string[]) =>
-  sourcePaths.map((p) => copyCommentAttachment(app.getPath('userData'), applicationId, p)),
+  sourcePaths.map((p) => copyCommentAttachment(root(), applicationId, p)),
 );
 
 /* Profile templates: the Fassungen of the two documents that are not tied to
    an application. They share the picker above, so the extension is checked
    once more in the file layer before anything is written. */
-ipcMain.handle('templates:list', () => listTemplates(app.getPath('userData')));
+ipcMain.handle('templates:list', () => listTemplates(root()));
 
-ipcMain.handle('templates:add', (_e, kind: TemplateKind, sourcePath: string) =>
-  addTemplateVersion(app.getPath('userData'), kind, sourcePath),
-);
+ipcMain.handle('templates:add', (_e, kind: TemplateKind, sourcePath: string) => {
+  requirePicked(sourcePath);
+  return addTemplateVersion(root(), kind, sourcePath);
+});
 
-ipcMain.handle('templates:replace', (_e, kind: TemplateKind, label: string, sourcePath: string) =>
-  replaceTemplateVersion(app.getPath('userData'), kind, label, sourcePath),
-);
+ipcMain.handle('templates:replace', (_e, kind: TemplateKind, label: string, sourcePath: string) => {
+  requirePicked(sourcePath);
+  return replaceTemplateVersion(root(), kind, label, sourcePath);
+});
 
 ipcMain.handle('templates:select', (_e, kind: TemplateKind, label: string) =>
-  selectTemplateVersion(app.getPath('userData'), kind, label),
+  selectTemplateVersion(root(), kind, label),
 );
 
 ipcMain.handle('templates:rename', (_e, kind: TemplateKind, from: string, to: string) =>
-  renameTemplateVersion(app.getPath('userData'), kind, from, to),
+  renameTemplateVersion(root(), kind, from, to),
 );
 
 ipcMain.handle('templates:remove', (_e, kind: TemplateKind, label: string) =>
-  removeTemplateVersion(app.getPath('userData'), kind, label),
+  removeTemplateVersion(root(), kind, label),
 );
 
 /* Without a label the selected Fassung opens — what the agent panel's doc
    chips point at. */
 ipcMain.handle('templates:open', (_e, kind: TemplateKind, label?: string) => {
-  const root = app.getPath('userData');
   const filePath = label
-    ? templateVersionPath(root, kind, label)
-    : (selectedTemplatePath(root, kind)?.path ?? null);
+    ? templateVersionPath(root(), kind, label)
+    : (selectedTemplatePath(root(), kind)?.path ?? null);
   return filePath ? shell.openPath(filePath) : 'Noch keine Datei hochgeladen.';
 });
+
+/* One render per PDF at a time: a double-click must not race two hidden
+   Chromium prints onto the same file — the loser's cleanup would delete what
+   the winner just wrote. Later clicks queue behind the running render. */
+const pdfRenders = new Map<string, Promise<void>>();
 
 /* The PDF of one Fassung, rendered beside its HTML on first request and again
    whenever the HTML is newer than the last render — the profile has nothing
    else that would trigger the export. Returns '' on success, else the reason. */
 ipcMain.handle('templates:openPdf', async (_e, kind: TemplateKind, label: string) => {
-  const root = app.getPath('userData');
-  const htmlPath = templateVersionPath(root, kind, label);
+  const htmlPath = templateVersionPath(root(), kind, label);
   if (!htmlPath) throw new Error('Noch keine Datei hochgeladen.');
   const pdfPath = templatePdfPath(htmlPath);
+  const render = (pdfRenders.get(pdfPath) ?? Promise.resolve())
+    .catch(() => {}) /* the earlier click already reported its own failure */
+    .then(async () => {
+      if (!existsSync(pdfPath) || statSync(pdfPath).mtimeMs < statSync(htmlPath).mtimeMs) {
+        await renderPdf(htmlPath, pdfPath);
+      }
+    });
+  pdfRenders.set(pdfPath, render);
   try {
-    if (!existsSync(pdfPath) || statSync(pdfPath).mtimeMs < statSync(htmlPath).mtimeMs) {
-      await renderPdf(htmlPath, pdfPath);
-    }
+    await render;
   } catch (err) {
     rmSync(pdfPath, { force: true });
     throw new Error('Das PDF ließ sich nicht erzeugen: ' + String(err));
+  } finally {
+    if (pdfRenders.get(pdfPath) === render) pdfRenders.delete(pdfPath);
   }
   const openError = await shell.openPath(pdfPath);
   if (openError) throw new Error(openError);
-  /* The Fassung as it now stands — the menu shows the PDF's size from here on. */
-  return listTemplateVersions(root, kind).find((v) => v.label === label)!;
+  /* The Fassung as it now stands — the menu shows the PDF's size from here on.
+     It may be gone by now (deleted outside the app mid-render). */
+  const version = listTemplateVersions(root(), kind).find((v) => v.label === label);
+  if (!version) throw new Error(`Fassung „${label}“ ist nicht vorhanden.`);
+  return version;
 });
 
 /* Profile documents: any further files kept with the profile. The picker is
    the unfiltered multi-select one; the bytes are copied in straight away, so
    the folder listing is all the state there is. */
-ipcMain.handle('profileDocuments:list', () => listProfileDocuments(app.getPath('userData')));
+ipcMain.handle('profileDocuments:list', () => listProfileDocuments(root()));
 
 ipcMain.handle('profileDocuments:add', async (_e, title: string) => {
   const res = await dialog.showOpenDialog(win!, {
@@ -267,31 +298,29 @@ ipcMain.handle('profileDocuments:add', async (_e, title: string) => {
     properties: ['openFile', 'multiSelections'],
   });
   if (res.canceled || res.filePaths.length === 0) return null;
-  return addProfileDocuments(app.getPath('userData'), res.filePaths);
+  return addProfileDocuments(root(), res.filePaths);
 });
 
 ipcMain.handle('profileDocuments:open', (_e, name: string) =>
-  shell.openPath(profileDocumentPath(app.getPath('userData'), name)),
+  shell.openPath(profileDocumentPath(root(), name)),
 );
 
-ipcMain.handle('profileDocuments:remove', (_e, name: string) =>
-  removeProfileDocument(app.getPath('userData'), name),
-);
+ipcMain.handle('profileDocuments:remove', (_e, name: string) => removeProfileDocument(root(), name));
 
 /* The database must be usable before any window exists; a broken store means
    quit with an error rather than silently running in-memory and losing edits. */
 function initDb(): boolean {
   try {
-    const db = openDb(path.join(app.getPath('userData'), 'bewerbungen.db'));
+    const db = openDb(path.join(root(), 'bewerbungen.db'));
     seedIfEmpty(db);
     const repo = createRepo(db);
-    const agent = registerAgentIpc(() => win, db, repo, app.getPath('userData'));
+    const agent = registerAgentIpc(() => win, db, repo, root());
     registerDbIpc(repo, {
       afterDeleteApplication: (id) => {
         agent.abandon(id);
-        purgeApplicationFiles(app.getPath('userData'), id);
+        purgeApplicationFiles(root(), id);
       },
-      afterDeleteComment: (paths) => paths.forEach((p) => removeStoredFile(app.getPath('userData'), p)),
+      afterDeleteComment: (paths) => paths.forEach((p) => removeStoredFile(root(), p)),
     });
     return true;
   } catch (err) {

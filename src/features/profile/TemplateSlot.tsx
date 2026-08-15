@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from 'react';
+import { useRef, useState, type CSSProperties } from 'react';
 import { formatBytes } from '../../lib/bytes';
 import { isoToDate } from '../../lib/date';
 import type { TemplateVersion } from '../../shared/domain';
@@ -51,6 +51,9 @@ export function TemplateSlot({
   /* The label whose file is being written; '' while a new Fassung is copied. */
   const [busy, setBusy] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<{ label: string; draft: string } | null>(null);
+  /* Enter blurs the input and blur commits; a second blur while the rename is
+     in flight must not commit again. */
+  const committing = useRef(false);
 
   const desktop = () => {
     const api = window.desktop;
@@ -123,17 +126,26 @@ export function TemplateSlot({
     }
   };
 
+  /* The input stays until the bridge has answered: leaving it on Enter would
+     show the old label for the round trip and then flip — a flash. */
   const commitRename = async () => {
-    const api = desktop();
     const r = renaming;
-    setRenaming(null);
-    if (!api || !r || r.draft.trim() === r.label) return;
+    if (!r || committing.current) return;
+    const api = desktop();
+    if (!api || r.draft.trim() === r.label) {
+      setRenaming(null);
+      return;
+    }
+    committing.current = true;
     onError(null);
     try {
       const v = await api.templates.rename(kind, r.label, r.draft);
       onChange([...versions.filter((x) => x.label !== r.label), v].sort(byLabel));
     } catch (err) {
       onError(String(err));
+    } finally {
+      committing.current = false;
+      setRenaming(null);
     }
   };
 

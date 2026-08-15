@@ -3,7 +3,7 @@ import { SortDir, SortKey, Urgency } from '../../data/config.ts';
 import { Interest, LinkKind } from '../../shared/enums.ts';
 import { shiftISO, todayISO } from '../../lib/date.ts';
 import type { ApplicationRow, CompanyRow, FactRow } from '../../shared/db-types.ts';
-import { activeFilterCount, cardSubtitle, isSorted, visibleCards } from '../selectors.ts';
+import { activeFilterCount, cardSubtitle, isSorted, peopleKeysForCard, visibleCards } from '../selectors.ts';
 import type { AppState, BoardFilter } from '../store-context.ts';
 
 const application = (
@@ -25,6 +25,7 @@ const application = (
   applied_via: null,
   posting_url: null,
   posting_text: null,
+  assignee: null,
   created_at: 't',
   updated_at: 't',
 });
@@ -135,5 +136,67 @@ describe('cardSubtitle', () => {
 
   it('stops calling it overdue once it has been sent', () => {
     expect(cardSubtitle(cardWithFollowup(-4, true), 'A').tone).toBe(Urgency.MUTED);
+  });
+});
+
+describe('peopleKeysForCard', () => {
+  /* Cards A and B belong to company 1, card C to company 2. Person 7 is filed
+     under company 1, 8 under company 2 but sits on one of A's rounds, 9 is
+     C's contact and filed under company 2, 5 has no company at all. */
+  function peopleState(): AppState {
+    return {
+      applications: {
+        A: application('A', 'UX Researcher', 1, Interest.LOW, 'LinkedIn'),
+        B: application('B', 'Design Lead', 1, Interest.URGENT, 'Recruiter'),
+        C: application('C', 'Produktdesigner', 2, Interest.MEDIUM, 'LinkedIn'),
+      },
+      people: {
+        5: { name: 'Loner', role: '', bg: 'c', companyId: null },
+        7: { name: 'Ines', role: '', bg: 'c', companyId: 1 },
+        8: { name: 'Jonas', role: '', bg: 'c', companyId: 2 },
+        9: { name: 'Kai', role: '', bg: 'c', companyId: 2 },
+      },
+      linksByApp: {
+        C: [{ application_id: 'C', person_id: 9, kind: LinkKind.CONTACT, position: 0 }],
+      },
+      roundsState: { A: [{ people: ['8'] }] },
+    } as unknown as AppState;
+  }
+
+  it('lists everyone, the card’s company and its own people first', () => {
+    expect(peopleKeysForCard(peopleState(), 'A')).toEqual([
+      { key: '8', known: true },
+      { key: '7', known: true },
+      { key: '5', known: false },
+      { key: '9', known: false },
+    ]);
+    expect(peopleKeysForCard(peopleState(), 'B')).toEqual([
+      { key: '7', known: true },
+      { key: '5', known: false },
+      { key: '8', known: false },
+      { key: '9', known: false },
+    ]);
+    expect(
+      peopleKeysForCard(peopleState(), 'C')
+        .filter((p) => p.known)
+        .map((p) => p.key),
+    ).toEqual(['9', '8']);
+  });
+
+  it('knows nobody on a card at a company without people, but still offers everyone', () => {
+    const st = peopleState();
+    st.applications.D = application('D', 'Neu', 3, Interest.NONE, 'LinkedIn');
+    const keys = peopleKeysForCard(st, 'D');
+    expect(keys.some((p) => p.known)).toBe(false);
+    expect(keys.map((p) => p.key)).toEqual(['5', '7', '8', '9']);
+  });
+
+  it('puts the card’s own pool first and drops deleted people', () => {
+    const st = peopleState();
+    st.linksByApp.A = [
+      { application_id: 'A', person_id: 9, kind: LinkKind.POOL, position: 0 },
+      { application_id: 'A', person_id: 42, kind: LinkKind.CONTACT, position: 1 },
+    ];
+    expect(peopleKeysForCard(st, 'A').map((p) => p.key)).toEqual(['9', '8', '7', '5']);
   });
 });

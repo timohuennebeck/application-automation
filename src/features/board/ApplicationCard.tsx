@@ -1,16 +1,25 @@
-import { AGENT_RUNS } from '../../data/sample-data';
 import { INTEREST } from '../../data/config';
 import type { ColumnDef } from '../../data/config';
 import { Urgency } from '../../data/config';
-import { Interest } from '../../shared/enums';
+import { AgentRunStatus, Assignee, Interest } from '../../shared/enums';
 import { clock } from '../../lib/date';
 import { initials } from '../../lib/text';
-import { cardSubtitle, cardView, interviewChip } from '../../state/selectors';
+import { agentLocked, agentRunFor, cardSubtitle, cardView, interviewChip } from '../../state/selectors';
 import { useApp } from '../../state/store-context';
-import { Avatar, BriefcaseGlyph, EuroGlyph, GlobeGlyph, PriorityBars, Spinner } from '../../ui/icons';
+import {
+  Avatar,
+  BriefcaseGlyph,
+  EuroGlyph,
+  GlobeGlyph,
+  PinGlyph,
+  KeplerAvatar,
+  PriorityBars,
+  RegenGlyph,
+  Spinner,
+} from '../../ui/icons';
 import { dragOverCol, endDrag, makeGhost } from './dnd';
 
-/* The stacked company / salary / platform lines, each labelled by its icon. */
+/* The stacked company / location / salary / platform lines, each labelled by its icon. */
 const FACT_ROW = {
   display: 'flex',
   alignItems: 'center',
@@ -30,15 +39,23 @@ const ELLIPSIS = {
 /* A single application on the board. */
 export function ApplicationCard({ id, col, ci }: { id: string; col: ColumnDef; ci: number }) {
   const store = useApp();
-  const { st, set, openCard, contactsFor } = store;
+  const { st, set, openCard, contactsFor, retryAgentStep } = store;
 
   const card = cardView(st, id);
   if (!card) return null;
   const role = card.role;
-  const company = card.companyLine;
+  const company = card.company;
 
   const interest = card.interest || Interest.NONE;
-  const run = AGENT_RUNS[id];
+  /* The running border and label only while Kepler owns the card; a failed
+     run keeps a red status strip so the board shows where Kepler needs help. */
+  const runView = agentRunFor(st, id);
+  const assigned = st.applications[id]?.assignee === Assignee.KEPLER;
+  const run = agentLocked(st, id) ? runView?.run : undefined;
+  /* A failed run keeps its red strip (retry lives there) even after Kepler is
+     taken off the card; only the "Kepler" name row follows the assignment. */
+  const failedRun = !run && runView?.run.status === AgentRunStatus.FAILED ? runView.run : undefined;
+  const keplerRow = !!run || (!!failedRun && assigned);
   const interview = interviewChip(st, id);
   const subtitle = cardSubtitle(st, id);
   const contacts = contactsFor(id).filter((c) => c.name && c.name !== '—');
@@ -80,10 +97,12 @@ export function ApplicationCard({ id, col, ci }: { id: string; col: ColumnDef; c
         set({ cardMenu: { id, x: e.clientX, y: e.clientY } });
       }}
       style={{
-        opacity: st.dragId === id ? 0.35 : run ? 0.78 : 1,
+        opacity: st.dragId === id ? 0.35 : run || failedRun ? 0.78 : 1,
         background: run
           ? 'linear-gradient(var(--c-fff),var(--c-fff)) padding-box, conic-gradient(from var(--oa),var(--run) 0deg,color-mix(in srgb, var(--run) 22%, transparent) 34deg,transparent 50deg,transparent 322deg,color-mix(in srgb, var(--run) 60%, transparent) 360deg) border-box'
-          : 'var(--c-fff)',
+          : failedRun
+            ? 'color-mix(in srgb, var(--c-c2564c) 4%, var(--c-fff))'
+            : 'var(--c-fff)',
         backgroundSize: run ? 'auto' : '300% 100%',
         animation: run ? 'om-ang 2.6s linear infinite' : 'none',
         border: '1px solid ' + (run ? 'transparent' : 'var(--c-eae7e0)'),
@@ -117,6 +136,12 @@ export function ApplicationCard({ id, col, ci }: { id: string; col: ColumnDef; c
         <BriefcaseGlyph style={{ color: 'var(--c-a5a29a)' }} />
         <span style={ELLIPSIS}>{company}</span>
       </div>
+      {card.city && (
+        <div style={FACT_ROW}>
+          <PinGlyph style={{ color: 'var(--c-a5a29a)' }} />
+          <span style={ELLIPSIS}>{card.city}</span>
+        </div>
+      )}
       {card.salary && (
         <div style={FACT_ROW}>
           <EuroGlyph style={{ color: 'var(--c-a5a29a)' }} />
@@ -130,90 +155,120 @@ export function ApplicationCard({ id, col, ci }: { id: string; col: ColumnDef; c
         </div>
       )}
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0, marginTop: 1 }}>
-        {/* Contacts are editable straight from the board; the click must not
-            also open the card. */}
-        <div
-          className="card-contacts"
-          title="Kontaktpersonen ändern"
-          onClick={(e) => {
-            e.stopPropagation();
-            set((s) => ({
-              cardContact: s.cardContact?.id === id ? null : { id, x: e.clientX, y: e.clientY + 12 },
-              contactDraft: '',
-              cardMenu: null,
-            }));
-          }}
-          style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0, borderRadius: 6 }}
-        >
-          {contacts.length > 0 ? (
-            <>
-              <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-                {contacts.slice(0, 3).map((c, i) => (
-                  <Avatar
-                    key={i}
-                    bg={c.bg || 'var(--c-7a5aa8)'}
-                    size={16}
-                    style={{ marginLeft: i ? -5 : 0, zIndex: 10 - i, boxShadow: '0 0 0 1.5px var(--c-fff)' }}
-                  >
-                    {initials(c.name) || '?'}
-                  </Avatar>
-                ))}
-              </div>
-              <div
-                style={{
-                  fontSize: 10.5,
-                  color: 'var(--c-5f5c56)',
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  minWidth: 0,
-                }}
-              >
-                {contacts[0].name}
-              </div>
-              {contacts.length > 1 && (
-                <div style={{ fontSize: 10.5, color: 'var(--c-9a978f)', flexShrink: 0 }}>
-                  +{contacts.length - 1}
-                </div>
-              )}
-            </>
-          ) : (
-            <>
-              <Avatar bg="var(--c-dedbd4)" size={16} style={{ color: 'var(--c-8b8880)' }}>
-                –
-              </Avatar>
-              <div
-                style={{
-                  fontSize: 10.5,
-                  color: 'var(--c-9a978f)',
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  minWidth: 0,
-                }}
-              >
-                Kein Kontakt ausgewählt
-              </div>
-            </>
-          )}
+      {/* While a Kepler strip owns the card's foot — running or failed — the
+          contact and due-date row steps aside and Kepler takes the contact's
+          place: the card says who is on it, the strip says what it does. */}
+      {keplerRow && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0, marginTop: 1 }}>
+          <KeplerAvatar size={16} fontSize={8} />
+          <div style={{ fontSize: 10.5, color: 'var(--c-5f5c56)', whiteSpace: 'nowrap' }}>Kepler</div>
         </div>
-        {!run && !interview && (
+      )}
+      {!keplerRow && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0, marginTop: 1 }}>
+          {/* Contacts are editable straight from the board; the click must not
+            also open the card. */}
+          <div
+            className="card-contacts"
+            title="Kontaktpersonen ändern"
+            onClick={(e) => {
+              e.stopPropagation();
+              set((s) => ({
+                cardContact: s.cardContact?.id === id ? null : { id, x: e.clientX, y: e.clientY + 12 },
+                contactDraft: '',
+                cardMenu: null,
+              }));
+            }}
+            style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0, borderRadius: 6 }}
+          >
+            {contacts.length > 0 ? (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                  {contacts.slice(0, 3).map((c, i) => (
+                    <Avatar
+                      key={i}
+                      bg={c.bg || 'var(--c-7a5aa8)'}
+                      size={16}
+                      style={{
+                        marginLeft: i ? -5 : 0,
+                        zIndex: 10 - i,
+                        boxShadow: '0 0 0 1.5px var(--c-fff)',
+                      }}
+                    >
+                      {initials(c.name) || '?'}
+                    </Avatar>
+                  ))}
+                </div>
+                <div
+                  style={{
+                    fontSize: 10.5,
+                    color: 'var(--c-5f5c56)',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    minWidth: 0,
+                  }}
+                >
+                  {contacts[0].name}
+                </div>
+                {contacts.length > 1 && (
+                  <div style={{ fontSize: 10.5, color: 'var(--c-9a978f)', flexShrink: 0 }}>
+                    +{contacts.length - 1}
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <Avatar bg="var(--c-dedbd4)" size={16} style={{ color: 'var(--c-8b8880)' }}>
+                  –
+                </Avatar>
+                <div
+                  style={{
+                    fontSize: 10.5,
+                    color: 'var(--c-9a978f)',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    minWidth: 0,
+                  }}
+                >
+                  Kein Kontakt ausgewählt
+                </div>
+              </>
+            )}
+          </div>
           <div
             style={{
               marginLeft: 'auto',
               paddingLeft: 12,
-              fontSize: 10.5,
-              color: dueColor,
-              fontWeight: subtitle.tone !== Urgency.MUTED ? 600 : 400,
-              whiteSpace: 'nowrap',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
               flexShrink: 0,
             }}
           >
-            {subtitle.text}
+            {/* Kepler stays on the card after its run is done — the avatar
+                says who owns it, the run strip says what it is doing. */}
+            {assigned && (
+              <div title="Bearbeiter: Kepler" style={{ display: 'flex' }}>
+                <KeplerAvatar size={16} fontSize={8} />
+              </div>
+            )}
+            {!interview && (
+              <div
+                style={{
+                  fontSize: 10.5,
+                  color: dueColor,
+                  fontWeight: subtitle.tone !== Urgency.MUTED ? 600 : 400,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {subtitle.text}
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {interview && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 1, minWidth: 0 }}>
@@ -322,7 +377,62 @@ export function ApplicationCard({ id, col, ci }: { id: string; col: ColumnDef; c
               textAlign: 'right',
             }}
           >
-            {clock(run.started + st.tick)}
+            {clock(Math.max(0, Math.floor((Date.now() - Date.parse(run.started_at)) / 1000)))}
+          </div>
+        </div>
+      )}
+
+      {failedRun && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            minWidth: 0,
+            background: 'color-mix(in srgb, var(--c-c2564c) 8%, var(--c-fff))',
+            borderRadius: 6,
+            padding: '5px 7px',
+          }}
+        >
+          <svg width="12" height="12" viewBox="0 0 14 14" style={{ flexShrink: 0 }}>
+            <circle cx="7" cy="7" r="5.5" fill="none" stroke="var(--c-c2564c)" strokeWidth="1.6" />
+            <path
+              d="M7 4.2 L7 7.8 M7 9.9 L7 10.1"
+              fill="none"
+              stroke="var(--c-c2564c)"
+              strokeWidth="1.7"
+              strokeLinecap="round"
+            />
+          </svg>
+          <div
+            style={{
+              fontSize: 9.5,
+              fontWeight: 600,
+              color: 'var(--c-c2564c)',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+          >
+            Kepler wurde unterbrochen
+          </div>
+          <div
+            className="icon-btn icon-btn-fail icon-btn-fail-tinted"
+            title="Schritt erneut ausführen"
+            style={{
+              flexShrink: 0,
+              width: 20,
+              height: 20,
+              marginLeft: 'auto',
+              marginTop: -3,
+              marginBottom: -3,
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              retryAgentStep(id);
+            }}
+          >
+            <RegenGlyph />
           </div>
         </div>
       )}

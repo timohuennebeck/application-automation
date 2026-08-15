@@ -26,7 +26,9 @@ import {
   replaceTemplateVersion,
   selectTemplateVersion,
   selectedTemplatePath,
+  templatePdfPath,
   templateVersionPath,
+  listTemplateVersions,
 } from './files.ts';
 import { renderPdf } from './pdf.ts';
 import type { DocumentUpload } from '../src/shared/domain.ts';
@@ -236,18 +238,22 @@ ipcMain.handle('templates:open', (_e, kind: TemplateKind, label?: string) => {
    whenever the HTML is newer than the last render — the profile has nothing
    else that would trigger the export. Returns '' on success, else the reason. */
 ipcMain.handle('templates:openPdf', async (_e, kind: TemplateKind, label: string) => {
-  const htmlPath = templateVersionPath(app.getPath('userData'), kind, label);
-  if (!htmlPath) return 'Noch keine Datei hochgeladen.';
-  const pdfPath = htmlPath.replace(/\.[^.]+$/, '.pdf');
+  const root = app.getPath('userData');
+  const htmlPath = templateVersionPath(root, kind, label);
+  if (!htmlPath) throw new Error('Noch keine Datei hochgeladen.');
+  const pdfPath = templatePdfPath(htmlPath);
   try {
     if (!existsSync(pdfPath) || statSync(pdfPath).mtimeMs < statSync(htmlPath).mtimeMs) {
       await renderPdf(htmlPath, pdfPath);
     }
   } catch (err) {
     rmSync(pdfPath, { force: true });
-    return 'Das PDF ließ sich nicht erzeugen: ' + String(err);
+    throw new Error('Das PDF ließ sich nicht erzeugen: ' + String(err));
   }
-  return shell.openPath(pdfPath);
+  const openError = await shell.openPath(pdfPath);
+  if (openError) throw new Error(openError);
+  /* The Fassung as it now stands — the menu shows the PDF's size from here on. */
+  return listTemplateVersions(root, kind).find((v) => v.label === label)!;
 });
 
 /* Profile documents: any further files kept with the profile. The picker is

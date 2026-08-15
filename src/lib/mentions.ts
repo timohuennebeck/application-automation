@@ -22,6 +22,16 @@ export const KEPLER_ENTRY: Mentionable = {
   initials: 'K',
 };
 
+/* The app's user — who Kepler addresses in its reports ("@Timo …"), and the
+   same name the agent panel's mention chip carries. */
+export const USER_ENTRY: Mentionable = {
+  key: 'Timo',
+  name: 'Timo',
+  role: 'Du',
+  bg: 'var(--c-3f6ea8)',
+  initials: 'T',
+};
+
 export interface TextPart {
   t: string;
   mention: boolean;

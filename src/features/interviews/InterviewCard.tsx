@@ -178,6 +178,7 @@ export function InterviewCard({
         email: p.email || '',
         phone: p.phone || '',
         linkedin: p.linkedin || '',
+        company: p.company,
       },
       personField: null,
       personFieldDraft: '',

@@ -5,6 +5,7 @@
    Plattform picker included. The caller owns the open/closed state (usually
    AppState.dropdown, which the global outside-click handler clears). */
 import { useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { DashedPlus } from './AddRow';
 import { SearchGlyph } from './icons';
 import { MenuItem } from './MenuItem';
 import { Popover } from './Popover';
@@ -32,6 +33,10 @@ export interface SelectPopoverProps {
   zIndex?: number;
   /* Row content for one option; plain text when omitted. */
   renderRow?(value: string): ReactNode;
+  /* Typing something the list lacks offers a „…“ neu anlegen row (like a
+     Linear label): picking it hands the typed text to onPick. Needs
+     `searchable`. */
+  creatable?: boolean;
 }
 
 export function SelectPopover({
@@ -44,6 +49,7 @@ export function SelectPopover({
   top,
   zIndex,
   renderRow,
+  creatable,
 }: SelectPopoverProps) {
   const listRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLDivElement>(null);
@@ -55,6 +61,14 @@ export function SelectPopover({
   const [active, setActive] = useState(() => options.indexOf(value));
   const q = query.trim().toLowerCase();
   const matches = q ? options.filter((v) => v.toLowerCase().includes(q)) : options;
+  /* The create row shows once the typed text is not already an option. */
+  const draft = query.trim();
+  const createRow = !!creatable && !!draft && !options.some((v) => v.toLowerCase() === q);
+  const rows = matches.length + (createRow ? 1 : 0);
+  const pickRow = (i: number) => {
+    if (i < matches.length) onPick(matches[i]);
+    else if (createRow) onPick(draft);
+  };
 
   /* Measure what is actually left below the chip; shrink the list into that
      space, or open it upwards when the room above is the larger side. Runs
@@ -74,11 +88,14 @@ export function SelectPopover({
     setDrop({ up, maxHeight: Math.max(LIST_MIN_HEIGHT, Math.min(wanted, up ? above : below)) });
   }, []);
 
+  /* Bring the current value into view once the list has its final height —
+     and only then. Re-running on later renders (a parent re-rendering while
+     the user scrolls) would yank the list back to the selection. */
   useLayoutEffect(() => {
-    if (q) return;
     const index = options.indexOf(value);
     if (index >= 0) listRef.current?.children[index]?.scrollIntoView({ block: 'center' });
-  }, [drop, options, value, q]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [drop]);
 
   /* Without a search input the list itself takes focus, so the arrow keys,
      Enter and Escape land somewhere. */
@@ -93,11 +110,10 @@ export function SelectPopover({
       e.stopPropagation();
       onClose();
     }
-    if (e.key === 'Enter' && matches.length) onPick(matches[active] ?? matches[0]);
-    if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && matches.length) {
+    if (e.key === 'Enter' && rows) pickRow(active >= 0 && active < rows ? active : 0);
+    if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && rows) {
       e.preventDefault();
-      const next =
-        e.key === 'ArrowDown' ? (active + 1) % matches.length : active <= 0 ? matches.length - 1 : active - 1;
+      const next = e.key === 'ArrowDown' ? (active + 1) % rows : active <= 0 ? rows - 1 : active - 1;
       setActive(next);
       listRef.current?.children[next]?.scrollIntoView({ block: 'nearest' });
     }
@@ -158,7 +174,17 @@ export function SelectPopover({
             {renderRow ? renderRow(v) : <span style={{ flex: '1 1 auto', whiteSpace: 'nowrap' }}>{v}</span>}
           </MenuItem>
         ))}
-        {!matches.length && (
+        {createRow && (
+          <MenuItem
+            active={active === matches.length}
+            onClick={() => onPick(draft)}
+            style={{ color: 'var(--c-8b8880)' }}
+          >
+            <DashedPlus size={20} />
+            <span>„{draft}“ neu anlegen</span>
+          </MenuItem>
+        )}
+        {!rows && (
           <div style={{ fontSize: 12, color: 'var(--c-a5a29a)', padding: '4px 8px 5px' }}>Keine Treffer</div>
         )}
       </div>

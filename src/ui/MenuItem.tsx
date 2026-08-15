@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react';
+import { formatBytes } from '../lib/bytes';
 import { Check } from './icons';
 
 export interface MenuItemProps {
@@ -10,8 +11,13 @@ export interface MenuItemProps {
   active?: boolean;
   /* Suppresses the checkmark while keeping the selected tint. */
   hideCheck?: boolean;
+  /* Not available right now: dimmed, no hover tint, not-allowed cursor; the
+     click still fires so the caller can explain (title) or ignore it. */
+  disabled?: boolean;
   danger?: boolean;
   dim?: number;
+  /* Native tooltip for rows whose action needs a caveat. */
+  title?: string;
   style?: CSSProperties;
   children: ReactNode;
 }
@@ -22,8 +28,10 @@ export function MenuItem({
   selected,
   active,
   hideCheck,
+  disabled,
   danger,
   dim,
+  title,
   style,
   children,
 }: MenuItemProps) {
@@ -35,10 +43,12 @@ export function MenuItem({
         'menu-item' +
         (selected ? ' menu-item-selected' : '') +
         (active ? ' menu-item-active' : '') +
-        (danger ? ' menu-item-danger' : '')
+        (danger ? ' menu-item-danger' : '') +
+        (disabled ? ' menu-item-disabled' : '')
       }
       onClick={onClick}
       onMouseDown={onMouseDown}
+      title={title}
       style={{
         display: 'flex',
         alignItems: 'center',
@@ -46,7 +56,7 @@ export function MenuItem({
         fontSize: 12.5,
         color: danger ? 'var(--c-c2564c)' : 'var(--c-28261f)',
         padding: '5px 8px',
-        opacity: dim,
+        opacity: dim ?? (disabled ? 0.45 : undefined),
         ...style,
       }}
     >
@@ -76,4 +86,12 @@ export function MenuLabel({ children, style }: { children: ReactNode; style?: CS
       {children}
     </div>
   );
+}
+
+/* The file size beside a download entry, left out entirely when the file is
+   not there to be measured. */
+export function MenuSize({ bytes }: { bytes?: number | null }) {
+  const text = formatBytes(bytes ?? null);
+  if (!text) return null;
+  return <span style={{ fontSize: 11.5, color: 'var(--c-a5a29a)' }}>{text}</span>;
 }

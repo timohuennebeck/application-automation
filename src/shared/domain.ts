@@ -53,6 +53,8 @@ export interface TemplateInfo {
 export interface TemplateVersion extends TemplateInfo {
   label: string;
   selected: boolean;
+  /* Size of the PDF rendered beside the HTML, null until it was rendered once. */
+  pdfSize: number | null;
 }
 
 export type ProfileDocumentInfo = TemplateInfo;

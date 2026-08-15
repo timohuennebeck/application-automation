@@ -2,6 +2,8 @@ import type { CSSProperties, ReactNode } from 'react';
 
 export interface FieldRowProps {
   label: ReactNode;
+  /* A small glyph in front of the label (the properties sidebar). */
+  glyph?: ReactNode;
   /* Label column width — 76px inside cards, 104px in the properties sidebar. */
   labelWidth?: number;
   align?: CSSProperties['alignItems'];
@@ -16,6 +18,7 @@ export interface FieldRowProps {
    follow-up email card and the properties sidebar. */
 export function FieldRow({
   label,
+  glyph,
   labelWidth = 76,
   align = 'center',
   minHeight,
@@ -35,9 +38,11 @@ export function FieldRow({
           color: 'var(--c-a5a29a)',
           lineHeight: 1.35,
           overflowWrap: 'break-word',
+          ...(glyph ? { display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 } : null),
         }}
       >
-        {label}
+        {glyph}
+        {glyph ? <span style={{ minWidth: 0 }}>{label}</span> : label}
       </div>
       {inset ? <div style={{ marginLeft: -6, minWidth: 0 }}>{children}</div> : children}
     </div>

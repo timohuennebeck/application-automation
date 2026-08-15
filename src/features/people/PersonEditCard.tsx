@@ -1,22 +1,47 @@
+import { useRef } from 'react';
 import { isoToDate, todayISO } from '../../lib/date';
 import { initials } from '../../lib/text';
+import { isHttpUrl } from '../../lib/url';
 import { useApp } from '../../state/store-context';
-import { Avatar } from '../../ui/icons';
+import { FieldChip } from '../../ui/FieldChip';
+import { FIELD_GLYPH_SLOT, FieldGlyph } from '../../ui/field-glyphs';
+import { PopoverAnchor } from '../../ui/Popover';
+import { Avatar, LinkGlyph } from '../../ui/icons';
+import { CompanyPopover } from '../companies/CompanyPopover';
+import { RolePopover } from '../detail/properties/RolePopover';
 
 interface FieldDef {
   label: string;
-  prop: 'name' | 'role' | 'email' | 'phone' | 'linkedin';
-  placeholder: string;
-  link?: boolean;
+  prop: 'name' | 'role' | 'company' | 'email' | 'phone' | 'linkedin';
+  /* Only takes a full web address (https://…), like the sidebar's URL rows,
+     and renders filled as the blue link pill that opens it. */
+  url?: boolean;
+  /* Picked from the company list (or typed to create one) instead of typed. */
+  select?: boolean;
 }
 
 const FIELDS: FieldDef[] = [
-  { label: 'Name', prop: 'name', placeholder: 'Hinzufügen' },
-  { label: 'Position', prop: 'role', placeholder: 'Hinzufügen' },
-  { label: 'Email', prop: 'email', placeholder: 'Hinzufügen', link: true },
-  { label: 'Telefon', prop: 'phone', placeholder: 'Hinzufügen' },
-  { label: 'LinkedIn', prop: 'linkedin', placeholder: 'Hinzufügen', link: true },
+  { label: 'Name', prop: 'name' },
+  { label: 'Berufsbezeichnung', prop: 'role', select: true },
+  { label: 'Firma', prop: 'company', select: true },
+  { label: 'Email', prop: 'email' },
+  { label: 'Telefon', prop: 'phone' },
+  { label: 'LinkedIn', prop: 'linkedin', url: true },
 ];
+
+/* The select rows' keys in AppState.dropdown. */
+const DD_KEY: Partial<Record<FieldDef['prop'], string>> = {
+  company: 'person:company',
+  role: 'person:role',
+};
+const DD_KEYS = new Set(Object.values(DD_KEY));
+
+const ELLIPSIS = {
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+  minWidth: 0,
+} as const;
 
 /* Inline person editor shown inside a popover, from a participant chip or a
    contact picker. Field edits land in `personFieldDraft` and are folded into
@@ -40,9 +65,25 @@ export function PersonEditCard({
   const p = person(personKey);
   const liveName = ((st.personField === 'name' ? st.personFieldDraft : draft.name) || '').trim();
   const stored = st.people[personKey];
+  /* The anchor of whichever select is open, for the click-away check. */
+  const selectRef = useRef<HTMLDivElement>(null);
+  const setDraft = (prop: FieldDef['prop'], value: string) =>
+    set((s) => ({ personDraft: { ...s.personDraft, [prop]: value } }));
+  const startEdit = (prop: FieldDef['prop'], value: string) =>
+    set({ personField: prop, personFieldDraft: value, dropdown: null });
 
   return (
-    <div style={{ padding: '8px 9px 9px', display: 'flex', flexDirection: 'column', gap: 11 }}>
+    <div
+      style={{ padding: '8px 9px 9px', display: 'flex', flexDirection: 'column', gap: 11 }}
+      /* The editor sits inside a popover, which the global outside-click
+         handler leaves alone — so a click anywhere in here that is not on the
+         company dropdown has to close that dropdown itself. */
+      onMouseDownCapture={(e) => {
+        if (!st.dropdown || !DD_KEYS.has(st.dropdown)) return;
+        if (selectRef.current?.contains(e.target as Node)) return;
+        set({ dropdown: null });
+      }}
+    >
       <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
         <Avatar bg={p.bg} size={26} fontSize={10}>
           {initials(liveName || '?') || '?'}
@@ -74,58 +115,141 @@ export function PersonEditCard({
         {FIELDS.map((f) => {
           const v = draft[f.prop] || '';
           const editing = st.personField === f.prop;
-          return (
-            <div key={f.prop} style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-              <div style={{ width: 64, flexShrink: 0, fontSize: 11.5, color: 'var(--c-9a978f)' }}>
-                {f.label}
-              </div>
-              {editing ? (
-                <input
-                  value={st.personFieldDraft}
-                  autoFocus
-                  onChange={(e) => set({ personField: f.prop, personFieldDraft: e.target.value })}
-                  onBlur={() =>
-                    set((s) =>
-                      s.personField !== f.prop
-                        ? {}
-                        : {
-                            personDraft: { ...s.personDraft, [f.prop]: (s.personFieldDraft || '').trim() },
-                            personField: null,
-                            personFieldDraft: '',
-                          },
-                    )
+          const clear = v ? () => setDraft(f.prop, '') : undefined;
+          const clearTitle = f.label + ' entfernen';
+          let value;
+          if (f.select) {
+            const key = DD_KEY[f.prop]!;
+            const open = st.dropdown === key;
+            const pick = (name: string) => {
+              setDraft(f.prop, name);
+              set({ dropdown: null });
+            };
+            const close = () => set({ dropdown: null });
+            value = (
+              <PopoverAnchor style={{ marginLeft: -6, minWidth: 0 }} ref={open ? selectRef : undefined}>
+                <FieldChip
+                  open={open}
+                  empty={!v}
+                  chevron
+                  gap={5}
+                  onClick={() =>
+                    set((s) => ({ dropdown: s.dropdown === key ? null : key, personField: null }))
                   }
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-                    if (e.key === 'Escape') {
-                      e.stopPropagation();
-                      set({ personField: null, personFieldDraft: '' });
-                    }
-                  }}
-                  style={{
-                    fontSize: 12,
-                    color: 'var(--c-28261f)',
-                    lineHeight: 1.45,
-                    border: 'none',
-                    borderRadius: 5,
-                    padding: '2px 6px',
-                    marginLeft: -6,
-                    background: 'var(--c-fff)',
-                    boxShadow: 'inset 0 0 0 1px var(--c-cfccc3)',
-                    outline: 'none',
-                    flex: '1 1 0',
-                    minWidth: 0,
-                  }}
-                />
-              ) : (
-                <div
-                  className="pfield"
-                  onClick={() => set({ personField: f.prop, personFieldDraft: v })}
-                  style={{ color: v ? (f.link ? 'var(--c-3f6ea8)' : 'var(--c-28261f)') : 'var(--c-c3c0b8)' }}
+                  onClear={clear}
+                  clearTitle={clearTitle}
                 >
-                  {v || f.placeholder}
-                </div>
-              )}
+                  <span style={ELLIPSIS}>{v || f.label + ' auswählen'}</span>
+                </FieldChip>
+                {open &&
+                  (f.prop === 'company' ? (
+                    <CompanyPopover value={v} onPick={pick} onClose={close} />
+                  ) : (
+                    <RolePopover value={v} onPick={pick} onClose={close} />
+                  ))}
+              </PopoverAnchor>
+            );
+          } else if (editing) {
+            /* A URL field only takes a full web address. While the draft is
+               anything else the input turns red and Enter does nothing;
+               leaving the field drops the draft instead of storing text that
+               is not a link — same rule as the sidebar's link rows. */
+            const typed = (st.personFieldDraft || '').trim();
+            const invalid = !!f.url && !!typed && !isHttpUrl(typed);
+            value = (
+              <input
+                value={st.personFieldDraft}
+                autoFocus
+                placeholder={f.url ? 'https://…' : undefined}
+                title={invalid ? 'Nur vollständige Links (https://…)' : undefined}
+                onChange={(e) => set({ personField: f.prop, personFieldDraft: e.target.value })}
+                onBlur={() =>
+                  set((s) => {
+                    if (s.personField !== f.prop) return {};
+                    const next = (s.personFieldDraft || '').trim();
+                    const keep = !f.url || !next || isHttpUrl(next);
+                    return {
+                      personDraft: keep ? { ...s.personDraft, [f.prop]: next } : s.personDraft,
+                      personField: null,
+                      personFieldDraft: '',
+                    };
+                  })
+                }
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !invalid) e.currentTarget.blur();
+                  if (e.key === 'Escape') {
+                    e.stopPropagation();
+                    set({ personField: null, personFieldDraft: '' });
+                  }
+                }}
+                /* Sized exactly like the chip it replaces (font, line height,
+                   1px border in place of the chip's padding), so focusing a
+                   field does not move the rows around it. */
+                style={{
+                  fontSize: 12.5,
+                  color: 'var(--c-28261f)',
+                  lineHeight: 1.45,
+                  border: '1px solid ' + (invalid ? 'var(--c-c2564c)' : 'var(--c-cfccc3)'),
+                  borderRadius: 5,
+                  padding: '1px 5px',
+                  marginLeft: -6,
+                  background: 'var(--c-fff)',
+                  outline: 'none',
+                  flex: '1 1 0',
+                  minWidth: 0,
+                }}
+              />
+            );
+          } else if (f.url && v) {
+            /* A filled link is a link, like the sidebar rows: the pill opens
+               the address, the ✕ removes it. Editing = remove and add again. */
+            value = (
+              <FieldChip
+                link
+                title={v}
+                style={{ marginLeft: -6 }}
+                onClear={clear}
+                clearTitle={clearTitle}
+                onClick={() => window.desktop?.openExternal(v)}
+              >
+                <LinkGlyph />
+                <span style={ELLIPSIS}>{v}</span>
+              </FieldChip>
+            );
+          } else {
+            value = (
+              <FieldChip
+                empty={!v}
+                title={v || undefined}
+                style={{ marginLeft: -6, cursor: 'text' }}
+                onClear={clear}
+                clearTitle={clearTitle}
+                onClick={() => startEdit(f.prop, v)}
+              >
+                <span style={ELLIPSIS}>{v || 'Hinzufügen'}</span>
+              </FieldChip>
+            );
+          }
+          return (
+            <div key={f.prop} style={{ display: 'flex', gap: 10, alignItems: 'center', minWidth: 0 }}>
+              <div
+                style={{
+                  width: 64 + FIELD_GLYPH_SLOT,
+                  flexShrink: 0,
+                  fontSize: 11.5,
+                  color: 'var(--c-9a978f)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 7,
+                }}
+              >
+                <FieldGlyph label={f.label} />
+                {/* Truncates rather than pushing the value column around. */}
+                <span style={ELLIPSIS} title={f.label}>
+                  {f.label}
+                </span>
+              </div>
+              {value}
             </div>
           );
         })}

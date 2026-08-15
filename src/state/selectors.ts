@@ -2,10 +2,33 @@
    chip and salary line were pre-rendered strings in the sample data; now they
    are computed from rounds, follow-ups and facts at render time. */
 import { INTEREST, roundStage, SortDir, SortKey, Urgency } from '../data/config';
-import { Interest, RoundState } from '../shared/enums';
+import { AgentRunStatus, Assignee, Interest, LinkKind, RoundState } from '../shared/enums';
+import type { AgentRunView } from './db-view';
 import { MON_DE3, DOW_DE, dateToISO, dayDiff, todayISO } from '../lib/date';
 import { parseSalary } from '../lib/salary';
 import type { AppState } from './store-context';
+
+/* The card's latest Kepler run, whatever state it ended in. */
+export function agentRunFor(st: AppState, id: string): AgentRunView | undefined {
+  return st.agentRuns[id];
+}
+
+/* While Kepler owns the record its fields are read-only. */
+export function agentLocked(st: AppState, id: string): boolean {
+  const status = st.agentRuns[id]?.run.status;
+  return status === AgentRunStatus.QUEUED || status === AgentRunStatus.RUNNING;
+}
+
+/* Why Kepler cannot be taken off the card right now, or null when it can:
+   a run is underway, or stopped at a failed step that a retry picks back up. */
+export function keplerHoldReason(st: AppState, id: string): string | null {
+  if (st.applications[id]?.assignee !== Assignee.KEPLER) return null;
+  if (agentLocked(st, id)) return 'Kepler arbeitet gerade – erst stoppen';
+  if (st.agentRuns[id]?.run.status === AgentRunStatus.FAILED) {
+    return 'Kepler ist an einem Schritt gescheitert – erst wiederholen oder den Lauf beenden';
+  }
+  return null;
+}
 
 export function factOf(st: AppState, id: string, label: string): string {
   const v = (st.factsByApp[id] || []).find((f) => f.label === label)?.value;
@@ -187,4 +210,23 @@ export function cardSubtitle(st: AppState, id: string): CardSubtitle {
               : 'vor ' + Math.round(days / 30) + ' Monaten',
     tone: Urgency.MUTED,
   };
+}
+
+/* Everyone the pickers on a card offer, in picker order: first the people
+   "known" here — linked to the card (pool, contacts, recipients), sitting on
+   one of its interview rounds, or filed under the card's company — then the
+   rest of the directory. Keys whose person has since been deleted are
+   dropped. */
+export function peopleKeysForCard(st: AppState, id: string): { key: string; known: boolean }[] {
+  const companyId = st.applications[id]?.company_id;
+  const links = st.linksByApp[id] || [];
+  const pool = links.filter((l) => l.kind === LinkKind.POOL);
+  const rest = links.filter((l) => l.kind !== LinkKind.POOL);
+  const onRounds = (st.roundsState[id] || []).flatMap((r) => r.people);
+  const linked = [...pool, ...rest].map((l) => String(l.person_id)).concat(onRounds);
+  const atCompany = Object.keys(st.people).filter((k) => st.people[k].companyId === companyId);
+  const known = [...new Set([...linked, ...atCompany])].filter((k) => st.people[k]);
+  const knownSet = new Set(known);
+  const others = Object.keys(st.people).filter((k) => !knownSet.has(k));
+  return [...known.map((key) => ({ key, known: true })), ...others.map((key) => ({ key, known: false }))];
 }

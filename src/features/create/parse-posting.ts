@@ -2,14 +2,14 @@
    page, the host names the company and the last path segment names the role;
    anything unparseable falls back to the generic placeholders. */
 import { cap } from '../../lib/text';
+import { UNKNOWN_COMPANY, UNKNOWN_ROLE } from '../../shared/domain';
 
 export interface Posting {
   role: string;
   company: string;
 }
 
-export const UNKNOWN_ROLE = 'Neue Bewerbung';
-export const UNKNOWN_COMPANY = 'Unbekanntes Unternehmen';
+export { UNKNOWN_COMPANY, UNKNOWN_ROLE };
 
 export function parsePosting(url: string): Posting {
   const posting: Posting = { role: UNKNOWN_ROLE, company: UNKNOWN_COMPANY };

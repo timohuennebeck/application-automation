@@ -110,3 +110,14 @@ export function clock(sec: number): string {
   const m = Math.floor(sec / 60);
   return m + ':' + String(sec % 60).padStart(2, '0');
 }
+
+/* 'vor 9 Min' / 'vor 3 Std' — minute-level relative time for the agent
+   panel's step metas, counted from an ISO timestamp. */
+export function ago(iso: string, now = new Date()): string {
+  const mins = Math.floor((now.getTime() - new Date(iso).getTime()) / 60_000);
+  if (mins < 1) return 'gerade eben';
+  if (mins < 60) return 'vor ' + mins + ' Min';
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return 'vor ' + hours + ' Std';
+  return 'vor ' + Math.floor(hours / 24) + ' Tagen';
+}

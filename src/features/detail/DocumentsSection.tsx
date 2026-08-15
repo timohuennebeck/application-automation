@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react';
-import { formatBytes } from '../../lib/bytes';
 import { openDocument } from '../../lib/download';
 import { documentCaption } from './document-caption';
 import { useApp } from '../../state/store-context';
 import { DocumentCard } from '../../ui/DocumentCard';
-import { MenuItem } from '../../ui/MenuItem';
+import { MenuItem, MenuSize } from '../../ui/MenuItem';
 import { Popover, PopoverAnchor } from '../../ui/Popover';
 import { Section } from '../../ui/Section';
 import { DocFormat, DotsGlyph } from '../../ui/icons';
@@ -86,13 +85,13 @@ export function DocumentsSection({ card }: { card: { id: string; role: string; c
                       {d.file_path && (
                         <MenuItem onClick={() => open(d, d.file_path)}>
                           <span style={{ flex: '1 1 auto', whiteSpace: 'nowrap' }}>HTML herunterladen</span>
-                          <Size bytes={sizes[d.file_path]} />
+                          <MenuSize bytes={sizes[d.file_path]} />
                         </MenuItem>
                       )}
                       {d.pdf_path && (
                         <MenuItem onClick={() => open(d, d.pdf_path)}>
                           <span style={{ flex: '1 1 auto', whiteSpace: 'nowrap' }}>PDF herunterladen</span>
-                          <Size bytes={sizes[d.pdf_path]} />
+                          <MenuSize bytes={sizes[d.pdf_path]} />
                         </MenuItem>
                       )}
                       <MenuItem
@@ -114,12 +113,4 @@ export function DocumentsSection({ card }: { card: { id: string; role: string; c
       </div>
     </Section>
   );
-}
-
-/* The size beside a menu entry, left out entirely when the file is not there to
-   be measured. */
-function Size({ bytes }: { bytes?: number | null }) {
-  const text = formatBytes(bytes ?? null);
-  if (!text) return null;
-  return <span style={{ fontSize: 11.5, color: 'var(--c-a5a29a)' }}>{text}</span>;
 }

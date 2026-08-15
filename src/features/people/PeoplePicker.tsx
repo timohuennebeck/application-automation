@@ -1,13 +1,13 @@
-import { useRef, useState } from 'react';
+import { Fragment, useRef, useState } from 'react';
 import { DashedPlus } from '../../ui/AddRow';
 import { MenuItem, MenuLabel } from '../../ui/MenuItem';
 import { Avatar, PencilGlyph, SearchGlyph } from '../../ui/icons';
-import type { PersonView } from '../../state/db-view';
+import { UNKNOWN_COMPANY } from '../../shared/domain';
+import type { PersonSuggestion } from '../../state/store-context';
 
-export type Suggestion = PersonView & { key: string; initials: string };
-
-/* Search field + "known at <company>" suggestions + a create row.
-   Shared by the interview participant picker and both contact pickers. */
+/* Search field, the people known at the card's company, everyone else under
+   "Weitere Personen", and a create row. Shared by the interview participant
+   picker and both contact pickers. */
 export function PeoplePicker({
   draft,
   onDraftChange,
@@ -22,7 +22,7 @@ export function PeoplePicker({
   draft: string;
   onDraftChange: (v: string) => void;
   company: string;
-  people: Suggestion[];
+  people: PersonSuggestion[];
   isSelected: (key: string) => boolean;
   onToggle: (key: string) => void;
   /* Opens the person's editor. Omitted where a picker only picks. */
@@ -31,7 +31,12 @@ export function PeoplePicker({
   onClose: () => void;
 }) {
   const q = draft.trim().toLowerCase();
-  const matches = people.filter((p) => !q || p.name.toLowerCase().includes(q)).slice(0, 8);
+  const matches = people.filter((p) => !q || p.name.toLowerCase().includes(q)).slice(0, 12);
+  /* peopleForCard already sorts the known ones first, so the section break is
+     the first row that is not. */
+  const firstOther = matches.findIndex((p) => !p.known);
+  /* A card at the placeholder company has no name to head the section with. */
+  const knownLabel = company && company !== UNKNOWN_COMPANY ? `Bei ${company}` : 'Bei dieser Bewerbung';
 
   const listRef = useRef<HTMLDivElement>(null);
   /* Row the arrow keys are on; -1 means none, Enter then takes the first.
@@ -66,7 +71,9 @@ export function PeoplePicker({
               e.preventDefault();
               const next = e.key === 'ArrowDown' ? (active + 1) % rows : active <= 0 ? rows - 1 : active - 1;
               setActive(next);
-              listRef.current?.children[next]?.scrollIntoView({ block: 'nearest' });
+              /* Rows by class, not by child index — the section labels sit
+                 between them. */
+              listRef.current?.querySelectorAll('.menu-item')[next]?.scrollIntoView({ block: 'nearest' });
             }
           }}
           style={{
@@ -81,65 +88,69 @@ export function PeoplePicker({
           }}
         />
       </div>
-      <MenuLabel>Bei {company} bekannt</MenuLabel>
       <div
         ref={listRef}
         className="no-scrollbar"
-        style={{ maxHeight: 168, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 1 }}
+        style={{ maxHeight: 208, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 1 }}
       >
         {matches.map((p, i) => {
           const sel = isSelected(p.key);
+          const label = i === 0 && p.known ? knownLabel : i === firstOther ? 'Weitere Personen' : null;
           return (
-            <MenuItem key={p.key} selected={sel} active={i === active} onClick={() => onToggle(p.key)}>
-              <Avatar bg={p.bg} size={20} fontSize={8.5}>
-                {p.initials}
-              </Avatar>
-              <div
-                style={{
-                  fontWeight: sel ? 600 : 400,
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  minWidth: 0,
-                }}
-              >
-                {p.name}
-              </div>
-              <div
-                style={{
-                  fontSize: 11.5,
-                  color: 'var(--c-a5a29a)',
-                  marginLeft: 'auto',
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  maxWidth: '44%',
-                }}
-              >
-                {p.role}
-              </div>
-              {/* stopPropagation, or editing would also toggle the row. */}
-              {onEdit && (
-                <span
-                  className="row-edit"
-                  role="button"
-                  tabIndex={0}
-                  title="Person bearbeiten"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onEdit(p.key);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key !== 'Enter' && e.key !== ' ') return;
-                    e.preventDefault();
-                    e.stopPropagation();
-                    onEdit(p.key);
+            <Fragment key={p.key}>
+              {label && <MenuLabel>{label}</MenuLabel>}
+              <MenuItem selected={sel} active={i === active} onClick={() => onToggle(p.key)}>
+                <Avatar bg={p.bg} size={20} fontSize={8.5}>
+                  {p.initials}
+                </Avatar>
+                <div
+                  style={{
+                    fontWeight: sel ? 600 : 400,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    minWidth: 0,
                   }}
                 >
-                  <PencilGlyph />
-                </span>
-              )}
-            </MenuItem>
+                  {p.name}
+                </div>
+                {/* Known people show their position; the rest, where they work. */}
+                <div
+                  style={{
+                    fontSize: 11.5,
+                    color: 'var(--c-a5a29a)',
+                    marginLeft: 'auto',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    maxWidth: '44%',
+                  }}
+                >
+                  {p.known ? p.role : p.company || p.role}
+                </div>
+                {/* stopPropagation, or editing would also toggle the row. */}
+                {onEdit && (
+                  <span
+                    className="row-edit"
+                    role="button"
+                    tabIndex={0}
+                    title="Person bearbeiten"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onEdit(p.key);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key !== 'Enter' && e.key !== ' ') return;
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onEdit(p.key);
+                    }}
+                  >
+                    <PencilGlyph />
+                  </span>
+                )}
+              </MenuItem>
+            </Fragment>
           );
         })}
         <MenuItem

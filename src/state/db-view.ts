@@ -3,6 +3,8 @@
    The DB stores ISO; everything display-flavoured is derived here. */
 import type {
   ActivityRow,
+  AgentRunRow,
+  AgentStepRow,
   ApplicationPersonRow,
   ApplicationRow,
   CommentAttachmentRow,
@@ -52,8 +54,15 @@ export interface PersonView {
   phone?: string;
   linkedin?: string;
   initials?: string;
+  companyId: number | null;
   createdAt?: string;
   updatedAt?: string;
+}
+
+/* A Kepler run with its steps, as the panel renders it. */
+export interface AgentRunView {
+  run: AgentRunRow;
+  steps: AgentStepRow[];
 }
 
 export interface DomainState {
@@ -71,6 +80,12 @@ export interface DomainState {
   activitiesByApp: Record<string, ActivityRow[]>;
   /* Profile-wide, so a flat list rather than one keyed by application. */
   profileFacts: ProfileFactRow[];
+  /* The Standort and Berufsbezeichnung vocabularies, by name. */
+  locations: string[];
+  roles: string[];
+  /* The latest run per application — older rows are history and stay in the
+     database only. */
+  agentRuns: Record<string, AgentRunView>;
   board: string[][];
 }
 
@@ -115,6 +130,7 @@ export function personView(p: PersonRow): PersonView {
     phone: p.phone || '',
     linkedin: p.linkedin || '',
     initials: p.initials || undefined,
+    companyId: p.company_id,
     createdAt: created,
     updatedAt: updated,
   };
@@ -171,6 +187,14 @@ export function indexSnapshot(snap: DbSnapshot, now = new Date()): DomainState {
     );
   }
 
+  /* Runs arrive ordered by application and id, so the last one per
+     application is the latest. */
+  const stepsByRun = groupBy(snap.agentSteps, (s) => s.run_id);
+  const agentRuns: Record<string, AgentRunView> = {};
+  for (const run of snap.agentRuns) {
+    agentRuns[run.application_id] = { run, steps: stepsByRun[String(run.id)] ?? [] };
+  }
+
   return {
     applications: Object.fromEntries(snap.applications.map((a) => [a.id, a])),
     companies: Object.fromEntries(snap.companies.map((c) => [c.id, c])),
@@ -184,6 +208,9 @@ export function indexSnapshot(snap: DbSnapshot, now = new Date()): DomainState {
     documentsByApp: groupBy(snap.documents, (d) => d.application_id),
     activitiesByApp: groupBy(snap.activities, (a) => a.application_id),
     profileFacts: snap.profileFacts,
+    locations: snap.locations.map((l) => l.name),
+    roles: snap.roles.map((r) => r.name),
+    agentRuns,
     board: boardFrom(snap.applications),
   };
 }

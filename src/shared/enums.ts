@@ -64,6 +64,45 @@ export const TemplateKind = {
 } as const;
 export type TemplateKind = (typeof TemplateKind)[keyof typeof TemplateKind];
 
+/* Who owns a card. Kepler is the only assignee so far; NULL means nobody. */
+export const Assignee = {
+  KEPLER: 'kepler',
+} as const;
+export type Assignee = (typeof Assignee)[keyof typeof Assignee];
+
+/* Lifecycle of one Kepler run. QUEUED rows wait their turn in the main
+   process's FIFO; everything past FAILED/DONE is history. */
+export const AgentRunStatus = {
+  QUEUED: 'QUEUED',
+  RUNNING: 'RUNNING',
+  DONE: 'DONE',
+  FAILED: 'FAILED',
+} as const;
+export type AgentRunStatus = (typeof AgentRunStatus)[keyof typeof AgentRunStatus];
+
+export const AgentStepStatus = {
+  WAIT: 'WAIT',
+  RUN: 'RUN',
+  DONE: 'DONE',
+  ERROR: 'ERROR',
+} as const;
+export type AgentStepStatus = (typeof AgentStepStatus)[keyof typeof AgentStepStatus];
+
+/* What a step does, independent of its German label. FETCH only exists on
+   runs that have a posting URL — pasted text skips straight to EXTRACT. */
+export const AgentStepKey = {
+  FETCH: 'FETCH',
+  EXTRACT: 'EXTRACT',
+  CONTACTS: 'CONTACTS',
+  READ_CV: 'READ_CV',
+  READ_LETTER: 'READ_LETTER',
+  GEN_CV: 'GEN_CV',
+  GEN_LETTER: 'GEN_LETTER',
+  VALIDATE: 'VALIDATE',
+  COMMENT: 'COMMENT',
+} as const;
+export type AgentStepKey = (typeof AgentStepKey)[keyof typeof AgentStepKey];
+
 export const Interest = {
   URGENT: 'URGENT',
   HIGH: 'HIGH',

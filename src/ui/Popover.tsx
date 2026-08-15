@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import type { CSSProperties, ReactNode } from 'react';
+import type { CSSProperties, ReactNode, Ref } from 'react';
 
 /* Floating surfaces come in two flavours in the design:
    - "menu": a compact option list (8px radius, tight padding, softer shadow)
@@ -78,9 +78,17 @@ export function Popover({
 /* Positioning context for a popover. The `data-dd` marker tells the global
    mousedown handler in the store that a click landed inside a dropdown, so it
    should not close it. */
-export function PopoverAnchor({ style, children }: { style?: CSSProperties; children: ReactNode }) {
+export function PopoverAnchor({
+  style,
+  children,
+  ref,
+}: {
+  style?: CSSProperties;
+  children: ReactNode;
+  ref?: Ref<HTMLDivElement>;
+}) {
   return (
-    <div data-dd="1" style={{ position: 'relative', ...style }}>
+    <div data-dd="1" ref={ref} style={{ position: 'relative', ...style }}>
       {children}
     </div>
   );

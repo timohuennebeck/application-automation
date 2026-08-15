@@ -135,9 +135,9 @@ const api = {
        given; '' on success, else the reason. */
     open: (kind: TemplateKind, label?: string): Promise<string> =>
       ipcRenderer.invoke('templates:open', kind, label),
-    /* Renders the Fassung to PDF (once per change) and hands that to the OS;
-       '' on success, else the reason. */
-    openPdf: (kind: TemplateKind, label: string): Promise<string> =>
+    /* Renders the Fassung to PDF (once per change), hands that to the OS and
+       resolves to the Fassung with its PDF size; rejects with the reason. */
+    openPdf: (kind: TemplateKind, label: string): Promise<TemplateVersion> =>
       ipcRenderer.invoke('templates:openPdf', kind, label),
   },
   /* Further profile documents (Immatrikulationsbescheinigung, Zeugnisse, …).

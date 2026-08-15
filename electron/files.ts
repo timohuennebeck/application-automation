@@ -323,7 +323,18 @@ function describeVersion(
 ): TemplateVersion {
   const file = versionFile(versionDir(userDataPath, kind, label));
   if (!file) throw new Error(`Fassung „${label}“ ist nicht vorhanden.`);
-  return { ...describe(file), label, selected };
+  let pdfSize: number | null = null;
+  try {
+    pdfSize = statSync(templatePdfPath(file)).size;
+  } catch {
+    /* not rendered yet */
+  }
+  return { ...describe(file), label, selected, pdfSize };
+}
+
+/* Where a Fassung's PDF rendition sits: beside the HTML, same stem. */
+export function templatePdfPath(htmlPath: string): string {
+  return htmlPath.replace(/\.[^.]+$/, '.pdf');
 }
 
 /* Two labels collide when they differ only in case — the Mac's filesystem

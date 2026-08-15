@@ -33,6 +33,7 @@ import {
   replaceTemplateVersion,
   selectTemplateVersion,
   selectedTemplatePath,
+  templatePdfPath,
 } from '../files.ts';
 
 let root: string;
@@ -252,7 +253,14 @@ describe('template versions', () => {
 
   it('files the first upload as "Standard" and selects it', () => {
     const v = addTemplateVersion(root, TemplateKind.LEBENSLAUF, source('Mein Lebenslauf.html', 'cv'));
-    expect(v).toEqual({ label: 'Standard', selected: true, name: CV, size: 2, day: toISO(new Date()) });
+    expect(v).toEqual({
+      label: 'Standard',
+      selected: true,
+      name: CV,
+      size: 2,
+      day: toISO(new Date()),
+      pdfSize: null,
+    });
     expect(readFileSync(path.join(slot('lebenslauf'), 'Standard', CV), 'utf8')).toBe('cv');
     expect(selectedTemplatePath(root, TemplateKind.LEBENSLAUF)).toEqual({
       label: 'Standard',
@@ -295,6 +303,7 @@ describe('template versions', () => {
         name: 'Timo_Huennebeck_Anschreiben.html',
         size: 13,
         day: toISO(new Date()),
+        pdfSize: null,
       },
       {
         label: 'Standard',
@@ -302,6 +311,7 @@ describe('template versions', () => {
         name: 'Timo_Huennebeck_Anschreiben.html',
         size: 6,
         day: toISO(new Date()),
+        pdfSize: null,
       },
     ]);
     expect(selectedTemplatePath(root, TemplateKind.ANSCHREIBEN)!.label).toBe('Fassung 2');
@@ -360,6 +370,13 @@ describe('template versions', () => {
     expect(listTemplateVersions(root, TemplateKind.LEBENSLAUF).find((v) => v.selected)!.label).toBe(
       'Fassung 2',
     );
+  });
+
+  it('reports the size of a rendered PDF beside the HTML', () => {
+    addTemplateVersion(root, TemplateKind.LEBENSLAUF, source('a.html'));
+    writeFileSync(path.join(slot('lebenslauf'), 'Standard', 'Timo_Huennebeck_Lebenslauf.pdf'), 'pdfpdf');
+    expect(listTemplateVersions(root, TemplateKind.LEBENSLAUF)[0].pdfSize).toBe(6);
+    expect(templatePdfPath('/x/Timo_Huennebeck_Lebenslauf.htm')).toBe('/x/Timo_Huennebeck_Lebenslauf.pdf');
   });
 
   it('skips a Fassung whose file vanished', () => {

@@ -28,7 +28,7 @@ export function ContactPickerBody({
   store,
   onClose,
 }: ContactPickerBodyProps) {
-  const { st, set, peopleForCard, savePerson, deletePerson } = useApp();
+  const { st, set, person, peopleForCard, companyOfCard, savePerson, deletePerson } = useApp();
   const editing = st.personEdit?.forContact === popKey && st.personEdit.id === cardId ? st.personEdit : null;
 
   const toggle = (key: string) => {
@@ -65,7 +65,9 @@ export function ContactPickerBody({
         forContact: popKey,
         contactStore: store,
       },
-      personDraft: { name, role: '', email: '', phone: '', linkedin: '' },
+      /* A person added from this card is filed under its company by default
+         (never under the placeholder a cleared card sits at). */
+      personDraft: { name, role: '', email: '', phone: '', linkedin: '', company: companyOfCard(cardId) },
       personField: 'name',
       personFieldDraft: name,
       editing: null,
@@ -75,16 +77,17 @@ export function ContactPickerBody({
   /* An existing person opens the same editor, only already named — which is
      what turns "Löschen" on inside it. */
   const startEdit = (key: string) =>
-    set((s) => {
-      const p = s.people[key];
+    set(() => {
+      const p = person(key);
       return {
         personEdit: { id: cardId, ri: -1, key, isNew: false, forContact: popKey, contactStore: store },
         personDraft: {
-          name: p?.name || '',
-          role: p?.role || '',
-          email: p?.email || '',
-          phone: p?.phone || '',
-          linkedin: p?.linkedin || '',
+          name: p.name,
+          role: p.role,
+          email: p.email || '',
+          phone: p.phone || '',
+          linkedin: p.linkedin || '',
+          company: p.company,
         },
         personField: null,
         personFieldDraft: '',

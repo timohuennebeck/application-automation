@@ -43,7 +43,9 @@ export function ContactPicker({
         : list[0].name + ' +' + (list.length - 1);
 
   return (
-    <>
+    /* Names this picker's chip and popover, so the outside-click handler can
+       tell a click on another popover's surface from one on this picker. */
+    <span data-contact-pop={popKey} style={{ display: 'contents' }}>
       <FieldChip
         open={open}
         chevron
@@ -101,6 +103,6 @@ export function ContactPicker({
           />
         </Popover>
       )}
-    </>
+    </span>
   );
 }

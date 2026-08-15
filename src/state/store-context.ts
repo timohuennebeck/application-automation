@@ -13,12 +13,19 @@ import type {
   FollowupRow,
   ProfileFactRow,
 } from '../shared/db-types';
-import type { PersonView, RoundView } from './db-view';
+import type { AgentRunView, PersonView, RoundView } from './db-view';
 import type { SortDir, SortKey } from '../data/config';
-import type { DocumentKind, Interest, LinkKind } from '../shared/enums';
+import type { Assignee, DocumentKind, Interest, LinkKind } from '../shared/enums';
 
 /* Components render rounds through this alias. */
 export type Round = RoundView;
+
+/* A person as the pickers and chips read them: the stored view plus its key,
+   guaranteed initials and the resolved company name. */
+export type PersonEntry = PersonView & { key: string; initials: string; company: string };
+/* A picker row: `known` groups the person under "Bei <Firma>" — linked to the
+   card, on one of its rounds, or filed under its company. */
+export type PersonSuggestion = PersonEntry & { known: boolean };
 
 export interface ContactEntry {
   /* DB person id; distinguishes two people sharing a name. */
@@ -112,6 +119,10 @@ export interface AppState {
   activitiesByApp: Record<string, ActivityRow[]>;
   /* The profile's facts, in the order they are shown and handed over. */
   profileFacts: ProfileFactRow[];
+  locations: string[];
+  roles: string[];
+  /* Kepler's latest run per application, kept live by agent:event pushes. */
+  agentRuns: Record<string, AgentRunView>;
   /* Card ids per stage column, index-aligned with config COLUMNS/STAGE_IDS. */
   board: string[][];
   boardFilter: BoardFilter;
@@ -201,15 +212,29 @@ export interface AppStore {
   setContacts: (id: string, list: ContactEntry[]) => void;
   emailContactsFor: (id: string) => ContactEntry[];
   setEmailContacts: (id: string, list: ContactEntry[]) => void;
-  person: (key: string) => PersonView & { key: string; initials: string };
+  person: (key: string) => PersonEntry;
   /* Everyone suggestible for a card: its pool plus anyone already on a round. */
-  peopleForCard: (id: string) => (PersonView & { key: string; initials: string })[];
+  peopleForCard: (id: string) => PersonSuggestion[];
+  /* The name of the card's company; '' when the card is unknown. */
+  companyOfCard: (id: string) => string;
   moveCard: (id: string, toCol: number, toIdx: number | null, live?: boolean) => void;
   openCard: (id: string) => void;
   createCard: () => void;
+  /* Hands a card to Kepler; progress arrives over the agent event channel. */
+  startAgent: (id: string) => void;
+  /* Retries the failed step of the latest run; earlier steps stay done. */
+  retryAgentStep: (id: string) => void;
+  /* Halts the active run at its current step; retry resumes from there. */
+  stopAgent: (id: string) => void;
   deleteCard: (id: string) => void;
   savePerson: () => void;
   deletePerson: (id: string, key: string, isNew: boolean) => void;
+  /* No-op while a card still points at the company. */
+  deleteCompany: (companyId: number) => void;
+  /* No-op while a card's Standort still names it. */
+  deleteLocation: (name: string) => void;
+  /* No-op while a card or a person still carries the role. */
+  deleteRole: (name: string) => void;
   createPersonForRound: (id: string, ri: number, name: string) => void;
   saveRound: () => void;
   /* Sidebar field write, routed to the owning table (see fact-label routing). */
@@ -223,6 +248,9 @@ export interface AppStore {
     title: string,
   ) => Promise<string | null>;
   setInterest: (id: string, interest: Interest) => void;
+  /* Kepler is the only assignee; assigning it starts a run and moves the
+     card from Interessiert to In Bearbeitung. */
+  setAssignee: (id: string, assignee: Assignee | null) => void;
   saveSummary: (id: string, text: string | null) => void;
   addComment: (id: string, text: string) => void;
   updateComment: (id: string, commentId: number, text: string) => void;

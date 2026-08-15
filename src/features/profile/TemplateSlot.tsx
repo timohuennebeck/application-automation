@@ -6,7 +6,7 @@ import type { TemplateKind } from '../../shared/enums';
 import { useApp } from '../../state/store-context';
 import { AddRow } from '../../ui/AddRow';
 import { DocumentCard } from '../../ui/DocumentCard';
-import { MenuItem } from '../../ui/MenuItem';
+import { MenuItem, MenuSize } from '../../ui/MenuItem';
 import { Popover, PopoverAnchor } from '../../ui/Popover';
 import { SelectDot } from '../../ui/SelectDot';
 import { DocFormat, DotsGlyph } from '../../ui/icons';
@@ -114,10 +114,15 @@ export function TemplateSlot({
   };
 
   const openPdf = async (label: string) => {
+    const api = desktop();
     set({ dropdown: null });
+    if (!api) return;
     onError(null);
-    const err = await window.desktop?.templates.openPdf(kind, label);
-    if (err) onError(err);
+    try {
+      patch(await api.templates.openPdf(kind, label));
+    } catch (err) {
+      onError(String(err));
+    }
   };
 
   const remove = async (label: string) => {
@@ -241,11 +246,13 @@ export function TemplateSlot({
                     right={0}
                     minWidth={196}
                   >
-                    <MenuItem style={{ whiteSpace: 'nowrap' }} onClick={() => open(v.label)}>
-                      Im Browser öffnen
+                    <MenuItem onClick={() => open(v.label)}>
+                      <span style={{ flex: '1 1 auto', whiteSpace: 'nowrap' }}>HTML herunterladen</span>
+                      <MenuSize bytes={v.size} />
                     </MenuItem>
-                    <MenuItem style={{ whiteSpace: 'nowrap' }} onClick={() => openPdf(v.label)}>
-                      PDF herunterladen
+                    <MenuItem onClick={() => openPdf(v.label)}>
+                      <span style={{ flex: '1 1 auto', whiteSpace: 'nowrap' }}>PDF herunterladen</span>
+                      <MenuSize bytes={v.pdfSize} />
                     </MenuItem>
                     <MenuItem style={{ whiteSpace: 'nowrap' }} onClick={() => replace(v.label)}>
                       Ersetzen mit eigener Datei

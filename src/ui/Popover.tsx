@@ -93,3 +93,24 @@ export function PopoverAnchor({
     </div>
   );
 }
+
+/* The 222px shell the date and time pickers drop into. Both are the same
+   surface at the same offsets under whichever chip opened them, so the size,
+   padding and reveal live here rather than being spelled out twice. */
+export function PickerPopover({
+  top = 26,
+  left = 0,
+  zIndex = 40,
+  children,
+}: {
+  top?: number;
+  left?: number;
+  zIndex?: number;
+  children: ReactNode;
+}) {
+  return (
+    <Popover top={top} left={left} zIndex={zIndex} width={222} padding={10} stack={false} revealOnMount>
+      {children}
+    </Popover>
+  );
+}

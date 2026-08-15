@@ -9,6 +9,7 @@ import { DotsMenu } from '../../ui/DotsMenu';
 import { MenuItem } from '../../ui/MenuItem';
 import { DocFormat } from '../../ui/icons';
 import { useDesktopList } from '../../ui/useDesktopList';
+import { ERROR_TEXT } from '../../ui/styles';
 
 /* Which glyph a stored file gets — by extension, since that is all a listing
    knows about it. */
@@ -76,7 +77,7 @@ export function ProfileDocuments() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      {error && <div style={{ fontSize: 11.5, color: 'var(--c-c2564c)', lineHeight: 1.45 }}>{error}</div>}
+      {error && <div style={ERROR_TEXT}>{error}</div>}
       {(docs ?? []).map((doc, i, all) => (
         <DocumentCard
           key={doc.name}

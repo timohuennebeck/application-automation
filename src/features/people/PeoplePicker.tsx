@@ -5,6 +5,7 @@ import { SearchRow, cycleActive } from '../../ui/SearchRow';
 import { Avatar, PencilGlyph } from '../../ui/icons';
 import { UNKNOWN_COMPANY } from '../../shared/domain';
 import type { PersonSuggestion } from '../../state/store-context';
+import { ELLIPSIS } from '../../ui/styles';
 
 /* Search field, the people known at the card's company, everyone else under
    "Weitere Personen", and a create row. Shared by the interview participant
@@ -90,17 +91,7 @@ export function PeoplePicker({
                 <Avatar bg={p.bg} size={20} fontSize={8.5}>
                   {p.initials}
                 </Avatar>
-                <div
-                  style={{
-                    fontWeight: sel ? 600 : 400,
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    minWidth: 0,
-                  }}
-                >
-                  {p.name}
-                </div>
+                <div style={{ ...ELLIPSIS, fontWeight: sel ? 600 : 400 }}>{p.name}</div>
                 {/* Known people show their position; the rest, where they work. */}
                 <div
                   style={{

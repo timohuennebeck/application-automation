@@ -8,6 +8,7 @@ import { PopoverAnchor } from '../../ui/Popover';
 import { Caret, Check, ClipboardGlyph, KeplerAvatar, RegenGlyph } from '../../ui/icons';
 import { ContactPicker } from '../people/ContactPicker';
 import { draftEmail, dueColor, dueLabel, type FollowUpSlot } from './schedule';
+import { ELLIPSIS } from '../../ui/styles';
 
 const COPIED_MS = 1400;
 
@@ -241,13 +242,10 @@ export function FollowUpEmailCard({
                 <>
                   <div
                     style={{
+                      ...ELLIPSIS,
                       fontSize: 12.5,
                       color: 'var(--c-77746d)',
                       lineHeight: 1.5,
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      minWidth: 0,
                       flex: '1 1 0',
                       ...sent,
                     }}

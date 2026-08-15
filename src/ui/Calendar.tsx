@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { CAL_DOWS, MONTHS_DE, shiftISO, todayISO, toISO } from '../lib/date';
-import { Popover } from './Popover';
+import { PickerPopover } from './Popover';
 
 interface CalendarProps {
   selectedISO: string;
@@ -182,8 +182,8 @@ export function CalendarPopover({
   zIndex?: number;
 }) {
   return (
-    <Popover top={top} left={left} zIndex={zIndex} width={222} padding={10} stack={false} revealOnMount>
+    <PickerPopover top={top} left={left} zIndex={zIndex}>
       <Calendar {...cal} />
-    </Popover>
+    </PickerPopover>
   );
 }

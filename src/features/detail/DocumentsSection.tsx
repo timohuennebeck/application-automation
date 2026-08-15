@@ -6,6 +6,7 @@ import { DotsMenu, DownloadItem } from '../../ui/DotsMenu';
 import { MenuItem } from '../../ui/MenuItem';
 import { Section } from '../../ui/Section';
 import { DocFormat } from '../../ui/icons';
+import { ERROR_TEXT } from '../../ui/styles';
 
 export function DocumentsSection({ cardId }: { cardId: string }) {
   const { st, set, replaceDocument } = useApp();
@@ -50,7 +51,7 @@ export function DocumentsSection({ cardId }: { cardId: string }) {
 
   return (
     <Section sectionKey="docs" title="Bewerbungsunterlagen" count={docs.length} gap={10}>
-      {error && <div style={{ fontSize: 11.5, color: 'var(--c-c2564c)', lineHeight: 1.45 }}>{error}</div>}
+      {error && <div style={ERROR_TEXT}>{error}</div>}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
         {docs.map((d) => (
           <DocumentCard

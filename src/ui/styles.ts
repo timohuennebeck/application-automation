@@ -12,6 +12,27 @@ export const ELLIPSIS = {
   minWidth: 0,
 } as const satisfies CSSProperties;
 
+/* A dialog's own text input: the frame is the dialog, so the field brings no
+   border, no ground and no padding of its own — just the type. Shared by the
+   create dialog and the interview editor. */
+export const DIALOG_INPUT = {
+  fontSize: 15,
+  color: 'var(--c-1b1a17)',
+  lineHeight: 1.5,
+  border: 'none',
+  outline: 'none',
+  background: 'transparent',
+  width: '100%',
+  padding: 0,
+} as const satisfies CSSProperties;
+
+/* What went wrong, under the control that tried it. */
+export const ERROR_TEXT = {
+  fontSize: 11.5,
+  color: 'var(--c-c2564c)',
+  lineHeight: 1.45,
+} as const satisfies CSSProperties;
+
 /* The animated running border around whatever Kepler is working on — the
    board card and the run panel share it, so the two always spin alike.
    Pair with `animation: 'om-ang 2.6s linear infinite'`. */

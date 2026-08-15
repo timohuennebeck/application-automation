@@ -199,16 +199,7 @@ export function ApplicationCard({ id, col, ci }: { id: string; col: ColumnDef; c
                     </Avatar>
                   ))}
                 </div>
-                <div
-                  style={{
-                    fontSize: 10.5,
-                    color: 'var(--c-5f5c56)',
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    minWidth: 0,
-                  }}
-                >
+                <div style={{ ...ELLIPSIS, fontSize: 10.5, color: 'var(--c-5f5c56)' }}>
                   {contacts[0].name}
                 </div>
                 {contacts.length > 1 && (
@@ -222,16 +213,7 @@ export function ApplicationCard({ id, col, ci }: { id: string; col: ColumnDef; c
                 <Avatar bg="var(--c-dedbd4)" size={16} style={{ color: 'var(--c-8b8880)' }}>
                   –
                 </Avatar>
-                <div
-                  style={{
-                    fontSize: 10.5,
-                    color: 'var(--c-9a978f)',
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    minWidth: 0,
-                  }}
-                >
+                <div style={{ ...ELLIPSIS, fontSize: 10.5, color: 'var(--c-9a978f)' }}>
                   Kein Kontakt ausgewählt
                 </div>
               </>

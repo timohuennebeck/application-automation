@@ -4,6 +4,7 @@ import { useApp } from '../../state/store-context';
 import { AddRow } from '../../ui/AddRow';
 import { GripGlyph } from '../../ui/icons';
 import { targetIndex } from './reorder';
+import { ELLIPSIS } from '../../ui/styles';
 
 /* The profile dialog's "Kontext" list — what the agent knows about you beyond
    the CV: drag to reorder, click to correct, ✕ to remove.
@@ -229,17 +230,7 @@ function Fact({
       <GripGlyph />
       {/* Ellipsis rather than wrapping: the row has a fixed height, and clicking
           it opens the whole text in an input anyway. */}
-      <div
-        style={{
-          flex: '1 1 auto',
-          minWidth: 0,
-          fontSize: 12.5,
-          color: 'var(--c-28261f)',
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-        }}
-      >
+      <div style={{ ...ELLIPSIS, flex: '1 1 auto', fontSize: 12.5, color: 'var(--c-28261f)' }}>
         {fact.text}
       </div>
       <div

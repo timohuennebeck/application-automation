@@ -1,5 +1,6 @@
 import { LinkKind } from '../../shared/enums';
 import { cardView } from '../../state/selectors';
+import { clampToViewport } from '../../lib/dom';
 import { useApp } from '../../state/store-context';
 import { Popover, PopoverVariant } from '../../ui/Popover';
 import { ContactPickerBody } from '../people/ContactPickerBody';
@@ -8,7 +9,6 @@ const WIDTH = 288;
 /* Roughly the tallest the picker gets (search, suggestions, create row), used
    to keep it inside the window when a card sits near the bottom. */
 const HEIGHT = 300;
-const EDGE = 8;
 
 const CARD_CONTACT_KEY = 'card-contact';
 
@@ -23,8 +23,7 @@ export function CardContactPicker() {
   const card = cardView(st, at.id);
   if (!card) return null;
 
-  const left = Math.max(EDGE, Math.min(at.x, window.innerWidth - WIDTH - EDGE));
-  const top = Math.max(EDGE, Math.min(at.y, window.innerHeight - HEIGHT - EDGE));
+  const { left, top } = clampToViewport(at, WIDTH, HEIGHT);
 
   return (
     <div data-dd="1">

@@ -7,6 +7,7 @@ import { SelectPopover } from '../../ui/SelectPopover';
 import { Switch } from '../../ui/Switch';
 import { Avatar, KeplerAvatar } from '../../ui/icons';
 import { isHttpUrl } from '../../lib/url';
+import { DIALOG_INPUT } from '../../ui/styles';
 
 /* The dialog's channel dropdown shares AppState.dropdown with every other
    select, so the global outside-click handler closes it like the rest. */
@@ -84,17 +85,7 @@ export function NewApplicationModal() {
             autoFocus
             placeholder="https://…"
             onChange={(e) => set({ jobUrl: e.target.value })}
-            style={{
-              fontSize: 15,
-              color: 'var(--c-1b1a17)',
-              lineHeight: 1.5,
-              border: 'none',
-              outline: 'none',
-              background: 'transparent',
-              width: '100%',
-              minWidth: 0,
-              padding: 0,
-            }}
+            style={{ ...DIALOG_INPUT, minWidth: 0 }}
           />
           <FieldHint>
             Link zur Stellenanzeige einfügen. Kepler liest Titel, Unternehmen und Kernanforderungen

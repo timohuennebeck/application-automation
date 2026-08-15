@@ -1,5 +1,5 @@
 import { fmtMins, minsOf, timeRange } from '../lib/date';
-import { Popover } from './Popover';
+import { PickerPopover } from './Popover';
 
 interface TimeRangePickerProps {
   /* Current value, e.g. "10:00 – 11:00". */
@@ -149,8 +149,8 @@ export function TimeRangePopover({
   zIndex?: number;
 }) {
   return (
-    <Popover top={top} left={left} zIndex={zIndex} width={222} padding={10} stack={false} revealOnMount>
+    <PickerPopover top={top} left={left} zIndex={zIndex}>
       <TimeRangePicker {...picker} />
-    </Popover>
+    </PickerPopover>
   );
 }

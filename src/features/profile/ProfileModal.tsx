@@ -7,6 +7,7 @@ import { useDesktopList } from '../../ui/useDesktopList';
 import { FactList } from './FactList';
 import { ProfileDocuments } from './ProfileDocuments';
 import { TemplateSlot } from './TemplateSlot';
+import { ERROR_TEXT } from '../../ui/styles';
 
 const EMPTY_SLOTS: TemplateSlots = { [TemplateKind.LEBENSLAUF]: [], [TemplateKind.ANSCHREIBEN]: [] };
 
@@ -27,7 +28,7 @@ export function ProfileModal() {
         label="Templates"
         hint="Deine HTML-Templates. Du kannst je mehrere Fassungen halten — der Punkt markiert die, die Kepler für neue Bewerbungen nutzt. Die Originale bleiben unberührt."
       >
-        {error && <div style={{ fontSize: 11.5, color: 'var(--c-c2564c)', lineHeight: 1.45 }}>{error}</div>}
+        {error && <div style={ERROR_TEXT}>{error}</div>}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
           {Object.values(TemplateKind).map((kind) => (
             <TemplateSlot

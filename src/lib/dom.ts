@@ -1,4 +1,20 @@
-/* DOM predicates shared by the store's document-level listeners. */
+/* DOM predicates and measurements shared across the renderer. */
+
+/* Keeps a surface opened at the cursor inside the window. Both callers float
+   at viewport coordinates, so without this a click near the right or bottom
+   edge opens a menu half off-screen. `height` is the surface's own estimate —
+   it is laid out after this runs, so there is nothing to measure yet. */
+const VIEWPORT_EDGE = 8;
+export function clampToViewport(
+  at: { x: number; y: number },
+  width: number,
+  height: number,
+): { left: number; top: number } {
+  return {
+    left: Math.max(VIEWPORT_EDGE, Math.min(at.x, window.innerWidth - width - VIEWPORT_EDGE)),
+    top: Math.max(VIEWPORT_EDGE, Math.min(at.y, window.innerHeight - height - VIEWPORT_EDGE)),
+  };
+}
 
 /* Whether a mousedown landed in the text field that already has focus.
    The global handler flushes and closes an open editor on every mousedown, but

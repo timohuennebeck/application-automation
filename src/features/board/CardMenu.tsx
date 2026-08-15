@@ -1,5 +1,6 @@
 import { Assignee } from '../../shared/enums';
 import { keplerHoldReason, keplerStartBlocked } from '../../state/selectors';
+import { clampToViewport } from '../../lib/dom';
 import { useApp } from '../../state/store-context';
 import { KeplerAvatar } from '../../ui/icons';
 import { MenuItem, MenuLabel } from '../../ui/MenuItem';
@@ -12,7 +13,6 @@ const MIN_WIDTH = 196;
 const MAX_WIDTH = 260;
 /* Height of the menu box, used to keep it inside the window near the bottom. */
 const HEIGHT = 92;
-const EDGE = 8;
 
 /* Right-click menu for a board card. Positioned at the cursor in viewport
    coordinates, so it is rendered at the shell level rather than in the column. */
@@ -27,8 +27,7 @@ export function CardMenu() {
   /* Unassigning is held while a run is underway; assigning is held while
      there is no posting for Kepler to work from. */
   const hold = assigned ? keplerHoldReason(st, menu.id) : keplerStartBlocked(st, menu.id);
-  const left = Math.max(EDGE, Math.min(menu.x, window.innerWidth - MAX_WIDTH - EDGE));
-  const top = Math.max(EDGE, Math.min(menu.y, window.innerHeight - HEIGHT - EDGE));
+  const { left, top } = clampToViewport(menu, MAX_WIDTH, HEIGHT);
 
   return (
     <div data-dd="1">

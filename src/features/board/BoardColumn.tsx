@@ -4,6 +4,7 @@ import { useApp } from '../../state/store-context';
 import { CollapseGlyph, ColumnIcon } from '../../ui/icons';
 import { ApplicationCard } from './ApplicationCard';
 import { dragOverCol, endDrag } from './dnd';
+import { ELLIPSIS } from '../../ui/styles';
 
 /* One pipeline stage. Collapses to a 40px rail with a vertical label. */
 export function BoardColumn({ col, ci }: { col: ColumnDef; ci: number }) {
@@ -73,14 +74,11 @@ export function BoardColumn({ col, ci }: { col: ColumnDef; ci: number }) {
             <ColumnIcon col={col} style={{ marginTop: 1 }} />
             <div
               style={{
+                ...ELLIPSIS,
                 fontSize: 12,
                 fontWeight: 600,
                 color: 'var(--c-28261f)',
                 lineHeight: 1.3,
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                minWidth: 0,
               }}
             >
               {col.name}

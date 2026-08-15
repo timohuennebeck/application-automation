@@ -12,6 +12,7 @@ import { Switch } from '../../ui/Switch';
 import { TimeRangePopover } from '../../ui/TimeRangePicker';
 import { Avatar, Check } from '../../ui/icons';
 import { RoundDot } from './RoundDot';
+import { DIALOG_INPUT } from '../../ui/styles';
 
 /* A remote interview's location, read off its meeting link. */
 function remoteWhere(link: string): string {
@@ -105,16 +106,7 @@ export function InterviewEditModal({ company, channel }: { company: string; chan
           autoFocus
           placeholder="Titel des Interviews"
           onChange={(e) => setDraft({ title: e.target.value })}
-          style={{
-            fontSize: 15,
-            color: 'var(--c-1b1a17)',
-            lineHeight: 1.5,
-            border: 'none',
-            outline: 'none',
-            background: 'transparent',
-            width: '100%',
-            padding: 0,
-          }}
+          style={DIALOG_INPUT}
         />
         <FieldHint>
           Titel des Gesprächs, zum Beispiel „Interview“, „Fachgespräch“ oder „Kennenlernen mit dem Team“.
@@ -239,16 +231,7 @@ export function InterviewEditModal({ company, channel }: { company: string; chan
             value={draft.link}
             placeholder="https://meet.google.com/… oder https://teams.microsoft.com/…"
             onChange={(e) => setDraft({ link: e.target.value, where: remoteWhere(e.target.value) })}
-            style={{
-              fontSize: 15,
-              color: 'var(--c-1b1a17)',
-              lineHeight: 1.5,
-              border: 'none',
-              outline: 'none',
-              background: 'transparent',
-              width: '100%',
-              padding: 0,
-            }}
+            style={DIALOG_INPUT}
           />
           <FieldHint>
             Link einfügen. Er wird beim Termin hinterlegt und ist aus der Bewerbung heraus aufrufbar.

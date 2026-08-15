@@ -18,6 +18,7 @@ import { Avatar, DotsGlyph } from '../../ui/icons';
 import { PeoplePicker } from '../people/PeoplePicker';
 import { PersonEditCard } from '../people/PersonEditCard';
 import { RoundDot } from './RoundDot';
+import { ELLIPSIS } from '../../ui/styles';
 
 /* One interview round: schedule, location, participants and its note thread. */
 export function InterviewCard({
@@ -328,9 +329,7 @@ export function InterviewCard({
                 style={{ padding: '2px 7px', marginLeft: -7 }}
                 onClick={() => toggle('link')}
               >
-                <span
-                  style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}
-                >
+                <span style={{ ...ELLIPSIS }}>
                   {round.link
                     ? round.link.length > 34
                       ? round.link.slice(0, 34) + '…'

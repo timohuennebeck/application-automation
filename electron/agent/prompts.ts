@@ -110,13 +110,13 @@ const PLACEHOLDER_GLOSSARY = `Briefkopf und Adressat
 - {{SALUTATION}}: formale Anrede passend zum Adressaten ("Sehr geehrte Frau Dr. Weber", "Sehr geehrter Herr Müller", "Sehr geehrtes Engineering Hiring Team").
 
 Einstieg
-- {{COMPANY_CORE_TECH_FOCUS}}: das technische oder produktseitige Hauptziel der Firma (z. B. "skalierbare Cloud-Microservices", "performante Web-Plattformen", "moderne Data-Pipelines").
-- {{COMPANY_SPECIFIC_HOOK}}: was die Firma konkret plant oder baut, aus der Anzeige belegt (z. B. "die Skalierung Ihrer B2B-Plattform", "Ihre neue mobile App-Architektur").
-- {{CANDIDATE_PRIMARY_EXPERIENCE}}: die zur Stelle am besten passende Erfahrung des Bewerbers (z. B. "der Architektur moderner Web- und Mobile-Clients", "dem Aufbau robuster TypeScript- und API-Systeme").
+- {{COMPANY_HOOK_SENTENCE}}: ein ganzer Satz über die Firma, aus der Anzeige belegt — was sie baut, für wen, und wenn genannt, wo sie gerade steht (Wachstum, neuer Markt, Relaunch). Nie über Technik, immer über Produkt und Wirkung (z. B. "Personio nimmt kleinen und mittleren Unternehmen die Personalarbeit ab – und wächst dabei gerade in fünf weitere europäische Märkte.", "Mit Ihrer App bringen Sie Zahnarztpraxen die Terminplanung ins Smartphone."). Beginnt mit dem Firmennamen oder "Mit Ihrer/Ihrem …" — er ist der erste Satz nach der Anrede. Er enthält mindestens ein Detail, das nur auf diese Firma passt (Produktname, Kundenzahl, Markt, Phase); ist nichts Konkretes belegbar, lieber schlicht formulieren als Allgemeinplätze wie "innovative Lösungen".
+- {{COMPANY_PRODUCT_PURPOSE}}: dieselbe Wirkung als Relativsatz-Fragment nach "Software, die …" (z. B. "Personalprozesse für tausende Firmen zuverlässig macht", "Praxen den Alltag spürbar vereinfacht"). Ohne Punkt, ohne Wiederholung des Firmennamens.
+- {{CANDIDATE_PRIMARY_EXPERIENCE}}: die zur Stelle am besten passende Erfahrung des Bewerbers als Objekt zu "in der ich … bereits in Produktion gebracht habe" (z. B. "moderne Web- und Mobile-Clients", "robuste TypeScript- und API-Systeme").
 
 Matrix — vier Zeilen Anforderung ↔ Beleg
-- {{JOB_REQUIREMENT_1}} … {{JOB_REQUIREMENT_4}}: die vier wichtigsten Anforderungen der Anzeige, prägnant formuliert.
-- {{CANDIDATE_PROOF_POINT_1}} … {{CANDIDATE_PROOF_POINT_4}}: der jeweils passende Beleg aus Lebenslauf und Profil-Angaben nach der XYZ-Logik (Ergebnis + Methode/Tool). Hebe in der rechten Spalte insgesamt ein bis zwei Highlights mit <strong>…</strong> hervor (z. B. <strong>phase6</strong>, <strong>Multi-Agenten-KI-Tool</strong>, <strong>Expo EAS</strong>, <strong>100 % TypeScript</strong>).
+- {{JOB_REQUIREMENT_1}} … {{JOB_REQUIREMENT_4}}: die vier wichtigsten Anforderungen der Anzeige, prägnant formuliert — mit den Wörtern der Anzeige, nicht umschrieben ("Ownership" bleibt "Ownership", "React Native" wird nicht "Mobile"). Reihenfolge nach Gewicht in der Anzeige: was zuerst steht oder als Muss markiert ist, kommt in Zeile 1.
+- {{CANDIDATE_PROOF_POINT_1}} … {{CANDIDATE_PROOF_POINT_4}}: der jeweils passende Beleg aus Lebenslauf und Profil-Angaben nach der XYZ-Logik (Ergebnis + Methode/Tool). Jeder Beleg enthält mindestens eine Zahl (Nutzer, Prozent, Dauer, Teamgröße); gibt der Lebenslauf keine her, dann Umfang ("drei Apps in Produktion") statt Adjektiv — keine Zahl erfinden. Hebe in der rechten Spalte insgesamt ein bis zwei Highlights mit <strong>…</strong> hervor (z. B. <strong>phase6</strong>, <strong>Multi-Agenten-KI-Tool</strong>, <strong>Expo EAS</strong>, <strong>100 % TypeScript</strong>).
 
 Schluss
 - {{RELEVANT_TECH_STACK_SUMMARY}}: der für die Stelle relevante Stack in einer Wendung (z. B. "im React- und Expo-Ökosystem", "in moderner Software-Architektur und KI-Workflows").

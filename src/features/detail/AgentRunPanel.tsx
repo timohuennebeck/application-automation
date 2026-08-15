@@ -1,26 +1,20 @@
-import { Fragment, useEffect, useState } from 'react';
-import { ago, clock } from '../../lib/date';
+import { Fragment } from 'react';
+import { ago, elapsed } from '../../lib/date';
 import type { AgentRunView } from '../../state/db-view';
+import { INTERRUPTED_HEADLINE } from '../../shared/agent';
 import type { AgentStepRow } from '../../shared/db-types';
-import type { TemplateVersion } from '../../shared/domain';
-import { AgentRunStatus, AgentStepKey, AgentStepStatus } from '../../shared/enums';
+import type { TemplateSlots, TemplateVersion } from '../../shared/domain';
+import { AgentRunStatus, AgentStepKey, AgentStepStatus, TEMPLATE_TITLES } from '../../shared/enums';
 import type { TemplateKind } from '../../shared/enums';
 import { useApp } from '../../state/store-context';
 import { AttachmentChip } from '../../ui/AttachmentChip';
 import { LinkChip } from '../../ui/MentionText';
 import { KeplerAvatar, RegenGlyph, StopGlyph } from '../../ui/icons';
-
-type Templates = Record<TemplateKind, TemplateVersion[]>;
-
-/* What a doc chip says while its slot has no upload yet: the slot itself,
-   named as the profile dialog names it. */
-const SLOT_TITLES: Record<TemplateKind, string> = {
-  LEBENSLAUF: 'Lebenslauf',
-  ANSCHREIBEN: 'Anschreiben',
-};
+import { RUN_BORDER_BG, SHIMMER_BG } from '../../ui/styles';
+import { useDesktopList } from '../../ui/useDesktopList';
 
 /* The Fassung Kepler uses for a slot — what the doc chip stands for. */
-function selectedOf(templates: Templates | null, kind: TemplateKind): TemplateVersion | undefined {
+function selectedOf(templates: TemplateSlots | null, kind: TemplateKind): TemplateVersion | undefined {
   return templates?.[kind].find((v) => v.selected);
 }
 
@@ -49,8 +43,7 @@ const STEP_STYLE = {
     weight: 600,
     dotAnim: 'om-spin 2.4s linear infinite',
     textAnim: 'om-shimmer 2.4s linear infinite',
-    textBg:
-      'linear-gradient(90deg,var(--c-a5a29a) 0%,var(--c-a5a29a) 28%,var(--c-1b1a17) 46%,var(--c-a5a29a) 64%,var(--c-a5a29a) 100%)',
+    textBg: SHIMMER_BG,
   },
   [AgentStepStatus.WAIT]: {
     r: 5.5,
@@ -139,9 +132,7 @@ function tokenize(label: string): Token[] {
 /* 'seit 1:14' while running, 'vor 9 Min' once done — from the row's own
    timestamps, re-rendered by the store's second tick. */
 function stepMeta(step: AgentStepRow): string {
-  if (step.status === AgentStepStatus.RUN && step.started_at) {
-    return 'seit ' + clock(Math.max(0, Math.floor((Date.now() - Date.parse(step.started_at)) / 1000)));
-  }
+  if (step.status === AgentStepStatus.RUN && step.started_at) return 'seit ' + elapsed(step.started_at);
   if (step.finished_at) return ago(step.finished_at);
   return '';
 }
@@ -154,7 +145,7 @@ function StepRow({
   onStop,
 }: {
   step: AgentStepRow;
-  templates: Templates | null;
+  templates: TemplateSlots | null;
   /* The address the step works from — the posting URL on the fetch step,
      shown as the same blue pill a link gets in comments and properties. */
   link?: string | null;
@@ -220,7 +211,8 @@ function StepRow({
           return (
             <AttachmentChip
               key={i}
-              name={selectedOf(templates, doc)?.name ?? SLOT_TITLES[doc]}
+              /* Falls back to the slot's own name while nothing is uploaded. */
+              name={selectedOf(templates, doc)?.name ?? TEMPLATE_TITLES[doc]}
               size={selectedOf(templates, doc)?.size}
               title="Im Browser öffnen"
               // Cancel out the chip padding so it doesn't grow the step row.
@@ -303,33 +295,23 @@ export function AgentRunPanel({ view }: { view: AgentRunView }) {
   /* While queued the label is the queue headline ("Kepler wartet in der
      Warteschlange…"); once running, the header states who owns the record. */
   const heading = failed
-    ? 'Kepler wurde unterbrochen'
+    ? INTERRUPTED_HEADLINE
     : run.status === AgentRunStatus.QUEUED
       ? run.label
       : 'Kepler arbeitet an dieser Bewerbung';
 
   /* The doc chips show the profile templates as they really are on disk. A
      missing listing (still loading, no desktop) just leaves the size off. */
-  const [templates, setTemplates] = useState<Templates | null>(null);
-  useEffect(() => {
-    let live = true;
-    window.desktop?.templates
-      .list()
-      .then((s) => {
-        if (live) setTemplates(s);
-      })
-      .catch((err) => console.error('[templates]', err));
-    return () => {
-      live = false;
-    };
-  }, []);
+  const [templates] = useDesktopList<TemplateSlots>(
+    () => window.desktop?.templates.list(),
+    (msg) => console.error('[templates]', msg),
+  );
 
   return (
     <div
       style={{
         borderRadius: 10,
-        background:
-          'linear-gradient(var(--c-fff),var(--c-fff)) padding-box, conic-gradient(from var(--oa),var(--run) 0deg,color-mix(in srgb, var(--run) 22%, transparent) 34deg,transparent 50deg,transparent 322deg,color-mix(in srgb, var(--run) 60%, transparent) 360deg) border-box',
+        background: RUN_BORDER_BG,
         animation: failed ? 'none' : 'om-ang 2.6s linear infinite',
         border: failed ? '1.5px solid var(--c-eae7e0)' : '1.5px solid transparent',
         padding: '13px 14px',

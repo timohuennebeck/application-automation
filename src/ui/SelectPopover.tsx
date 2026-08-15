@@ -6,9 +6,9 @@
    AppState.dropdown, which the global outside-click handler clears). */
 import { useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { DashedPlus } from './AddRow';
-import { SearchGlyph } from './icons';
 import { MenuItem } from './MenuItem';
 import { Popover } from './Popover';
+import { SearchRow, cycleActive } from './SearchRow';
 
 /* Longer lists (Branche) scroll inside the popover instead of growing past
    the bottom of the window. Matches the salary picker's list height. */
@@ -113,7 +113,7 @@ export function SelectPopover({
     if (e.key === 'Enter' && rows) pickRow(active >= 0 && active < rows ? active : 0);
     if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && rows) {
       e.preventDefault();
-      const next = e.key === 'ArrowDown' ? (active + 1) % rows : active <= 0 ? rows - 1 : active - 1;
+      const next = cycleActive(active, rows, e.key);
       setActive(next);
       listRef.current?.children[next]?.scrollIntoView({ block: 'nearest' });
     }
@@ -128,32 +128,16 @@ export function SelectPopover({
       style={drop.up ? { top: 'auto', bottom: 'calc(100% + 2px)' } : undefined}
     >
       {searchable && (
-        <div
-          ref={searchRef}
-          style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 8px 7px' }}
-        >
-          <SearchGlyph />
-          <input
-            value={query}
-            autoFocus
-            placeholder="Suchen"
-            onChange={(e) => {
-              setQuery(e.target.value);
-              setActive(-1);
-            }}
-            onKeyDown={navKeys}
-            style={{
-              fontSize: 12.5,
-              color: 'var(--c-28261f)',
-              border: 'none',
-              outline: 'none',
-              background: 'transparent',
-              flex: '1 1 0',
-              minWidth: 0,
-              padding: 0,
-            }}
-          />
-        </div>
+        <SearchRow
+          containerRef={searchRef}
+          value={query}
+          placeholder="Suchen"
+          onChange={(v) => {
+            setQuery(v);
+            setActive(-1);
+          }}
+          onKeyDown={navKeys}
+        />
       )}
       <div
         ref={listRef}

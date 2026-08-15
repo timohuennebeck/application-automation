@@ -1,13 +1,7 @@
 import type { MouseEvent, KeyboardEvent } from 'react';
 import { SelectPopover } from './SelectPopover';
 import { TrashGlyph } from './icons';
-
-const ELLIPSIS = {
-  overflow: 'hidden',
-  textOverflow: 'ellipsis',
-  whiteSpace: 'nowrap',
-  minWidth: 0,
-} as const;
+import { ELLIPSIS } from './styles';
 
 /* A select over a list the user curates in place — companies, locations:
    searchable, a „…“ neu anlegen row for a name the list lacks (the caller

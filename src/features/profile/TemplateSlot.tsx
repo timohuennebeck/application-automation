@@ -6,10 +6,10 @@ import type { TemplateKind } from '../../shared/enums';
 import { useApp } from '../../state/store-context';
 import { AddRow } from '../../ui/AddRow';
 import { DocumentCard } from '../../ui/DocumentCard';
-import { MenuItem, MenuSize } from '../../ui/MenuItem';
-import { Popover, PopoverAnchor } from '../../ui/Popover';
+import { DotsMenu, DownloadItem } from '../../ui/DotsMenu';
+import { MenuItem } from '../../ui/MenuItem';
 import { SelectDot } from '../../ui/SelectDot';
-import { DocFormat, DotsGlyph } from '../../ui/icons';
+import { DocFormat } from '../../ui/icons';
 
 const byLabel = (a: TemplateVersion, b: TemplateVersion) => a.label.localeCompare(b.label, 'de');
 
@@ -44,10 +44,13 @@ export function TemplateSlot({
   versions: TemplateVersion[];
   /* False until the first listing landed — nothing is claimed about the slot. */
   loaded: boolean;
-  onChange: (next: TemplateVersion[]) => void;
+  /* Updater form, applied to the list as it stands when the bridge answers —
+     a slow call (openPdf renders in a hidden window) must not clobber a
+     selection made while it was in flight. */
+  onChange: (update: (prev: TemplateVersion[]) => TemplateVersion[]) => void;
   onError: (msg: string | null) => void;
 }) {
-  const { st, set } = useApp();
+  const { set } = useApp();
   /* The label whose file is being written; '' while a new Fassung is copied. */
   const [busy, setBusy] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<{ label: string; draft: string } | null>(null);
@@ -61,104 +64,80 @@ export function TemplateSlot({
     return api;
   };
 
-  /* Replaces (or adds) the one Fassung the bridge reported back. */
-  const patch = (v: TemplateVersion) =>
-    onChange([...versions.filter((x) => x.label !== v.label), v].sort(byLabel));
-
-  /* Native picker → copy; the caller decides whether that adds a Fassung or
-     swaps the file of an existing one. */
-  const pickAndWrite = async (
-    label: string,
-    write: (api: NonNullable<typeof window.desktop>, source: string) => Promise<TemplateVersion>,
-  ) => {
+  /* The shared frame of every bridge write: menu closed, error line cleared,
+     failures shown on the dialog's error line. */
+  const act = async (fn: (api: NonNullable<typeof window.desktop>) => Promise<void>) => {
     const api = desktop();
     set({ dropdown: null });
     if (!api) return;
     onError(null);
     try {
+      await fn(api);
+    } catch (err) {
+      onError(String(err));
+    }
+  };
+
+  /* Replaces (or adds) the one Fassung the bridge reported back. */
+  const patch = (v: TemplateVersion, replacing = v.label) =>
+    onChange((prev) => [...prev.filter((x) => x.label !== replacing), v].sort(byLabel));
+
+  /* Native picker → copy; the caller decides whether that adds a Fassung or
+     swaps the file of an existing one. */
+  const pickAndWrite = (
+    label: string,
+    write: (api: NonNullable<typeof window.desktop>, source: string) => Promise<TemplateVersion>,
+  ) =>
+    act(async (api) => {
       /* Same native picker the document cards use — only the title and the
          offered file type differ. */
       const source = await api.documents.pick('Vorlage auswählen', 'html');
       if (!source) return; // cancelled
       setBusy(label);
-      patch(await write(api, source));
-    } catch (err) {
-      console.error('[templates]', err);
-      onError(String(err));
-    } finally {
-      setBusy(null);
-    }
-  };
+      try {
+        patch(await write(api, source));
+      } finally {
+        setBusy(null);
+      }
+    });
 
   const add = () => pickAndWrite('', (api, source) => api.templates.add(kind, source));
   const replace = (label: string) =>
     pickAndWrite(label, (api, source) => api.templates.replace(kind, label, source));
 
-  const select = async (label: string) => {
-    const api = desktop();
-    if (!api) return;
-    onError(null);
-    try {
+  const select = (label: string) =>
+    act(async (api) => {
       await api.templates.select(kind, label);
-      onChange(versions.map((v) => ({ ...v, selected: v.label === label })));
-    } catch (err) {
-      onError(String(err));
-    }
-  };
+      onChange((prev) => prev.map((v) => ({ ...v, selected: v.label === label })));
+    });
 
-  const open = async (label: string) => {
-    set({ dropdown: null });
-    onError(null);
-    const err = await window.desktop?.templates.open(kind, label);
-    if (err) onError(err);
-  };
+  const open = (label: string) =>
+    act(async (api) => {
+      const err = await api.templates.open(kind, label);
+      if (err) onError(err);
+    });
 
-  const openPdf = async (label: string) => {
-    const api = desktop();
-    set({ dropdown: null });
-    if (!api) return;
-    onError(null);
-    try {
-      patch(await api.templates.openPdf(kind, label));
-    } catch (err) {
-      onError(String(err));
-    }
-  };
+  const openPdf = (label: string) => act(async (api) => patch(await api.templates.openPdf(kind, label)));
 
-  const remove = async (label: string) => {
-    const api = desktop();
-    set({ dropdown: null });
-    if (!api) return;
-    onError(null);
-    try {
+  const remove = (label: string) =>
+    act(async (api) => {
       await api.templates.remove(kind, label);
-      onChange(versions.filter((v) => v.label !== label));
-    } catch (err) {
-      onError(String(err));
-    }
-  };
+      onChange((prev) => prev.filter((v) => v.label !== label));
+    });
 
   /* The input stays until the bridge has answered: leaving it on Enter would
      show the old label for the round trip and then flip — a flash. */
   const commitRename = async () => {
     const r = renaming;
     if (!r || committing.current) return;
-    const api = desktop();
-    if (!api || r.draft.trim() === r.label) {
+    if (r.draft.trim() === r.label) {
       setRenaming(null);
       return;
     }
     committing.current = true;
-    onError(null);
-    try {
-      const v = await api.templates.rename(kind, r.label, r.draft);
-      onChange([...versions.filter((x) => x.label !== r.label), v].sort(byLabel));
-    } catch (err) {
-      onError(String(err));
-    } finally {
-      committing.current = false;
-      setRenaming(null);
-    }
+    await act(async (api) => patch(await api.templates.rename(kind, r.label, r.draft), r.label));
+    committing.current = false;
+    setRenaming(null);
   };
 
   return (
@@ -179,11 +158,7 @@ export function TemplateSlot({
       )}
 
       {versions.map((v, i) => {
-        const menuKey = `template:${kind}:${v.label}`;
         const working = busy === v.label;
-        /* The dialog body scrolls; the last card's menu opens upwards rather
-           than off the bottom edge. */
-        const flipUp = i === versions.length - 1 && versions.length > 1;
         const isRenaming = renaming?.label === v.label;
         return (
           <DocumentCard
@@ -224,65 +199,41 @@ export function TemplateSlot({
               if (!v.selected) select(v.label);
             }}
           >
-            {/* stopPropagation throughout, or the card's own click would fire
-                behind the menu. */}
-            <PopoverAnchor>
-              <div
-                className="doc-dl"
-                title="Mehr"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onError(null);
-                  set((s) => ({ dropdown: s.dropdown === menuKey ? null : menuKey }));
+            <DotsMenu
+              menuKey={`template:${kind}:${v.label}`}
+              /* The dialog body scrolls; the last card's menu opens upwards
+                 rather than off the bottom edge. */
+              flipUp={i === versions.length - 1 && versions.length > 1}
+              onOpen={() => onError(null)}
+            >
+              <DownloadItem label="HTML herunterladen" bytes={v.size} onClick={() => open(v.label)} />
+              <DownloadItem label="PDF herunterladen" bytes={v.pdfSize} onClick={() => openPdf(v.label)} />
+              <MenuItem style={{ whiteSpace: 'nowrap' }} onClick={() => replace(v.label)}>
+                Ersetzen mit eigener Datei
+              </MenuItem>
+              <MenuItem
+                style={{ whiteSpace: 'nowrap' }}
+                onClick={() => {
+                  set({ dropdown: null });
+                  setRenaming({ label: v.label, draft: v.label });
                 }}
               >
-                <DotsGlyph />
-              </div>
-              {st.dropdown === menuKey && (
-                <div onClick={(e) => e.stopPropagation()}>
-                  <Popover
-                    top={32}
-                    style={flipUp ? { top: 'auto', bottom: 32 } : undefined}
-                    right={0}
-                    minWidth={196}
-                  >
-                    <MenuItem onClick={() => open(v.label)}>
-                      <span style={{ flex: '1 1 auto', whiteSpace: 'nowrap' }}>HTML herunterladen</span>
-                      <MenuSize bytes={v.size} />
-                    </MenuItem>
-                    <MenuItem onClick={() => openPdf(v.label)}>
-                      <span style={{ flex: '1 1 auto', whiteSpace: 'nowrap' }}>PDF herunterladen</span>
-                      <MenuSize bytes={v.pdfSize} />
-                    </MenuItem>
-                    <MenuItem style={{ whiteSpace: 'nowrap' }} onClick={() => replace(v.label)}>
-                      Ersetzen mit eigener Datei
-                    </MenuItem>
-                    <MenuItem
-                      style={{ whiteSpace: 'nowrap' }}
-                      onClick={() => {
-                        set({ dropdown: null });
-                        setRenaming({ label: v.label, draft: v.label });
-                      }}
-                    >
-                      Umbenennen
-                    </MenuItem>
-                    {/* The selected Fassung stays: a slot with files always has
-                        one Kepler can use. */}
-                    <MenuItem
-                      danger
-                      disabled={v.selected}
-                      title={v.selected ? 'Wird gerade verwendet' : undefined}
-                      style={{ whiteSpace: 'nowrap' }}
-                      onClick={() => {
-                        if (!v.selected) remove(v.label);
-                      }}
-                    >
-                      Löschen
-                    </MenuItem>
-                  </Popover>
-                </div>
-              )}
-            </PopoverAnchor>
+                Umbenennen
+              </MenuItem>
+              {/* The selected Fassung stays: a slot with files always has one
+                  Kepler can use. */}
+              <MenuItem
+                danger
+                disabled={v.selected}
+                title={v.selected ? 'Wird gerade verwendet' : undefined}
+                style={{ whiteSpace: 'nowrap' }}
+                onClick={() => {
+                  if (!v.selected) remove(v.label);
+                }}
+              >
+                Löschen
+              </MenuItem>
+            </DotsMenu>
           </DocumentCard>
         );
       })}

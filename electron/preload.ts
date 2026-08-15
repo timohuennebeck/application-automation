@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
+import { DB_CHANNELS } from './db/channels.ts';
 import type { AgentEvent, AgentStartResult } from '../src/shared/agent.ts';
 import type { AttachmentInput, DbApi } from '../src/shared/db-types.ts';
 import type { DocumentUpload, ProfileDocumentInfo, TemplateVersion } from '../src/shared/domain.ts';
@@ -9,62 +10,23 @@ const invoke =
   (...args: unknown[]) =>
     ipcRenderer.invoke(channel, ...args);
 
-/* Mirrors electron/db/ipc.ts channel-for-channel; DbApi keeps both sides honest. */
-const db: DbApi = {
-  load: invoke('db:load') as DbApi['load'],
-  applications: {
-    create: invoke('db:applications.create'),
-    update: invoke('db:applications.update'),
-    move: invoke('db:applications.move'),
-    delete: invoke('db:applications.delete'),
-    relinkCompany: invoke('db:applications.relinkCompany'),
-  } as DbApi['applications'],
-  companies: {
-    update: invoke('db:companies.update'),
-    delete: invoke('db:companies.delete'),
-  } as DbApi['companies'],
-  locations: { delete: invoke('db:locations.delete') } as DbApi['locations'],
-  roles: { delete: invoke('db:roles.delete') } as DbApi['roles'],
-  facts: {
-    upsert: invoke('db:facts.upsert'),
-    delete: invoke('db:facts.delete'),
-  } as DbApi['facts'],
-  comments: {
-    add: invoke('db:comments.add'),
-    update: invoke('db:comments.update'),
-    delete: invoke('db:comments.delete'),
-  } as DbApi['comments'],
-  rounds: { set: invoke('db:rounds.set') } as DbApi['rounds'],
-  roundNotes: { add: invoke('db:roundNotes.add') } as DbApi['roundNotes'],
-  people: {
-    create: invoke('db:people.create'),
-    update: invoke('db:people.update'),
-    delete: invoke('db:people.delete'),
-  } as DbApi['people'],
-  applicationPeople: {
-    set: invoke('db:applicationPeople.set'),
-  } as DbApi['applicationPeople'],
-  followups: {
-    setDue: invoke('db:followups.setDue'),
-    setCompleted: invoke('db:followups.setCompleted'),
-    saveEmail: invoke('db:followups.saveEmail'),
-  } as DbApi['followups'],
-  documents: { setFile: invoke('db:documents.setFile') } as DbApi['documents'],
-  activities: { add: invoke('db:activities.add') } as DbApi['activities'],
-  profileFacts: {
-    add: invoke('db:profileFacts.add'),
-    update: invoke('db:profileFacts.update'),
-    delete: invoke('db:profileFacts.delete'),
-    reorder: invoke('db:profileFacts.reorder'),
-  } as DbApi['profileFacts'],
-};
+/* Derived from DB_CHANNELS name-for-name ('db:group.method' → db.group.method,
+   'db:load' → db.load), so a new channel can never be forgotten here; DbApi is
+   the shape the renderer sees and keeps both sides honest. */
+const db = {} as Record<string, unknown>;
+for (const channel of Object.keys(DB_CHANNELS)) {
+  const [group, method] = channel.slice('db:'.length).split('.');
+  if (!method) db[group] = invoke(channel);
+  else ((db[group] ??= {}) as Record<string, unknown>)[method] = invoke(channel);
+}
+const dbApi = db as unknown as DbApi;
 
 /* The only surface the renderer gets. */
 const api = {
   platform: process.platform,
   setTheme: (theme: 'light' | 'dark') => ipcRenderer.send('theme:set', theme),
   openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
-  db,
+  db: dbApi,
   documents: {
     /* Native picker; null when the dialog was cancelled. */
     pick: (title: string, type: 'docx' | 'html'): Promise<string | null> =>

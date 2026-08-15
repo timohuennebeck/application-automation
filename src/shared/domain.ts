@@ -1,5 +1,6 @@
 /* Domain constants and types shared by the Electron main process (seed, repo,
    files) and the renderer. */
+import type { TemplateKind } from './enums.ts';
 
 /* The preset titles the create-interview dialog offers, mirroring the
    interview stages of the kanban board. */
@@ -45,9 +46,6 @@ export interface TemplateInfo {
   day: string;
 }
 
-/* A file in the profile's document folder — Immatrikulationsbescheinigung,
-   Zeugnisse, whatever should be kept in one place. Same shape as a template,
-   and read from disk in the same way; the name doubles as its id. */
 /* One Fassung of a template slot: its file plus the label it is filed under
    (the directory name) and whether it is the one Kepler uses. */
 export interface TemplateVersion extends TemplateInfo {
@@ -57,4 +55,11 @@ export interface TemplateVersion extends TemplateInfo {
   pdfSize: number | null;
 }
 
+/* Every slot's Fassungen, as templates:list reports them — the shape the
+   profile dialog and the run panel's doc chips both consume. */
+export type TemplateSlots = Record<TemplateKind, TemplateVersion[]>;
+
+/* A file in the profile's document folder — Immatrikulationsbescheinigung,
+   Zeugnisse, whatever should be kept in one place. Same shape as a template,
+   and read from disk in the same way; the name doubles as its id. */
 export type ProfileDocumentInfo = TemplateInfo;

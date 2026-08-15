@@ -4,9 +4,11 @@ import { initials } from '../../lib/text';
 import { isHttpUrl } from '../../lib/url';
 import { useApp } from '../../state/store-context';
 import { FieldChip } from '../../ui/FieldChip';
+import { InlineFieldInput, LinkValueChip, TextValueChip } from '../../ui/FieldValue';
 import { FIELD_GLYPH_SLOT, FieldGlyph } from '../../ui/field-glyphs';
 import { PopoverAnchor } from '../../ui/Popover';
-import { Avatar, LinkGlyph } from '../../ui/icons';
+import { Avatar } from '../../ui/icons';
+import { ELLIPSIS } from '../../ui/styles';
 import { CompanyPopover } from '../companies/CompanyPopover';
 import { RolePopover } from '../detail/properties/RolePopover';
 
@@ -35,13 +37,6 @@ const DD_KEY: Partial<Record<FieldDef['prop'], string>> = {
   role: 'person:role',
 };
 const DD_KEYS = new Set(Object.values(DD_KEY));
-
-const ELLIPSIS = {
-  overflow: 'hidden',
-  textOverflow: 'ellipsis',
-  whiteSpace: 'nowrap',
-  minWidth: 0,
-} as const;
 
 /* Inline person editor shown inside a popover, from a participant chip or a
    contact picker. Field edits land in `personFieldDraft` and are folded into
@@ -150,19 +145,15 @@ export function PersonEditCard({
               </PopoverAnchor>
             );
           } else if (editing) {
-            /* A URL field only takes a full web address. While the draft is
-               anything else the input turns red and Enter does nothing;
-               leaving the field drops the draft instead of storing text that
-               is not a link — same rule as the sidebar's link rows. */
-            const typed = (st.personFieldDraft || '').trim();
-            const invalid = !!f.url && !!typed && !isHttpUrl(typed);
+            /* The field edit lands in personFieldDraft and is folded into the
+               person draft on blur; an invalid URL draft is dropped — same
+               rule as the sidebar's link rows. */
             value = (
-              <input
+              <InlineFieldInput
                 value={st.personFieldDraft}
-                autoFocus
-                placeholder={f.url ? 'https://…' : undefined}
-                title={invalid ? 'Nur vollständige Links (https://…)' : undefined}
-                onChange={(e) => set({ personField: f.prop, personFieldDraft: e.target.value })}
+                url={f.url}
+                onChange={(v2) => set({ personField: f.prop, personFieldDraft: v2 })}
+                onEscape={() => set({ personField: null, personFieldDraft: '' })}
                 onBlur={() =>
                   set((s) => {
                     if (s.personField !== f.prop) return {};
@@ -175,59 +166,19 @@ export function PersonEditCard({
                     };
                   })
                 }
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !invalid) e.currentTarget.blur();
-                  if (e.key === 'Escape') {
-                    e.stopPropagation();
-                    set({ personField: null, personFieldDraft: '' });
-                  }
-                }}
-                /* Sized exactly like the chip it replaces (font, line height,
-                   1px border in place of the chip's padding), so focusing a
-                   field does not move the rows around it. */
-                style={{
-                  fontSize: 12.5,
-                  color: 'var(--c-28261f)',
-                  lineHeight: 1.45,
-                  border: '1px solid ' + (invalid ? 'var(--c-c2564c)' : 'var(--c-cfccc3)'),
-                  borderRadius: 5,
-                  padding: '1px 5px',
-                  marginLeft: -6,
-                  background: 'var(--c-fff)',
-                  outline: 'none',
-                  flex: '1 1 0',
-                  minWidth: 0,
-                }}
               />
             );
           } else if (f.url && v) {
-            /* A filled link is a link, like the sidebar rows: the pill opens
-               the address, the ✕ removes it. Editing = remove and add again. */
-            value = (
-              <FieldChip
-                link
-                title={v}
-                style={{ marginLeft: -6 }}
-                onClear={clear}
-                clearTitle={clearTitle}
-                onClick={() => window.desktop?.openExternal(v)}
-              >
-                <LinkGlyph />
-                <span style={ELLIPSIS}>{v}</span>
-              </FieldChip>
-            );
+            value = <LinkValueChip value={v} onClear={clear} clearTitle={clearTitle} />;
           } else {
             value = (
-              <FieldChip
+              <TextValueChip
+                value={v}
                 empty={!v}
-                title={v || undefined}
-                style={{ marginLeft: -6, cursor: 'text' }}
                 onClear={clear}
                 clearTitle={clearTitle}
                 onClick={() => startEdit(f.prop, v)}
-              >
-                <span style={ELLIPSIS}>{v || 'Hinzufügen'}</span>
-              </FieldChip>
+              />
             );
           }
           return (

@@ -1,7 +1,8 @@
 import { Fragment, useRef, useState } from 'react';
 import { DashedPlus } from '../../ui/AddRow';
 import { MenuItem, MenuLabel } from '../../ui/MenuItem';
-import { Avatar, PencilGlyph, SearchGlyph } from '../../ui/icons';
+import { SearchRow, cycleActive } from '../../ui/SearchRow';
+import { Avatar, PencilGlyph } from '../../ui/icons';
 import { UNKNOWN_COMPANY } from '../../shared/domain';
 import type { PersonSuggestion } from '../../state/store-context';
 
@@ -46,48 +47,34 @@ export function PeoplePicker({
 
   return (
     <>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 8px 7px' }}>
-        <SearchGlyph />
-        <input
-          value={draft}
-          autoFocus
-          placeholder="Person suchen"
-          onChange={(e) => {
-            onDraftChange(e.target.value);
-            setActive(-1);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') {
-              e.stopPropagation();
-              onClose();
-            }
-            if (e.key === 'Enter') {
-              if (active >= 0 && active < matches.length) onToggle(matches[active].key);
-              else if (active === matches.length) onCreate(draft.trim());
-              else if (matches.length) onToggle(matches[0].key);
-              else if (q) onCreate(draft.trim());
-            }
-            if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-              e.preventDefault();
-              const next = e.key === 'ArrowDown' ? (active + 1) % rows : active <= 0 ? rows - 1 : active - 1;
-              setActive(next);
-              /* Rows by class, not by child index — the section labels sit
-                 between them. */
-              listRef.current?.querySelectorAll('.menu-item')[next]?.scrollIntoView({ block: 'nearest' });
-            }
-          }}
-          style={{
-            fontSize: 12.5,
-            color: 'var(--c-28261f)',
-            border: 'none',
-            outline: 'none',
-            background: 'transparent',
-            flex: '1 1 0',
-            minWidth: 0,
-            padding: 0,
-          }}
-        />
-      </div>
+      <SearchRow
+        value={draft}
+        placeholder="Person suchen"
+        onChange={(v) => {
+          onDraftChange(v);
+          setActive(-1);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') {
+            e.stopPropagation();
+            onClose();
+          }
+          if (e.key === 'Enter') {
+            if (active >= 0 && active < matches.length) onToggle(matches[active].key);
+            else if (active === matches.length) onCreate(draft.trim());
+            else if (matches.length) onToggle(matches[0].key);
+            else if (q) onCreate(draft.trim());
+          }
+          if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            e.preventDefault();
+            const next = cycleActive(active, rows, e.key);
+            setActive(next);
+            /* Rows by class, not by child index — the section labels sit
+               between them. */
+            listRef.current?.querySelectorAll('.menu-item')[next]?.scrollIntoView({ block: 'nearest' });
+          }
+        }}
+      />
       <div
         ref={listRef}
         className="no-scrollbar"

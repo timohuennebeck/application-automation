@@ -1,14 +1,16 @@
 import { INTEREST } from '../../data/config';
 import type { ColumnDef } from '../../data/config';
 import { Urgency } from '../../data/config';
+import { INTERRUPTED_HEADLINE } from '../../shared/agent';
 import { AgentRunStatus, Assignee, Interest } from '../../shared/enums';
-import { clock } from '../../lib/date';
+import { elapsed } from '../../lib/date';
 import { initials } from '../../lib/text';
 import { agentLocked, agentRunFor, cardSubtitle, cardView, interviewChip } from '../../state/selectors';
 import { useApp } from '../../state/store-context';
 import {
   Avatar,
   BriefcaseGlyph,
+  ErrorDot,
   EuroGlyph,
   GlobeGlyph,
   PinGlyph,
@@ -17,6 +19,7 @@ import {
   RegenGlyph,
   Spinner,
 } from '../../ui/icons';
+import { ELLIPSIS, RUN_BORDER_BG, SHIMMER_BG } from '../../ui/styles';
 import { dragOverCol, endDrag, makeGhost } from './dnd';
 
 /* The stacked company / location / salary / platform lines, each labelled by its icon. */
@@ -27,12 +30,6 @@ const FACT_ROW = {
   fontSize: 10.5,
   color: 'var(--c-5f5c56)',
   fontWeight: 500,
-  minWidth: 0,
-} as const;
-const ELLIPSIS = {
-  overflow: 'hidden',
-  textOverflow: 'ellipsis',
-  whiteSpace: 'nowrap',
   minWidth: 0,
 } as const;
 
@@ -99,7 +96,7 @@ export function ApplicationCard({ id, col, ci }: { id: string; col: ColumnDef; c
       style={{
         opacity: st.dragId === id ? 0.35 : run || failedRun ? 0.78 : 1,
         background: run
-          ? 'linear-gradient(var(--c-fff),var(--c-fff)) padding-box, conic-gradient(from var(--oa),var(--run) 0deg,color-mix(in srgb, var(--run) 22%, transparent) 34deg,transparent 50deg,transparent 322deg,color-mix(in srgb, var(--run) 60%, transparent) 360deg) border-box'
+          ? RUN_BORDER_BG
           : failedRun
             ? 'color-mix(in srgb, var(--c-c2564c) 4%, var(--c-fff))'
             : 'var(--c-fff)',
@@ -355,8 +352,7 @@ export function ApplicationCard({ id, col, ci }: { id: string; col: ColumnDef; c
               whiteSpace: 'nowrap',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
-              backgroundImage:
-                'linear-gradient(90deg,var(--c-a5a29a) 0%,var(--c-a5a29a) 28%,var(--c-1b1a17) 46%,var(--c-a5a29a) 64%,var(--c-a5a29a) 100%)',
+              backgroundImage: SHIMMER_BG,
               backgroundSize: '200% 100%',
               WebkitBackgroundClip: 'text',
               backgroundClip: 'text',
@@ -377,7 +373,7 @@ export function ApplicationCard({ id, col, ci }: { id: string; col: ColumnDef; c
               textAlign: 'right',
             }}
           >
-            {clock(Math.max(0, Math.floor((Date.now() - Date.parse(run.started_at)) / 1000)))}
+            {elapsed(run.started_at)}
           </div>
         </div>
       )}
@@ -394,16 +390,7 @@ export function ApplicationCard({ id, col, ci }: { id: string; col: ColumnDef; c
             padding: '5px 7px',
           }}
         >
-          <svg width="12" height="12" viewBox="0 0 14 14" style={{ flexShrink: 0 }}>
-            <circle cx="7" cy="7" r="5.5" fill="none" stroke="var(--c-c2564c)" strokeWidth="1.6" />
-            <path
-              d="M7 4.2 L7 7.8 M7 9.9 L7 10.1"
-              fill="none"
-              stroke="var(--c-c2564c)"
-              strokeWidth="1.7"
-              strokeLinecap="round"
-            />
-          </svg>
+          <ErrorDot />
           <div
             style={{
               fontSize: 9.5,
@@ -414,7 +401,7 @@ export function ApplicationCard({ id, col, ci }: { id: string; col: ColumnDef; c
               textOverflow: 'ellipsis',
             }}
           >
-            Kepler wurde unterbrochen
+            {INTERRUPTED_HEADLINE}
           </div>
           <div
             className="icon-btn icon-btn-fail icon-btn-fail-tinted"

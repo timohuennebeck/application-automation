@@ -596,3 +596,20 @@ export function CollapseGlyph() {
     </svg>
   );
 }
+
+/* The red error dot of a failed Kepler run — circle plus exclamation mark,
+   as the run panel's step rows draw it. */
+export function ErrorDot({ size = 12 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 14 14" style={{ flexShrink: 0 }}>
+      <circle cx="7" cy="7" r="5.5" fill="none" stroke="var(--c-c2564c)" strokeWidth="1.6" />
+      <path
+        d="M7 4.2 L7 7.8 M7 9.9 L7 10.1"
+        fill="none"
+        stroke="var(--c-c2564c)"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}

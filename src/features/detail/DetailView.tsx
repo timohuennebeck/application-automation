@@ -134,7 +134,6 @@ export function DetailView() {
   const locked = agentLocked(st, cardId);
   const app = st.applications[cardId];
   const summary = card.summary;
-  const docCard = { id: cardId, role: card.role, company: card.companyFull };
 
   return (
     <div
@@ -273,7 +272,7 @@ export function DetailView() {
               {showRun && <AgentRunPanel view={runView} />}
               <FollowUpSection cardId={cardId} role={card.role} company={card.company} />
               <InterviewsSection cardId={cardId} company={card.company} />
-              <DocumentsSection card={docCard} />
+              <DocumentsSection cardId={cardId} />
               <CommentsSection cardId={cardId} />
               <HistorySection cardId={cardId} />
             </div>

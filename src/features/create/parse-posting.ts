@@ -9,8 +9,6 @@ export interface Posting {
   company: string;
 }
 
-export { UNKNOWN_COMPANY, UNKNOWN_ROLE };
-
 export function parsePosting(url: string): Posting {
   const posting: Posting = { role: UNKNOWN_ROLE, company: UNKNOWN_COMPANY };
   const trimmed = (url || '').trim();

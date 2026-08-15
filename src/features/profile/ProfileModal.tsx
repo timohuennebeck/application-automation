@@ -1,43 +1,22 @@
-import { useEffect, useState } from 'react';
-import type { TemplateVersion } from '../../shared/domain';
-import { TemplateKind } from '../../shared/enums';
+import type { TemplateSlots } from '../../shared/domain';
+import { TEMPLATE_TITLES, TemplateKind } from '../../shared/enums';
 import { CLOSED_PROFILE, useApp } from '../../state/store-context';
+import { useState } from 'react';
 import { FieldGroup, ModalShell } from '../../ui/ModalShell';
+import { useDesktopList } from '../../ui/useDesktopList';
 import { FactList } from './FactList';
 import { ProfileDocuments } from './ProfileDocuments';
 import { TemplateSlot } from './TemplateSlot';
 
-type Slots = Record<TemplateKind, TemplateVersion[]>;
-
-const EMPTY_SLOTS: Slots = { [TemplateKind.LEBENSLAUF]: [], [TemplateKind.ANSCHREIBEN]: [] };
-
-const SLOTS: { kind: TemplateKind; title: string }[] = [
-  { kind: TemplateKind.LEBENSLAUF, title: 'Lebenslauf' },
-  { kind: TemplateKind.ANSCHREIBEN, title: 'Anschreiben' },
-];
+const EMPTY_SLOTS: TemplateSlots = { [TemplateKind.LEBENSLAUF]: [], [TemplateKind.ANSCHREIBEN]: [] };
 
 /* The documents that belong to you rather than to a single application. There
    is no table behind them: the dialog reads the Fassungen from disk when it
    opens, so it always shows what is really there. */
 export function ProfileModal() {
   const { set } = useApp();
-  const [slots, setSlots] = useState<Slots | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let live = true;
-    window.desktop?.templates
-      .list()
-      .then((s) => {
-        if (live) setSlots(s);
-      })
-      .catch((err) => {
-        if (live) setError(String(err));
-      });
-    return () => {
-      live = false;
-    };
-  }, []);
+  const [slots, setSlots] = useDesktopList(() => window.desktop?.templates.list(), setError);
 
   return (
     <ModalShell
@@ -50,16 +29,22 @@ export function ProfileModal() {
       >
         {error && <div style={{ fontSize: 11.5, color: 'var(--c-c2564c)', lineHeight: 1.45 }}>{error}</div>}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-          {SLOTS.map(({ kind, title }) => (
+          {Object.values(TemplateKind).map((kind) => (
             <TemplateSlot
               key={kind}
               kind={kind}
-              title={title}
+              title={TEMPLATE_TITLES[kind]}
               versions={slots?.[kind] ?? []}
               loaded={slots !== null}
-              /* Falls back to a blank pair rather than dropping the change: the
-                 initial listing may still be in flight, or may have failed. */
-              onChange={(next) => setSlots((s) => ({ ...(s ?? EMPTY_SLOTS), [kind]: next }))}
+              /* Applied to the list as it stands — falling back to a blank
+                 pair rather than dropping the change: the initial listing may
+                 still be in flight, or may have failed. */
+              onChange={(update) =>
+                setSlots((s) => {
+                  const prev = s ?? EMPTY_SLOTS;
+                  return { ...prev, [kind]: update(prev[kind]) };
+                })
+              }
               onError={setError}
             />
           ))}

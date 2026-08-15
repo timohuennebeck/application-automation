@@ -1,5 +1,3 @@
-import type { CSSProperties } from 'react';
-
 /* The dashed "+" circle on its own, for rows that do their own layout. Both
    parts are drawn rather than typeset: a text "+" is centred by its font
    metrics, which leave it sitting high and a hair left of the ring's middle. */
@@ -34,17 +32,13 @@ export function DashedPlus({ size = 18, active }: { size?: number; active?: bool
 /* Dashed "+" affordance used for adding people and contacts. */
 export function AddRow({
   label,
-  size = 18,
   active,
   onClick,
-  style,
 }: {
   label: string;
-  size?: number;
   /* Renders in the darker committed tone while its picker is open. */
   active?: boolean;
   onClick?: () => void;
-  style?: CSSProperties;
 }) {
   return (
     <div
@@ -61,10 +55,9 @@ export function AddRow({
         boxSizing: 'content-box',
         borderRadius: 5,
         ...(active ? { color: 'var(--c-5f5c56)', background: 'var(--c-e7e4dc)' } : null),
-        ...style,
       }}
     >
-      <DashedPlus size={size} active={active} />
+      <DashedPlus active={active} />
       <div style={{ fontSize: 12 }}>{label}</div>
     </div>
   );

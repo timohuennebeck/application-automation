@@ -142,15 +142,13 @@ export function Check({
   size = 11,
   stroke = 'var(--c-1b1a17)',
   strokeWidth = 1.7,
-  style,
 }: {
   size?: number;
   stroke?: string;
   strokeWidth?: number;
-  style?: CSSProperties;
 }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 12 12" style={{ flexShrink: 0, ...style }}>
+    <svg width={size} height={size} viewBox="0 0 12 12" style={{ flexShrink: 0 }}>
       <path
         d="M2.4 6.4 L4.8 8.8 L9.6 3.4"
         fill="none"
@@ -163,9 +161,9 @@ export function Check({
   );
 }
 
-export function SearchGlyph({ size = 12, style }: { size?: number; style?: CSSProperties }) {
+export function SearchGlyph({ size = 12 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 14 14" style={{ flexShrink: 0, ...style }}>
+    <svg width={size} height={size} viewBox="0 0 14 14" style={{ flexShrink: 0 }}>
       <circle cx="6" cy="6" r="4.2" fill="none" stroke="var(--c-a8a49b)" strokeWidth="1.5" />
       <path d="M9.2 9.2 L12.5 12.5" stroke="var(--c-a8a49b)" strokeWidth="1.5" strokeLinecap="round" />
     </svg>
@@ -173,9 +171,9 @@ export function SearchGlyph({ size = 12, style }: { size?: number; style?: CSSPr
 }
 
 /* Pencil: opens the editor for a row that is otherwise only selectable. */
-export function PencilGlyph({ size = 12, style }: { size?: number; style?: CSSProperties }) {
+export function PencilGlyph({ size = 12 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 14 14" style={{ flexShrink: 0, ...style }}>
+    <svg width={size} height={size} viewBox="0 0 14 14" style={{ flexShrink: 0 }}>
       <path
         d="M9.4 1.9 L12.1 4.6 L4.8 11.9 L1.7 12.3 L2.1 9.2 Z"
         fill="none"
@@ -212,65 +210,40 @@ const DOC_INK: Record<DocFormat, string> = {
   [DocFormat.EMPTY]: 'var(--c-c9c5bb)',
 };
 
-export function DocGlyph({
-  format = DocFormat.PDF,
-  width = 26,
-  height = 32,
-  strokeWidth = 1.2,
-  lineWidth = 1.5,
-  style,
-}: {
-  format?: DocFormat;
-  width?: number;
-  height?: number;
-  strokeWidth?: number;
-  lineWidth?: number;
-  style?: CSSProperties;
-}) {
+export function DocGlyph({ format = DocFormat.PDF }: { format?: DocFormat }) {
   const empty = format === DocFormat.EMPTY;
   const paper = empty ? 'var(--c-e0ded8)' : 'var(--c-d5d1c7)';
   return (
-    <svg
-      width={width}
-      height={height}
-      viewBox="0 0 26 32"
-      style={{ flexShrink: 0, opacity: empty ? 0.6 : 1, ...style }}
-    >
+    <svg width={26} height={32} viewBox="0 0 26 32" style={{ flexShrink: 0, opacity: empty ? 0.6 : 1 }}>
       <path
         d="M3 4 a2 2 0 0 1 2-2 h11 l7 7 v19 a2 2 0 0 1-2 2 H5 a2 2 0 0 1-2-2 Z"
         fill="var(--c-f6f5f1)"
         stroke={paper}
-        strokeWidth={strokeWidth}
+        strokeWidth={1.2}
       />
-      <path d="M16 2 v5 a2 2 0 0 0 2 2 h5" fill="none" stroke={paper} strokeWidth={strokeWidth} />
-      <path
-        d={DOC_LINES}
-        fill="none"
-        stroke={DOC_INK[format]}
-        strokeWidth={lineWidth}
-        strokeLinecap="round"
-      />
+      <path d="M16 2 v5 a2 2 0 0 0 2 2 h5" fill="none" stroke={paper} strokeWidth={1.2} />
+      <path d={DOC_LINES} fill="none" stroke={DOC_INK[format]} strokeWidth={1.5} strokeLinecap="round" />
     </svg>
   );
 }
 
-export function Spinner({
-  size = 12,
-  stroke = 'var(--c-1b1a17)',
-  style,
-}: {
-  size?: number;
-  stroke?: string;
-  style?: CSSProperties;
-}) {
+export function Spinner({ size = 12 }: { size?: number }) {
   return (
     <svg
       width={size}
       height={size}
       viewBox="0 0 14 14"
-      style={{ flexShrink: 0, animation: 'om-spin 2.4s linear infinite', ...style }}
+      style={{ flexShrink: 0, animation: 'om-spin 2.4s linear infinite' }}
     >
-      <circle cx="7" cy="7" r="5.5" fill="none" stroke={stroke} strokeWidth="1.6" strokeDasharray="2.2 2" />
+      <circle
+        cx="7"
+        cy="7"
+        r="5.5"
+        fill="none"
+        stroke="var(--c-1b1a17)"
+        strokeWidth="1.6"
+        strokeDasharray="2.2 2"
+      />
     </svg>
   );
 }
@@ -492,7 +465,11 @@ export function FilterGlyph() {
 /* Heroicons (24/outline) briefcase and currency-euro, drawn small enough for
    a board card. They label the company and salary lines so the two are
    telling apart at a glance. */
-export function BriefcaseGlyph({ size = 11, style }: { size?: number; style?: CSSProperties }) {
+/* One 24-grid outline envelope. The board card's four glyphs and every glyph in
+   field-glyphs.tsx are the same SVG with a different path, so the stroke, the
+   caps and the grid live here — five copies of this drifting apart is exactly
+   how a set of icons stops looking like a set. */
+export function Outline({ d, size = 11, style }: { d: string; size?: number; style?: CSSProperties }) {
   return (
     <svg
       width={size}
@@ -505,64 +482,34 @@ export function BriefcaseGlyph({ size = 11, style }: { size?: number; style?: CS
       strokeLinejoin="round"
       style={{ flexShrink: 0, ...style }}
     >
-      <path d="M20.25 14.15v4.25c0 1.094-.787 2.036-1.872 2.18-2.087.277-4.216.42-6.378.42s-4.291-.143-6.378-.42c-1.085-.144-1.872-1.086-1.872-2.18v-4.25m16.5 0a2.18 2.18 0 0 0 .75-1.661V8.706c0-1.081-.768-2.015-1.837-2.175a48.114 48.114 0 0 0-3.413-.387m4.5 8.006c-.194.165-.42.295-.673.38A23.978 23.978 0 0 1 12 15.75c-2.648 0-5.195-.429-7.577-1.22a2.016 2.016 0 0 1-.673-.38m0 0A2.18 2.18 0 0 1 3 12.489V8.706c0-1.081.768-2.015 1.837-2.175a48.111 48.111 0 0 1 3.413-.387m7.5 0V5.25A2.25 2.25 0 0 0 13.5 3h-3a2.25 2.25 0 0 0-2.25 2.25v.894m7.5 0a48.667 48.667 0 0 0-7.5 0M12 12.75h.008v.008H12v-.008Z" />
+      <path d={d} />
     </svg>
   );
+}
+
+const BRIEFCASEGLYPH_PATH =
+  'M20.25 14.15v4.25c0 1.094-.787 2.036-1.872 2.18-2.087.277-4.216.42-6.378.42s-4.291-.143-6.378-.42c-1.085-.144-1.872-1.086-1.872-2.18v-4.25m16.5 0a2.18 2.18 0 0 0 .75-1.661V8.706c0-1.081-.768-2.015-1.837-2.175a48.114 48.114 0 0 0-3.413-.387m4.5 8.006c-.194.165-.42.295-.673.38A23.978 23.978 0 0 1 12 15.75c-2.648 0-5.195-.429-7.577-1.22a2.016 2.016 0 0 1-.673-.38m0 0A2.18 2.18 0 0 1 3 12.489V8.706c0-1.081.768-2.015 1.837-2.175a48.111 48.111 0 0 1 3.413-.387m7.5 0V5.25A2.25 2.25 0 0 0 13.5 3h-3a2.25 2.25 0 0 0-2.25 2.25v.894m7.5 0a48.667 48.667 0 0 0-7.5 0M12 12.75h.008v.008H12v-.008Z';
+const PINGLYPH_PATH =
+  'M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z';
+const GLOBEGLYPH_PATH =
+  'M12 21a9.004 9.004 0 0 0 8.716-6.747M12 21a9.004 9.004 0 0 1-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 0 1 7.843 4.582M12 3a8.997 8.997 0 0 0-7.843 4.582m15.686 0A11.953 11.953 0 0 1 12 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0 1 21 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0 1 12 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 0 1 3 12c0-1.605.42-3.113 1.157-4.418';
+const EUROGLYPH_PATH =
+  'M14.25 7.756a4.5 4.5 0 1 0 0 8.488M7.5 10.5h5.25m-5.25 3h5.25M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z';
+
+export function BriefcaseGlyph({ size = 11, style }: { size?: number; style?: CSSProperties }) {
+  return <Outline d={BRIEFCASEGLYPH_PATH} size={size} style={style} />;
 }
 
 export function PinGlyph({ size = 11, style }: { size?: number; style?: CSSProperties }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.7}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      style={{ flexShrink: 0, ...style }}
-    >
-      <path d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-      <path d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
-    </svg>
-  );
+  return <Outline d={PINGLYPH_PATH} size={size} style={style} />;
 }
 
 export function GlobeGlyph({ size = 11, style }: { size?: number; style?: CSSProperties }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.7}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      style={{ flexShrink: 0, ...style }}
-    >
-      <path d="M12 21a9.004 9.004 0 0 0 8.716-6.747M12 21a9.004 9.004 0 0 1-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 0 1 7.843 4.582M12 3a8.997 8.997 0 0 0-7.843 4.582m15.686 0A11.953 11.953 0 0 1 12 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0 1 21 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0 1 12 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 0 1 3 12c0-1.605.42-3.113 1.157-4.418" />
-    </svg>
-  );
+  return <Outline d={GLOBEGLYPH_PATH} size={size} style={style} />;
 }
 
 export function EuroGlyph({ size = 11, style }: { size?: number; style?: CSSProperties }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.7}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      style={{ flexShrink: 0, ...style }}
-    >
-      <path d="M14.25 7.756a4.5 4.5 0 1 0 0 8.488M7.5 10.5h5.25m-5.25 3h5.25M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-    </svg>
-  );
+  return <Outline d={EUROGLYPH_PATH} size={size} style={style} />;
 }
 
 /* Collapse arrow on board column headers. */

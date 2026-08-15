@@ -1,6 +1,8 @@
-import type { CSSProperties, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { useApp } from '../state/store-context';
 import { Chevron } from './icons';
+
+const COLLAPSED_HEIGHT = '17px';
 
 /* Collapsible section with a chevron header and a count, as used throughout
    the detail view. Collapsed state is persisted in localStorage. */
@@ -8,18 +10,14 @@ export function Section({
   sectionKey,
   title,
   count,
-  collapsedHeight = '17px',
   gap = 12,
   children,
-  style,
 }: {
   sectionKey: string;
   title: string;
   count?: number | string;
-  collapsedHeight?: string;
   gap?: number;
   children: ReactNode;
-  style?: CSSProperties;
 }) {
   const { st, set } = useApp();
   const open = st.secOpen[sectionKey] !== false;
@@ -43,8 +41,8 @@ export function Section({
         gap,
         flexShrink: 0,
         overflow: open ? 'visible' : 'hidden',
-        maxHeight: open ? 'none' : collapsedHeight,
-        ...style,
+        /* Collapsed, only the header row is left standing. */
+        maxHeight: open ? 'none' : COLLAPSED_HEIGHT,
       }}
     >
       <div

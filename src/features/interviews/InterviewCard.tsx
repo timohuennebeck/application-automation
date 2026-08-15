@@ -7,6 +7,7 @@ import { Author, AUTHOR_LABEL, RoundState } from '../../shared/enums';
 import { useApp } from '../../state/store-context';
 import { CalendarPopover } from '../../ui/Calendar';
 import { ChipToggle } from '../../ui/ChipToggle';
+import { AvatarStack, stackLabel } from '../../ui/AvatarStack';
 import { FieldChip } from '../../ui/FieldChip';
 import { FieldRow } from '../../ui/FieldRow';
 import { MentionComposer } from '../../ui/MentionComposer';
@@ -151,11 +152,7 @@ export function InterviewCard({
   const noPeople = people.length === 0;
   /* The chip states who is on the round the way the sidebar's contact chip
      does: one name, or the first plus a count. */
-  const peopleLabel = noPeople
-    ? 'Kein Kontakt ausgewählt'
-    : people.length === 1
-      ? people[0].name
-      : people[0].name + ' +' + (people.length - 1);
+  const peopleLabel = stackLabel(people.map((p) => p.name));
 
   const clearPeople = () => {
     editRound((r) => {
@@ -394,17 +391,14 @@ export function InterviewCard({
               onClear={!done && !noPeople ? clearPeople : undefined}
               clearTitle="Alle Teilnehmer entfernen"
             >
-              <div style={{ display: 'flex', flexShrink: 0 }}>
-                {(noPeople ? [null] : people.slice(0, 3)).map((p, i) => (
-                  <Avatar
-                    key={p ? p.key : 'none'}
-                    bg={p ? (sy.muted ? 'var(--c-c9c5bb)' : p.bg) : 'var(--c-b3b0a8)'}
-                    style={{ boxShadow: '0 0 0 1.5px var(--c-fff)', marginLeft: i ? -6 : 0 }}
-                  >
-                    {p ? p.initials : '–'}
-                  </Avatar>
-                ))}
-              </div>
+              <AvatarStack
+                people={people.map((p) => ({
+                  key: p.key,
+                  initials: p.initials,
+                  bg: sy.muted ? 'var(--c-c9c5bb)' : p.bg,
+                }))}
+                ring="var(--c-fff)"
+              />
               <span style={{ fontSize: 12 }}>{peopleLabel}</span>
               {people.length === 1 && (
                 <span style={{ fontSize: 12, color: people[0].role ? 'var(--c-a5a29a)' : 'var(--c-c3c0b8)' }}>

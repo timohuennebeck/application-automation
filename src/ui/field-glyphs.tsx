@@ -1,5 +1,5 @@
-import type { CSSProperties, ReactNode } from 'react';
-import { BriefcaseGlyph, EuroGlyph, GlobeGlyph, PinGlyph } from './icons';
+import type { ReactNode } from 'react';
+import { BriefcaseGlyph, EuroGlyph, GlobeGlyph, Outline as SharedOutline, PinGlyph } from './icons';
 
 /* The small outline glyph that marks a property row's label — in the detail
    sidebar and the person editor alike. The four the board card already uses
@@ -9,23 +9,8 @@ import { BriefcaseGlyph, EuroGlyph, GlobeGlyph, PinGlyph } from './icons';
 
 const SIZE = 12;
 
-function Outline({ d, size = SIZE, style }: { d: string; size?: number; style?: CSSProperties }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.7}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      style={{ flexShrink: 0, ...style }}
-    >
-      <path d={d} />
-    </svg>
-  );
-}
+/* The sidebar draws these one step larger than the board card does. */
+const Outline = ({ d }: { d: string }) => <SharedOutline d={d} size={SIZE} />;
 
 const PATH: Record<string, string> = {
   identification:

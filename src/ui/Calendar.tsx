@@ -10,7 +10,6 @@ interface CalendarProps {
   isDisabled?: (iso: string) => boolean;
   onPick: (iso: string) => void;
   /* Heute / +7 Tage / +14 Tage row. */
-  quick?: boolean;
 }
 
 interface MonthCells {
@@ -44,7 +43,7 @@ function buildMonths(fromYM: string, toYM: string): MonthCells[] {
 }
 
 /* Vertically scrolling month calendar, sized for a 222px popover. */
-function Calendar({ selectedISO, fromYM, toYM, isDisabled, onPick, quick = true }: CalendarProps) {
+function Calendar({ selectedISO, fromYM, toYM, isDisabled, onPick }: CalendarProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const today = todayISO();
   const months = buildMonths(fromYM, toYM);
@@ -159,13 +158,11 @@ function Calendar({ selectedISO, fromYM, toYM, isDisabled, onPick, quick = true 
           </div>
         ))}
       </div>
-      {quick && (
-        <div style={{ display: 'flex', gap: 4, marginTop: 8 }}>
-          {quickBtn('Heute', today)}
-          {quickBtn('+7 Tage', shiftISO(today, 7))}
-          {quickBtn('+14 Tage', shiftISO(today, 14))}
-        </div>
-      )}
+      <div style={{ display: 'flex', gap: 4, marginTop: 8 }}>
+        {quickBtn('Heute', today)}
+        {quickBtn('+7 Tage', shiftISO(today, 7))}
+        {quickBtn('+14 Tage', shiftISO(today, 14))}
+      </div>
     </>
   );
 }

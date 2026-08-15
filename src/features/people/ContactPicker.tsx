@@ -2,9 +2,9 @@ import { initials } from '../../lib/text';
 import type { LinkKind } from '../../shared/enums';
 import { useApp } from '../../state/store-context';
 import type { ContactEntry } from '../../state/store-context';
+import { AvatarStack, stackLabel } from '../../ui/AvatarStack';
 import { FieldChip } from '../../ui/FieldChip';
 import { Popover, PopoverVariant } from '../../ui/Popover';
-import { Avatar } from '../../ui/icons';
 import { ContactPickerBody } from './ContactPickerBody';
 
 /* Contact chip plus its picker popover. `popKey` keeps the sidebar copy and the
@@ -16,7 +16,6 @@ export function ContactPicker({
   list,
   onSave,
   store,
-  avatarRing = 'var(--c-f6f5f1)',
   avatarSize = 17,
   align = 'left',
 }: {
@@ -27,20 +26,17 @@ export function ContactPicker({
   onSave: (list: ContactEntry[]) => void;
   /* Which link list this picker writes. */
   store: LinkKind;
-  avatarRing?: string;
   avatarSize?: number;
   align?: 'left' | 'right';
 }) {
   const { st, set } = useApp();
   const open = st.contactEdit === popKey;
 
-  const stack = (list.length ? list : [{ name: '?', bg: 'var(--c-b3b0a8)' }]).slice(0, 3);
-  const label =
-    list.length === 0
-      ? 'Kein Kontakt ausgewählt'
-      : list.length === 1
-        ? list[0].name
-        : list[0].name + ' +' + (list.length - 1);
+  const stack = list.map((c) => ({
+    initials: initials(c.name) || '?',
+    bg: c.bg || 'var(--c-7a5aa8)',
+  }));
+  const label = stackLabel(list.map((c) => c.name));
 
   return (
     /* Names this picker's chip and popover, so the outside-click handler can
@@ -69,18 +65,7 @@ export function ContactPicker({
         }
         clearTitle="Kontaktperson entfernen"
       >
-        <div style={{ display: 'flex', flexShrink: 0 }}>
-          {stack.map((c, i) => (
-            <Avatar
-              key={i}
-              bg={c.bg || 'var(--c-7a5aa8)'}
-              size={avatarSize}
-              style={{ boxShadow: '0 0 0 1.5px ' + avatarRing, marginLeft: i ? -6 : 0 }}
-            >
-              {list.length ? initials(c.name) || '?' : '–'}
-            </Avatar>
-          ))}
-        </div>
+        <AvatarStack people={stack} ring="var(--c-f6f5f1)" size={avatarSize} />
         <span style={{ fontSize: 12 }}>{label}</span>
       </FieldChip>
 

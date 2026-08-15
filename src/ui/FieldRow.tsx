@@ -8,9 +8,6 @@ interface FieldRowProps {
   labelWidth?: number;
   align?: CSSProperties['alignItems'];
   minHeight?: number;
-  /* Pulls the value's chip padding back so text lines up with the label baseline. */
-  inset?: boolean;
-  style?: CSSProperties;
   children: ReactNode;
 }
 
@@ -22,12 +19,10 @@ export function FieldRow({
   labelWidth = 76,
   align = 'center',
   minHeight,
-  inset,
-  style,
   children,
 }: FieldRowProps) {
   return (
-    <div style={{ display: 'flex', gap: 10, alignItems: align, minHeight, minWidth: 0, ...style }}>
+    <div style={{ display: 'flex', gap: 10, alignItems: align, minHeight, minWidth: 0 }}>
       {/* Labels wrap rather than truncate: a clipped "Berufsbezeich…" hides
           which field the row belongs to, and fact labels are free text. */}
       <div
@@ -44,7 +39,7 @@ export function FieldRow({
         {glyph}
         {glyph ? <span style={{ minWidth: 0 }}>{label}</span> : label}
       </div>
-      {inset ? <div style={{ marginLeft: -6, minWidth: 0 }}>{children}</div> : children}
+      {children}
     </div>
   );
 }

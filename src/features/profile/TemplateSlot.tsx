@@ -191,16 +191,14 @@ export function TemplateSlot({
                 ? 'wird übernommen …'
                 : v.name + ' · ' + formatBytes(v.size) + ' · aktualisiert am ' + isoToDate(v.day)
             }
-            hint="Öffnen"
+            hint={v.selected ? 'Diese Fassung nutzt Kepler' : 'Diese Fassung verwenden'}
             muted={!v.selected}
-            leading={
-              <SelectDot
-                on={v.selected}
-                title={v.selected ? 'Diese Fassung nutzt Kepler' : 'Diese Fassung verwenden'}
-                onSelect={() => select(v.label)}
-              />
-            }
-            onClick={() => open(v.label)}
+            leading={<SelectDot on={v.selected} />}
+            /* The whole card is the choice, the dot just shows it; opening the
+               file is one menu entry away. */
+            onClick={() => {
+              if (!v.selected) select(v.label);
+            }}
           >
             {/* stopPropagation throughout, or the card's own click would fire
                 behind the menu. */}
@@ -225,7 +223,7 @@ export function TemplateSlot({
                     minWidth={196}
                   >
                     <MenuItem style={{ whiteSpace: 'nowrap' }} onClick={() => open(v.label)}>
-                      Herunterladen
+                      Im Browser öffnen
                     </MenuItem>
                     <MenuItem style={{ whiteSpace: 'nowrap' }} onClick={() => replace(v.label)}>
                       Ersetzen mit eigener Datei

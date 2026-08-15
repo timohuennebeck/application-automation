@@ -144,8 +144,15 @@
 .menu-item-selected.menu-item-active {
   background: var(--c-e7e4dc);
 }
+/* A row that cannot be picked right now: no hover feedback, forbidden cursor. */
 .menu-item-danger:hover {
   background: var(--c-faf0ee);
+}
+/* After the danger rule, so a disabled row stays flat whatever else it is. */
+.menu-item-disabled,
+.menu-item-disabled:hover {
+  cursor: not-allowed;
+  background: transparent;
 }
 
 /* Pencil on a person row: out of the way until the row is under the cursor,
@@ -179,9 +186,21 @@
   height: 26px;
   border-radius: 6px;
   cursor: pointer;
+  /* Glyphs drawn with currentColor pick this up; classes below retint it. */
+  color: var(--c-77746d);
 }
 .icon-btn:hover {
   background: var(--c-f1efe9);
+}
+/* Retry icons in error contexts: the glyph turns red; the hover stays the
+   regular grey pill. */
+.icon-btn-fail {
+  color: var(--c-c2564c);
+}
+/* On red-tinted surfaces (the card's error strip) the grey pill is all but
+   invisible — there the hover tints red instead. */
+.icon-btn-fail-tinted:hover {
+  background: color-mix(in srgb, var(--c-c2564c) 14%, var(--c-fff));
 }
 
 /* Buttons */

@@ -36,51 +36,55 @@ export function FactList() {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <div ref={listRef} onDragOver={onDragOver} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        {facts.map((f) => (
-          <Fact
-            key={f.id}
-            fact={f}
-            dragging={st.profileDragId === f.id}
-            editing={st.editing === editKey(f.id)}
-            draft={st.editDraft}
-            onDragStart={() => set({ profileDragId: f.id, editing: null })}
-            /* The list has already rearranged in memory by now; this is the one
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {/* Only rendered with facts in it: an empty list would still claim its
+          gap and push the add row down, out of line with the other groups. */}
+      {facts.length > 0 && (
+        <div
+          ref={listRef}
+          onDragOver={onDragOver}
+          style={{ display: 'flex', flexDirection: 'column', gap: 4 }}
+        >
+          {facts.map((f) => (
+            <Fact
+              key={f.id}
+              fact={f}
+              dragging={st.profileDragId === f.id}
+              editing={st.editing === editKey(f.id)}
+              draft={st.editDraft}
+              onDragStart={() => set({ profileDragId: f.id, editing: null })}
+              /* The list has already rearranged in memory by now; this is the one
                write, whether the drag ended in a drop or was abandoned. */
-            onDragEnd={() => {
-              set({ profileDragId: null });
-              commitProfileOrder();
-            }}
-            onEdit={() => set({ editing: editKey(f.id), editDraft: f.text, dropdown: null })}
-            onDraft={(text) => set({ editDraft: text })}
-            onCancel={() => {
-              cancelEditRef.current = true;
-            }}
-            onCommit={() => {
-              if (cancelEditRef.current) {
-                cancelEditRef.current = false;
-                set({ editing: null });
-                return;
-              }
-              updateProfileFact(f.id, st.editDraft);
-            }}
-            onDelete={() => deleteProfileFact(f.id)}
-          />
-        ))}
-      </div>
+              onDragEnd={() => {
+                set({ profileDragId: null });
+                commitProfileOrder();
+              }}
+              onEdit={() => set({ editing: editKey(f.id), editDraft: f.text, dropdown: null })}
+              onDraft={(text) => set({ editDraft: text })}
+              onCancel={() => {
+                cancelEditRef.current = true;
+              }}
+              onCommit={() => {
+                if (cancelEditRef.current) {
+                  cancelEditRef.current = false;
+                  set({ editing: null });
+                  return;
+                }
+                updateProfileFact(f.id, st.editDraft);
+              }}
+              onDelete={() => deleteProfileFact(f.id)}
+            />
+          ))}
+        </div>
+      )}
 
       {/* Both states are held in a box the height of a fact row, so opening the
-          composer swaps one for the other without the list below jumping. */}
-      <div style={{ display: 'flex', alignItems: 'center', minHeight: ROW_HEIGHT }}>
+          composer swaps one for the other without the dialog jumping. The add
+          row sits at the top of it, on the same line every other group's add
+          row takes. */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', minHeight: ROW_HEIGHT }}>
         {st.profileFactDraft === null ? (
-          <AddRow
-            label="Fakt hinzufügen"
-            /* Lines the + up with the grips above it rather than with the
-               dialog's own left edge. */
-            style={{ marginLeft: 2 }}
-            onClick={() => set({ profileFactDraft: '' })}
-          />
+          <AddRow label="Fakt hinzufügen" onClick={() => set({ profileFactDraft: '' })} />
         ) : (
           <input
             value={st.profileFactDraft}

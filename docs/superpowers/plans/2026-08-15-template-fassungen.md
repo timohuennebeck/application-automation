@@ -25,11 +25,13 @@
 ### Task 1: File layer — Fassungen on disk
 
 **Files:**
+
 - Modify: `src/shared/domain.ts` (add `TemplateVersion`)
 - Modify: `electron/files.ts:174-270` (replace the single-slot section)
 - Test: `electron/__tests__/files.test.ts` (replace `templatePath` / `copyTemplate` / `listTemplates` describes)
 
 **Interfaces:**
+
 - Produces (all in `electron/files.ts`, `userDataPath: string` first):
   - `interface TemplateVersion extends TemplateInfo { label: string; selected: boolean }` (in `src/shared/domain.ts`)
   - `listTemplateVersions(userDataPath, kind: TemplateKind): TemplateVersion[]`
@@ -110,8 +112,20 @@ describe('template versions', () => {
     addTemplateVersion(root, TemplateKind.ANSCHREIBEN, source('b.html', 'longer letter'));
     selectTemplateVersion(root, TemplateKind.ANSCHREIBEN, 'Fassung 2');
     expect(listTemplateVersions(root, TemplateKind.ANSCHREIBEN)).toEqual([
-      { label: 'Fassung 2', selected: true, name: 'Timo_Huennebeck_Anschreiben.html', size: 13, day: toISO(new Date()) },
-      { label: 'Standard', selected: false, name: 'Timo_Huennebeck_Anschreiben.html', size: 6, day: toISO(new Date()) },
+      {
+        label: 'Fassung 2',
+        selected: true,
+        name: 'Timo_Huennebeck_Anschreiben.html',
+        size: 13,
+        day: toISO(new Date()),
+      },
+      {
+        label: 'Standard',
+        selected: false,
+        name: 'Timo_Huennebeck_Anschreiben.html',
+        size: 6,
+        day: toISO(new Date()),
+      },
     ]);
     expect(selectedTemplatePath(root, TemplateKind.ANSCHREIBEN)!.label).toBe('Fassung 2');
   });
@@ -122,7 +136,9 @@ describe('template versions', () => {
     const v = replaceTemplateVersion(root, TemplateKind.LEBENSLAUF, 'Fassung 2', source('c.htm', 'three'));
     expect(v.label).toBe('Fassung 2');
     expect(v.name).toBe('Timo_Huennebeck_Lebenslauf.htm');
-    expect(readdirSync(path.join(slot('lebenslauf'), 'Fassung 2'))).toEqual(['Timo_Huennebeck_Lebenslauf.htm']);
+    expect(readdirSync(path.join(slot('lebenslauf'), 'Fassung 2'))).toEqual([
+      'Timo_Huennebeck_Lebenslauf.htm',
+    ]);
     expect(readFileSync(path.join(slot('lebenslauf'), 'Standard', CV), 'utf8')).toBe('one');
   });
 
@@ -142,7 +158,9 @@ describe('template versions', () => {
     }
     expect(existsSync(path.join(slot('lebenslauf'), 'Fassung 2'))).toBe(true);
     /* Renaming to itself is a no-op, not a duplicate. */
-    expect(renameTemplateVersion(root, TemplateKind.LEBENSLAUF, 'Fassung 2', 'Fassung 2').label).toBe('Fassung 2');
+    expect(renameTemplateVersion(root, TemplateKind.LEBENSLAUF, 'Fassung 2', 'Fassung 2').label).toBe(
+      'Fassung 2',
+    );
     /* Only whitespace around the label is dropped. */
     expect(renameTemplateVersion(root, TemplateKind.LEBENSLAUF, 'Fassung 2', '  Kurz ').label).toBe('Kurz');
   });
@@ -162,7 +180,9 @@ describe('template versions', () => {
     expect(selectedTemplatePath(root, TemplateKind.LEBENSLAUF)!.label).toBe('Fassung 2');
     expect(readFileSync(path.join(slot('lebenslauf'), '.selected'), 'utf8')).toBe('Fassung 2');
     rmSync(path.join(slot('lebenslauf'), '.selected'));
-    expect(listTemplateVersions(root, TemplateKind.LEBENSLAUF).find((v) => v.selected)!.label).toBe('Fassung 2');
+    expect(listTemplateVersions(root, TemplateKind.LEBENSLAUF).find((v) => v.selected)!.label).toBe(
+      'Fassung 2',
+    );
   });
 
   it('skips a Fassung whose file vanished', () => {
@@ -179,7 +199,9 @@ describe('template versions', () => {
     expect(listTemplateVersions(root, TemplateKind.ANSCHREIBEN)).toMatchObject([
       { label: 'Standard', selected: true, name: 'Timo_Huennebeck_Anschreiben.htm' },
     ]);
-    expect(readFileSync(path.join(slot('anschreiben'), 'Standard', 'Timo_Huennebeck_Anschreiben.htm'), 'utf8')).toBe('letter');
+    expect(
+      readFileSync(path.join(slot('anschreiben'), 'Standard', 'Timo_Huennebeck_Anschreiben.htm'), 'utf8'),
+    ).toBe('letter');
     expect(existsSync(path.join(slot('anschreiben'), 'Mein Anschreiben.htm'))).toBe(false);
   });
 
@@ -327,7 +349,11 @@ function versionFile(dir: string): string | null {
 
 /* Which Fassung the marker names, healed to the first label when it is missing
    or names one that no longer exists. Null for an empty slot. */
-function selectedLabel(userDataPath: string, kind: TemplateKind, labels = labelsIn(userDataPath, kind)): string | null {
+function selectedLabel(
+  userDataPath: string,
+  kind: TemplateKind,
+  labels = labelsIn(userDataPath, kind),
+): string | null {
   if (!labels.length) return null;
   const marker = path.join(templateDir(userDataPath, kind), SELECTED_MARKER);
   let wanted: string | null = null;
@@ -341,7 +367,12 @@ function selectedLabel(userDataPath: string, kind: TemplateKind, labels = labels
   return labels[0];
 }
 
-function describeVersion(userDataPath: string, kind: TemplateKind, label: string, selected: boolean): TemplateVersion {
+function describeVersion(
+  userDataPath: string,
+  kind: TemplateKind,
+  label: string,
+  selected: boolean,
+): TemplateVersion {
   const file = versionFile(versionDir(userDataPath, kind, label));
   if (!file) throw new Error(`Fassung „${label}“ ist nicht vorhanden.`);
   return { ...describe(file), label, selected };
@@ -369,7 +400,10 @@ export function listTemplates(userDataPath: string): Record<TemplateKind, Templa
 }
 
 /* The file of the Fassung Kepler uses, with its label; null for an empty slot. */
-export function selectedTemplatePath(userDataPath: string, kind: TemplateKind): { label: string; path: string } | null {
+export function selectedTemplatePath(
+  userDataPath: string,
+  kind: TemplateKind,
+): { label: string; path: string } | null {
   const label = selectedLabel(userDataPath, kind);
   if (!label) return null;
   const file = versionFile(versionDir(userDataPath, kind, label));
@@ -384,7 +418,12 @@ export function templateVersionPath(userDataPath: string, kind: TemplateKind, la
 /* Writes the picked file into a Fassung directory under the applicant's
    document name, replacing whatever was there. Only the extension is kept from
    the picked name — a .htm stays a .htm. */
-function writeVersionFile(userDataPath: string, kind: TemplateKind, label: string, sourcePath: string): string {
+function writeVersionFile(
+  userDataPath: string,
+  kind: TemplateKind,
+  label: string,
+  sourcePath: string,
+): string {
   if (!isHtml(sourcePath)) throw new Error(`not an HTML file: ${sourcePath}`);
   const dir = versionDir(userDataPath, kind, label);
   rmSync(dir, { recursive: true, force: true });
@@ -404,7 +443,11 @@ function labelTaken(labels: string[], label: string): boolean {
 /* Adds a Fassung under the next free name: "Standard" for an empty slot, else
    "Fassung 2", "Fassung 3", … skipping names in use. The first Fassung of a
    slot is selected; later ones leave the selection alone. */
-export function addTemplateVersion(userDataPath: string, kind: TemplateKind, sourcePath: string): TemplateVersion {
+export function addTemplateVersion(
+  userDataPath: string,
+  kind: TemplateKind,
+  sourcePath: string,
+): TemplateVersion {
   if (!isHtml(sourcePath)) throw new Error(`not an HTML file: ${sourcePath}`);
   const labels = labelsIn(userDataPath, kind);
   let label = FIRST_TEMPLATE_LABEL;
@@ -424,7 +467,8 @@ export function replaceTemplateVersion(
   sourcePath: string,
 ): TemplateVersion {
   const clean = checkLabel(label);
-  if (!labelsIn(userDataPath, kind).includes(clean)) throw new Error(`Fassung „${clean}“ ist nicht vorhanden.`);
+  if (!labelsIn(userDataPath, kind).includes(clean))
+    throw new Error(`Fassung „${clean}“ ist nicht vorhanden.`);
   writeVersionFile(userDataPath, kind, clean, sourcePath);
   return describeVersion(userDataPath, kind, clean, selectedLabel(userDataPath, kind) === clean);
 }
@@ -432,7 +476,8 @@ export function replaceTemplateVersion(
 /* Marks the Fassung Kepler uses from now on. */
 export function selectTemplateVersion(userDataPath: string, kind: TemplateKind, label: string): void {
   const clean = checkLabel(label);
-  if (!labelsIn(userDataPath, kind).includes(clean)) throw new Error(`Fassung „${clean}“ ist nicht vorhanden.`);
+  if (!labelsIn(userDataPath, kind).includes(clean))
+    throw new Error(`Fassung „${clean}“ ist nicht vorhanden.`);
   writeFileSync(path.join(templateDir(userDataPath, kind), SELECTED_MARKER), clean);
 }
 
@@ -450,7 +495,16 @@ export function renameTemplateVersion(
   if (!labels.includes(oldLabel)) throw new Error(`Fassung „${oldLabel}“ ist nicht vorhanden.`);
   const wasSelected = selectedLabel(userDataPath, kind, labels) === oldLabel;
   if (newLabel !== oldLabel) {
-    if (labelTaken(labels.filter((l) => l !== oldLabel), newLabel) || (newLabel.toLowerCase() === oldLabel.toLowerCase() && newLabel !== oldLabel && labelTaken(labels, newLabel) && false)) {
+    if (
+      labelTaken(
+        labels.filter((l) => l !== oldLabel),
+        newLabel,
+      ) ||
+      (newLabel.toLowerCase() === oldLabel.toLowerCase() &&
+        newLabel !== oldLabel &&
+        labelTaken(labels, newLabel) &&
+        false)
+    ) {
       throw new Error(`Eine Fassung „${newLabel}“ gibt es schon.`);
     }
     renameSync(versionDir(userDataPath, kind, oldLabel), versionDir(userDataPath, kind, newLabel));
@@ -483,13 +537,18 @@ export function copyTemplate(userDataPath: string, kind: TemplateKind, sourcePat
 
 Note on `renameTemplateVersion`'s duplicate check: simplify the condition to
 `if (labelTaken(labels.filter((l) => l !== oldLabel), newLabel))` — but a
-case-only rename of the *same* Fassung (`Kurz` → `kurz`) must be allowed and
+case-only rename of the _same_ Fassung (`Kurz` → `kurz`) must be allowed and
 `renameSync` handles it on a case-insensitive FS. Keep exactly:
 
 ```ts
-    if (labelTaken(labels.filter((l) => l !== oldLabel), newLabel)) {
-      throw new Error(`Eine Fassung „${newLabel}“ gibt es schon.`);
-    }
+if (
+  labelTaken(
+    labels.filter((l) => l !== oldLabel),
+    newLabel,
+  )
+) {
+  throw new Error(`Eine Fassung „${newLabel}“ gibt es schon.`);
+}
 ```
 
 Add `readFileSync` and `writeFileSync` to the `node:fs` import; import `TemplateVersion` from `../src/shared/domain.ts`. Keep `describe(filePath)` where it is (used by profile documents too).
@@ -511,6 +570,7 @@ git commit -m "feat(files): several Fassungen per template slot with a selected 
 ### Task 2: Database — `template_label` column and "Anschreiben" titles
 
 **Files:**
+
 - Modify: `electron/db/schema.ts` (append migration 20)
 - Modify: `src/shared/db-types.ts:178-189` (`DocumentRow`), `:376-378` (`DbApi.documents`)
 - Modify: `electron/db/repo.ts:216`, `:693-703`
@@ -520,6 +580,7 @@ git commit -m "feat(files): several Fassungen per template slot with a selected 
 - Test: `electron/db/__tests__/migrate.test.ts`, `electron/db/__tests__/repo.test.ts`
 
 **Interfaces:**
+
 - Produces: `DocumentRow.template_label: string | null`; `repo.setDocumentFile(documentId, filePath, pdfPath, templateLabel: string | null): DocumentRow`; `DbApi.documents.setFile(documentId, filePath, pdfPath, templateLabel)`.
 
 - [ ] **Step 1: Failing migration test**
@@ -527,11 +588,11 @@ git commit -m "feat(files): several Fassungen per template slot with a selected 
 Append to the migrate describe in `electron/db/__tests__/migrate.test.ts`:
 
 ```ts
-  /* Migration 20: generated documents remember the Fassung they came from, and
+/* Migration 20: generated documents remember the Fassung they came from, and
      the letter is called by its German name like everything else. */
-  it('adds template_label and renames the letter rows to Anschreiben', () => {
-    const db = dbAtVersion(19);
-    db.exec(`
+it('adds template_label and renames the letter rows to Anschreiben', () => {
+  const db = dbAtVersion(19);
+  db.exec(`
       INSERT INTO companies (id, name, created_at, updated_at) VALUES (1, 'Acme', 't', 't');
       INSERT INTO applications (id, role, company_id, interest, stage_id, stage_position, created_at, updated_at)
         VALUES ('BEW-1', 'Designer', 1, 'HIGH', 'interessiert', 0, 't', 't');
@@ -540,13 +601,13 @@ Append to the migrate describe in `electron/db/__tests__/migrate.test.ts`:
       INSERT INTO documents (application_id, kind, title, created_at, updated_at)
         VALUES ('BEW-1', 'LEBENSLAUF', 'Lebenslauf', 't', 't');
     `);
-    migrate(db);
-    const rows = db.prepare('SELECT kind, title, template_label FROM documents ORDER BY id').all();
-    expect(rows).toEqual([
-      { kind: 'COVER_LETTER', title: 'Anschreiben', template_label: null },
-      { kind: 'LEBENSLAUF', title: 'Lebenslauf', template_label: null },
-    ]);
-  });
+  migrate(db);
+  const rows = db.prepare('SELECT kind, title, template_label FROM documents ORDER BY id').all();
+  expect(rows).toEqual([
+    { kind: 'COVER_LETTER', title: 'Anschreiben', template_label: null },
+    { kind: 'LEBENSLAUF', title: 'Lebenslauf', template_label: null },
+  ]);
+});
 ```
 
 Check how `dbAtVersion` builds its schema (it runs `MIGRATIONS.slice(0, n)`); check the `applications` columns required at version 19 by reading an existing later test in the file and copy its INSERT shape if it differs.
@@ -556,19 +617,18 @@ Check how `dbAtVersion` builds its schema (it runs `MIGRATIONS.slice(0, n)`); ch
 In `electron/db/__tests__/repo.test.ts`, update the three existing `setDocumentFile` calls to pass a fourth argument (`null`), and add:
 
 ```ts
-  it('stores which Fassung a generated document came from, and clears it for a hand-uploaded file', () => {
-    const doc = repo.createApplication({ role: 'Designer', company: 'Acme GmbH', channel: null })
-      .documents[0];
-    const generated = repo.setDocumentFile(doc.id, 'documents/BEW-45/x.html', null, 'Kurz');
-    expect(generated.template_label).toBe('Kurz');
-    const uploaded = repo.setDocumentFile(doc.id, 'documents/BEW-45/x.html', null, null);
-    expect(uploaded.template_label).toBeNull();
-  });
+it('stores which Fassung a generated document came from, and clears it for a hand-uploaded file', () => {
+  const doc = repo.createApplication({ role: 'Designer', company: 'Acme GmbH', channel: null }).documents[0];
+  const generated = repo.setDocumentFile(doc.id, 'documents/BEW-45/x.html', null, 'Kurz');
+  expect(generated.template_label).toBe('Kurz');
+  const uploaded = repo.setDocumentFile(doc.id, 'documents/BEW-45/x.html', null, null);
+  expect(uploaded.template_label).toBeNull();
+});
 
-  it('creates the letter placeholder as "Anschreiben"', () => {
-    const docs = repo.createApplication({ role: 'Designer', company: 'Acme GmbH', channel: null }).documents;
-    expect(docs.map((d) => d.title)).toEqual(['Anschreiben', 'Lebenslauf']);
-  });
+it('creates the letter placeholder as "Anschreiben"', () => {
+  const docs = repo.createApplication({ role: 'Designer', company: 'Acme GmbH', channel: null }).documents;
+  expect(docs.map((d) => d.title)).toEqual(['Anschreiben', 'Lebenslauf']);
+});
 ```
 
 - [ ] **Step 3: Run both test files, expect FAIL**
@@ -592,9 +652,9 @@ In `electron/db/__tests__/repo.test.ts`, update the three existing `setDocumentF
 `src/shared/db-types.ts` — in `DocumentRow` after `pdf_path`:
 
 ```ts
-  /* The label of the profile-template Fassung this file was generated from;
+/* The label of the profile-template Fassung this file was generated from;
      NULL for hand-uploaded files and documents from before Fassungen. */
-  template_label: string | null;
+template_label: string | null;
 ```
 
 and `DbApi.documents.setFile(documentId: number, filePath: string, pdfPath: string | null, templateLabel: string | null): Promise<DocumentRow>;`
@@ -644,6 +704,7 @@ git commit -m "feat(db): remember the template Fassung per document; call the le
 ### Task 3: Orchestrator — read the selected Fassung, stamp its label
 
 **Files:**
+
 - Modify: `electron/agent/orchestrator.ts:9,220-265,398-450`
 - Modify: `electron/agent/labels.ts:61-65`
 - Test: `electron/agent/__tests__/orchestrator.test.ts`, `electron/agent/__tests__/labels.test.ts:68`
@@ -666,22 +727,22 @@ function uploadTemplates(slots: string[] = ['lebenslauf', 'anschreiben'], label 
 Find the test around line 160-171 that asserts `cv.file_path` and add:
 
 ```ts
-    expect(cv.template_label).toBe('Standard');
-    expect(letter.template_label).toBe('Standard');
+expect(cv.template_label).toBe('Standard');
+expect(letter.template_label).toBe('Standard');
 ```
 
 Add a test next to it:
 
 ```ts
-  it('generates from the selected Fassung and records its label', async () => {
-    uploadTemplates(['lebenslauf', 'anschreiben']);
-    uploadTemplates(['lebenslauf'], 'Kurz'); // writes .selected = Kurz for the CV slot
-    const appId = createApp({ postingText: POSTING });
-    await runPipeline(appId); // use the same call the neighbouring tests use
-    const docs = repo.load().documents.filter((d) => d.application_id === appId);
-    expect(docs.find((d) => d.kind === DocumentKind.LEBENSLAUF)!.template_label).toBe('Kurz');
-    expect(docs.find((d) => d.kind === DocumentKind.COVER_LETTER)!.template_label).toBe('Standard');
-  });
+it('generates from the selected Fassung and records its label', async () => {
+  uploadTemplates(['lebenslauf', 'anschreiben']);
+  uploadTemplates(['lebenslauf'], 'Kurz'); // writes .selected = Kurz for the CV slot
+  const appId = createApp({ postingText: POSTING });
+  await runPipeline(appId); // use the same call the neighbouring tests use
+  const docs = repo.load().documents.filter((d) => d.application_id === appId);
+  expect(docs.find((d) => d.kind === DocumentKind.LEBENSLAUF)!.template_label).toBe('Kurz');
+  expect(docs.find((d) => d.kind === DocumentKind.COVER_LETTER)!.template_label).toBe('Standard');
+});
 ```
 
 (Adapt `POSTING`/`runPipeline` to whatever helpers the file already uses for a full successful run — copy from the test at ~line 160.)
@@ -727,25 +788,25 @@ function readTemplate(
 In the pipeline, `docInput` becomes:
 
 ```ts
-    const docInput = (kind: TemplateKind, name: string): DocumentInput & { label: string } => {
-      const { html, label } = readTemplate(deps.userDataPath, kind, name);
-      return {
-        template: html,
-        label,
-        listing,
-        extraction: needExtraction(),
-        profileFacts: repo.load().profileFacts.map((f) => f.text),
-        company: company.name,
-        role: app.role,
-      };
-    };
+const docInput = (kind: TemplateKind, name: string): DocumentInput & { label: string } => {
+  const { html, label } = readTemplate(deps.userDataPath, kind, name);
+  return {
+    template: html,
+    label,
+    listing,
+    extraction: needExtraction(),
+    profileFacts: repo.load().profileFacts.map((f) => f.text),
+    company: company.name,
+    role: app.role,
+  };
+};
 ```
 
 and the two generation calls:
 
 ```ts
-      const input = docInput(TemplateKind.LEBENSLAUF, 'Lebenslauf');
-      cvHtml = await generateDocument(deps, applicationId, DocumentKind.LEBENSLAUF, cvPrompt(input), input.label);
+const input = docInput(TemplateKind.LEBENSLAUF, 'Lebenslauf');
+cvHtml = await generateDocument(deps, applicationId, DocumentKind.LEBENSLAUF, cvPrompt(input), input.label);
 ```
 
 (same for the letter with `letterPrompt` / `DocumentKind.COVER_LETTER`). `cvPrompt`/`letterPrompt` accept the extra property harmlessly (structural typing) — if `DocumentInput` is declared with exact keys and TS complains, pass `{ ...input }` minus `label` or extend `DocumentInput` with an optional `label?: string` that the prompt ignores. Prefer the destructure: `const { label, ...input } = docInput(...)`.
@@ -768,6 +829,7 @@ git commit -m "feat(agent): generate from the selected Fassung and stamp its lab
 ### Task 4: IPC — Fassung channels in main and preload; drop the wrappers
 
 **Files:**
+
 - Modify: `electron/main.ts:10-28,195-207`
 - Modify: `electron/preload.ts:116-125`
 - Modify: `electron/files.ts` (delete `templatePath`, `copyTemplate` wrappers)
@@ -775,7 +837,9 @@ git commit -m "feat(agent): generate from the selected Fassung and stamp its lab
 - Modify: `src/features/profile/ProfileModal.tsx` (temporarily compile: replaced fully in Task 5 — do Task 5 immediately after; the intermediate state only needs to typecheck)
 
 **Interfaces:**
+
 - Produces on `window.desktop.templates`:
+
   ```ts
   list(): Promise<Record<TemplateKind, TemplateVersion[]>>
   add(kind, sourcePath): Promise<TemplateVersion>
@@ -820,7 +884,9 @@ ipcMain.handle('templates:remove', (_e, kind: TemplateKind, label: string) =>
    chips point at. */
 ipcMain.handle('templates:open', (_e, kind: TemplateKind, label?: string) => {
   const root = app.getPath('userData');
-  const filePath = label ? templateVersionPath(root, kind, label) : selectedTemplatePath(root, kind)?.path ?? null;
+  const filePath = label
+    ? templateVersionPath(root, kind, label)
+    : (selectedTemplatePath(root, kind)?.path ?? null);
   return filePath ? shell.openPath(filePath) : 'Noch keine Datei hochgeladen.';
 });
 ```
@@ -884,12 +950,14 @@ and in the chip: `name={selectedOf(templates, doc)?.name ?? SLOT_TITLES[doc]}`, 
 ### Task 5: Profile UI — one card per Fassung with a selection dot
 
 **Files:**
+
 - Create: `src/ui/SelectDot.tsx`
 - Create: `src/features/profile/TemplateSlot.tsx`
 - Modify: `src/features/profile/ProfileModal.tsx` (shrinks to shell + two `TemplateSlot`s)
 - Modify: `src/app/app.css` (only if the dot needs a hover rule)
 
 **Interfaces:**
+
 - Consumes `window.desktop.templates.*` from Task 4.
 
 - [ ] **Step 1: `SelectDot`**
@@ -971,7 +1039,9 @@ export function TemplateSlot({
 
   const patch = (v: TemplateVersion) =>
     onChange(
-      [...versions.filter((x) => x.label !== v.label), v].sort((a, b) => a.label.localeCompare(b.label, 'de')),
+      [...versions.filter((x) => x.label !== v.label), v].sort((a, b) =>
+        a.label.localeCompare(b.label, 'de'),
+      ),
     );
 
   const add = useCallback(async () => {
@@ -1052,7 +1122,9 @@ export function TemplateSlot({
     try {
       const v = await a.templates.rename(kind, r.label, r.draft);
       onChange(
-        [...versions.filter((x) => x.label !== r.label), v].sort((x, y) => x.label.localeCompare(y.label, 'de')),
+        [...versions.filter((x) => x.label !== r.label), v].sort((x, y) =>
+          x.label.localeCompare(y.label, 'de'),
+        ),
       );
     } catch (err) {
       onError(String(err));
@@ -1097,16 +1169,34 @@ export function TemplateSlot({
                     if (e.key === 'Enter') commitRename();
                     if (e.key === 'Escape') setRenaming(null);
                   }}
-                  style={{ font: 'inherit', fontWeight: 600, border: 'none', outline: 'none', background: 'transparent', padding: 0, width: '100%' }}
+                  style={{
+                    font: 'inherit',
+                    fontWeight: 600,
+                    border: 'none',
+                    outline: 'none',
+                    background: 'transparent',
+                    padding: 0,
+                    width: '100%',
+                  }}
                 />
               ) : (
                 v.label
               )
             }
-            caption={working ? 'wird übernommen …' : `${v.name} · ${formatBytes(v.size)} · aktualisiert am ${isoToDate(v.day)}`}
+            caption={
+              working
+                ? 'wird übernommen …'
+                : `${v.name} · ${formatBytes(v.size)} · aktualisiert am ${isoToDate(v.day)}`
+            }
             hint="Öffnen"
             muted={!v.selected}
-            leading={<SelectDot on={v.selected} title={v.selected ? 'Diese Fassung nutzt Kepler' : 'Diese Fassung verwenden'} onSelect={() => select(v.label)} />}
+            leading={
+              <SelectDot
+                on={v.selected}
+                title={v.selected ? 'Diese Fassung nutzt Kepler' : 'Diese Fassung verwenden'}
+                onSelect={() => select(v.label)}
+              />
+            }
             onClick={() => open(v.label)}
           >
             <PopoverAnchor>
@@ -1123,9 +1213,18 @@ export function TemplateSlot({
               </div>
               {st.dropdown === menuKey && (
                 <div onClick={(e) => e.stopPropagation()}>
-                  <Popover top={32} style={flipUp ? { top: 'auto', bottom: 32 } : undefined} right={0} minWidth={196}>
-                    <MenuItem style={{ whiteSpace: 'nowrap' }} onClick={() => open(v.label)}>Herunterladen</MenuItem>
-                    <MenuItem style={{ whiteSpace: 'nowrap' }} onClick={() => replace(v.label)}>Ersetzen mit eigener Datei</MenuItem>
+                  <Popover
+                    top={32}
+                    style={flipUp ? { top: 'auto', bottom: 32 } : undefined}
+                    right={0}
+                    minWidth={196}
+                  >
+                    <MenuItem style={{ whiteSpace: 'nowrap' }} onClick={() => open(v.label)}>
+                      Herunterladen
+                    </MenuItem>
+                    <MenuItem style={{ whiteSpace: 'nowrap' }} onClick={() => replace(v.label)}>
+                      Ersetzen mit eigener Datei
+                    </MenuItem>
                     <MenuItem
                       style={{ whiteSpace: 'nowrap' }}
                       onClick={() => {
@@ -1159,6 +1258,7 @@ export function TemplateSlot({
 ```
 
 Notes for the implementer:
+
 - Check `MenuItem` for a `disabled` prop; if it lacks one, add `disabled?: boolean` that sets `opacity: .45; pointer-events: none` (look at how `danger` is styled and mirror it). Drop the `errorText` line — it is a leftover, errors are the parent's.
 - `DocumentCard.title` is typed `string`; widen to `ReactNode`.
 - Remove the `flipUp` reasoning comment duplication; keep one comment.
@@ -1207,7 +1307,10 @@ export function ProfileModal() {
   }, []);
 
   return (
-    <ModalShell onClose={() => set(CLOSED_PROFILE)} header={<div style={{ fontSize: 15, fontWeight: 600 }}>Profil</div>}>
+    <ModalShell
+      onClose={() => set(CLOSED_PROFILE)}
+      header={<div style={{ fontSize: 15, fontWeight: 600 }}>Profil</div>}
+    >
       <FieldGroup
         label="Templates"
         hint="Deine HTML-Templates. Du kannst je mehrere Fassungen halten — der Punkt markiert die, die Kepler für neue Bewerbungen nutzt. Die Originale bleiben unberührt."
@@ -1230,11 +1333,17 @@ export function ProfileModal() {
         </div>
       </FieldGroup>
 
-      <FieldGroup label="Dokumente" hint="Weitere Unterlagen, die du griffbereit haben willst — Immatrikulationsbescheinigung, etc. Beliebiges Format.">
+      <FieldGroup
+        label="Dokumente"
+        hint="Weitere Unterlagen, die du griffbereit haben willst — Immatrikulationsbescheinigung, etc. Beliebiges Format."
+      >
         <ProfileDocuments />
       </FieldGroup>
 
-      <FieldGroup label="Kontext" hint="Füge alles hinzu, was dich persönlicher macht — Sprachen, ein Umzug, etc.">
+      <FieldGroup
+        label="Kontext"
+        hint="Füge alles hinzu, was dich persönlicher macht — Sprachen, ein Umzug, etc."
+      >
         <FactList />
       </FieldGroup>
     </ModalShell>
@@ -1258,6 +1367,7 @@ git commit -m "feat(profile): manage template Fassungen per slot with a selectio
 ### Task 6: Detail view caption + remaining "Cover Letter" strings
 
 **Files:**
+
 - Modify: `src/features/detail/DocumentsSection.tsx:44-48`
 - Modify: `src/data/sample-data.ts:324,409`
 - Modify: `electron/db/__tests__/migrate.test.ts:84` (only if that fixture is asserted on by title — otherwise leave; it feeds migration 2)
@@ -1273,7 +1383,9 @@ import type { DocumentRow } from '../../shared/db-types';
 
 /* "erstellt am 14.08.2026 · Fassung Kurz" — the date the card stands for and,
    for a generated document, the profile Fassung it came from. */
-export function documentCaption(d: Pick<DocumentRow, 'created_at' | 'updated_at' | 'template_label'>): string {
+export function documentCaption(
+  d: Pick<DocumentRow, 'created_at' | 'updated_at' | 'template_label'>,
+): string {
   const updated = d.updated_at > d.created_at;
   const day = isoToDate((updated ? d.updated_at : d.created_at).slice(0, 10));
   const base = (updated ? 'aktualisiert am ' : 'erstellt am ') + day;
@@ -1290,13 +1402,19 @@ import { documentCaption } from '../document-caption';
 describe('documentCaption', () => {
   const t = '2026-08-14T09:00:00.000Z';
   it('names the Fassung a generated document came from', () => {
-    expect(documentCaption({ created_at: t, updated_at: t, template_label: 'Kurz' })).toBe('erstellt am 14.08.2026 · Fassung Kurz');
+    expect(documentCaption({ created_at: t, updated_at: t, template_label: 'Kurz' })).toBe(
+      'erstellt am 14.08.2026 · Fassung Kurz',
+    );
   });
   it('says nothing about a Fassung for hand-uploaded or older documents', () => {
-    expect(documentCaption({ created_at: t, updated_at: t, template_label: null })).toBe('erstellt am 14.08.2026');
+    expect(documentCaption({ created_at: t, updated_at: t, template_label: null })).toBe(
+      'erstellt am 14.08.2026',
+    );
   });
   it('reads "aktualisiert" once the file was replaced', () => {
-    expect(documentCaption({ created_at: t, updated_at: '2026-08-15T09:00:00.000Z', template_label: null })).toBe('aktualisiert am 15.08.2026');
+    expect(
+      documentCaption({ created_at: t, updated_at: '2026-08-15T09:00:00.000Z', template_label: null }),
+    ).toBe('aktualisiert am 15.08.2026');
   });
 });
 ```

@@ -83,15 +83,15 @@ says which one is in use, not the position.
 
 `window.desktop.templates` becomes:
 
-| channel | args | returns |
-|---|---|---|
-| `templates:list` | — | `Record<TemplateKind, TemplateVersion[]>` |
-| `templates:add` | kind, sourcePath | `TemplateVersion` |
-| `templates:replace` | kind, label, sourcePath | `TemplateVersion` |
-| `templates:select` | kind, label | `void` |
-| `templates:rename` | kind, from, to | `TemplateVersion` |
-| `templates:remove` | kind, label | `void` |
-| `templates:open` | kind, label | `''` or error string |
+| channel             | args                    | returns                                   |
+| ------------------- | ----------------------- | ----------------------------------------- |
+| `templates:list`    | —                       | `Record<TemplateKind, TemplateVersion[]>` |
+| `templates:add`     | kind, sourcePath        | `TemplateVersion`                         |
+| `templates:replace` | kind, label, sourcePath | `TemplateVersion`                         |
+| `templates:select`  | kind, label             | `void`                                    |
+| `templates:rename`  | kind, from, to          | `TemplateVersion`                         |
+| `templates:remove`  | kind, label             | `void`                                    |
+| `templates:open`    | kind, label             | `''` or error string                      |
 
 `templates:save` is removed (renderer only). Kind and label are validated in the
 main process (unknown kind / unsafe label → throw), never joined into a path raw.

@@ -29,3 +29,6 @@ detail.png
 
 # macOS
 .DS_Store
+
+# brainstorming companion sessions
+.superpowers/

@@ -11,12 +11,16 @@ export function DocumentCard({
   caption,
   hint,
   muted,
+  leading,
   onClick,
   children,
 }: {
   format: DocFormat;
-  title: string;
+  /* Usually the file's name; the profile swaps in an input while renaming. */
+  title: ReactNode;
   caption: string;
+  /* Sits left of the glyph — the profile's selection dot. */
+  leading?: ReactNode;
   /* Tooltip for the card itself, which says what clicking it does. */
   hint: string;
   /* Drains the labels for a slot that has nothing in it yet. */
@@ -26,6 +30,7 @@ export function DocumentCard({
 }) {
   return (
     <div className="doc-card" title={hint} onClick={onClick}>
+      {leading}
       <DocGlyph format={format} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
         <div

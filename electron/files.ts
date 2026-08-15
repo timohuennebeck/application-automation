@@ -461,17 +461,6 @@ export function removeTemplateVersion(userDataPath: string, kind: TemplateKind, 
   rmSync(versionDir(userDataPath, kind, clean), { recursive: true, force: true });
 }
 
-/* ── Compatibility wrappers, removed once every caller reads Fassungen ──── */
-export function templatePath(userDataPath: string, kind: TemplateKind): string | null {
-  return selectedTemplatePath(userDataPath, kind)?.path ?? null;
-}
-export function copyTemplate(userDataPath: string, kind: TemplateKind, sourcePath: string): TemplateInfo {
-  const selected = selectedLabel(userDataPath, kind);
-  return selected
-    ? replaceTemplateVersion(userDataPath, kind, selected, sourcePath)
-    : addTemplateVersion(userDataPath, kind, sourcePath);
-}
-
 function describe(filePath: string): TemplateInfo {
   const s = statSync(filePath);
   return { name: path.basename(filePath), size: s.size, day: toISO(s.mtime) };

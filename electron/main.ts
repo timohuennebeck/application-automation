@@ -6,11 +6,12 @@ import { openDb } from './db/open.ts';
 import { seedIfEmpty } from './db/seed.ts';
 import { createRepo } from './db/repo.ts';
 import { registerDbIpc } from './db/ipc.ts';
+import { registerAgentIpc } from './agent/index.ts';
 import {
   addProfileDocuments,
   copyCommentAttachment,
   copyDocument,
-  copyTemplate,
+  addTemplateVersion,
   documentPaths,
   documentSize,
   listProfileDocuments,
@@ -20,7 +21,12 @@ import {
   removeProfileDocument,
   removeStoredFile,
   resolveDocumentPath,
-  templatePath,
+  removeTemplateVersion,
+  renameTemplateVersion,
+  replaceTemplateVersion,
+  selectTemplateVersion,
+  selectedTemplatePath,
+  templateVersionPath,
 } from './files.ts';
 import { renderPdf } from './pdf.ts';
 import type { DocumentUpload } from '../src/shared/domain.ts';
@@ -35,6 +41,20 @@ const RENDERER_DIST = path.join(process.env.APP_ROOT, 'dist');
 const PRELOAD = path.join(__dirname, 'preload.mjs');
 
 let win: BrowserWindow | null = null;
+
+/* One instance only. Two processes on the same SQLite file would each run
+   boot recovery — the second would declare the first's in-flight Kepler runs
+   dead while they are still working. */
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (win) {
+      if (win.isMinimized()) win.restore();
+      win.focus();
+    }
+  });
+}
 
 /* shell.openExternal hands the string to the OS handler, so anything beyond
    these schemes (file://, custom app schemes) would launch local files or
@@ -177,17 +197,38 @@ ipcMain.handle('attachments:copy', (_e, applicationId: string, sourcePaths: stri
   sourcePaths.map((p) => copyCommentAttachment(app.getPath('userData'), applicationId, p)),
 );
 
-/* Profile templates: the two documents that are not tied to an application.
-   They share the picker above, so the extension is checked once more in
-   copyTemplate before anything is written. */
+/* Profile templates: the Fassungen of the two documents that are not tied to
+   an application. They share the picker above, so the extension is checked
+   once more in the file layer before anything is written. */
 ipcMain.handle('templates:list', () => listTemplates(app.getPath('userData')));
 
-ipcMain.handle('templates:save', (_e, kind: TemplateKind, sourcePath: string) =>
-  copyTemplate(app.getPath('userData'), kind, sourcePath),
+ipcMain.handle('templates:add', (_e, kind: TemplateKind, sourcePath: string) =>
+  addTemplateVersion(app.getPath('userData'), kind, sourcePath),
 );
 
-ipcMain.handle('templates:open', (_e, kind: TemplateKind) => {
-  const filePath = templatePath(app.getPath('userData'), kind);
+ipcMain.handle('templates:replace', (_e, kind: TemplateKind, label: string, sourcePath: string) =>
+  replaceTemplateVersion(app.getPath('userData'), kind, label, sourcePath),
+);
+
+ipcMain.handle('templates:select', (_e, kind: TemplateKind, label: string) =>
+  selectTemplateVersion(app.getPath('userData'), kind, label),
+);
+
+ipcMain.handle('templates:rename', (_e, kind: TemplateKind, from: string, to: string) =>
+  renameTemplateVersion(app.getPath('userData'), kind, from, to),
+);
+
+ipcMain.handle('templates:remove', (_e, kind: TemplateKind, label: string) =>
+  removeTemplateVersion(app.getPath('userData'), kind, label),
+);
+
+/* Without a label the selected Fassung opens — what the agent panel's doc
+   chips point at. */
+ipcMain.handle('templates:open', (_e, kind: TemplateKind, label?: string) => {
+  const root = app.getPath('userData');
+  const filePath = label
+    ? templateVersionPath(root, kind, label)
+    : (selectedTemplatePath(root, kind)?.path ?? null);
   return filePath ? shell.openPath(filePath) : 'Noch keine Datei hochgeladen.';
 });
 
@@ -219,8 +260,13 @@ function initDb(): boolean {
   try {
     const db = openDb(path.join(app.getPath('userData'), 'bewerbungen.db'));
     seedIfEmpty(db);
-    registerDbIpc(createRepo(db), {
-      afterDeleteApplication: (id) => purgeApplicationFiles(app.getPath('userData'), id),
+    const repo = createRepo(db);
+    const agent = registerAgentIpc(() => win, db, repo, app.getPath('userData'));
+    registerDbIpc(repo, {
+      afterDeleteApplication: (id) => {
+        agent.abandon(id);
+        purgeApplicationFiles(app.getPath('userData'), id);
+      },
       afterDeleteComment: (paths) => paths.forEach((p) => removeStoredFile(app.getPath('userData'), p)),
     });
     return true;

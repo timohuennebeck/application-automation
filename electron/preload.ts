@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
+import type { AgentEvent, AgentStartResult } from '../src/shared/agent.ts';
 import type { AttachmentInput, DbApi } from '../src/shared/db-types.ts';
-import type { DocumentUpload, ProfileDocumentInfo, TemplateInfo } from '../src/shared/domain.ts';
+import type { DocumentUpload, ProfileDocumentInfo, TemplateVersion } from '../src/shared/domain.ts';
 import type { DocumentKind, TemplateKind } from '../src/shared/enums.ts';
 
 const invoke =
@@ -18,7 +19,12 @@ const db: DbApi = {
     delete: invoke('db:applications.delete'),
     relinkCompany: invoke('db:applications.relinkCompany'),
   } as DbApi['applications'],
-  companies: { update: invoke('db:companies.update') } as DbApi['companies'],
+  companies: {
+    update: invoke('db:companies.update'),
+    delete: invoke('db:companies.delete'),
+  } as DbApi['companies'],
+  locations: { delete: invoke('db:locations.delete') } as DbApi['locations'],
+  roles: { delete: invoke('db:roles.delete') } as DbApi['roles'],
   facts: {
     upsert: invoke('db:facts.upsert'),
     delete: invoke('db:facts.delete'),
@@ -53,8 +59,7 @@ const db: DbApi = {
   } as DbApi['profileFacts'],
 };
 
-/* The only surface the renderer gets. Agent SDK calls will be added here as
-   typed request/response channels once the backend lands. */
+/* The only surface the renderer gets. */
 const api = {
   platform: process.platform,
   setTheme: (theme: 'light' | 'dark') => ipcRenderer.send('theme:set', theme),
@@ -88,15 +93,48 @@ const api = {
     openSource: (sourcePath: string): Promise<string> =>
       ipcRenderer.invoke('attachments:openSource', sourcePath),
   },
-  /* The two profile-wide templates. There is no database behind these — the
-     file on disk is the state, so every call reads it fresh. */
+  /* Kepler. Starting is request/response; progress arrives as agent:event
+     pushes — the run and step rows as they now stand in the database. */
+  agent: {
+    start: (applicationId: string): Promise<AgentStartResult> =>
+      ipcRenderer.invoke('agent:start', applicationId),
+    /* Rewinds the failed step of the latest run and queues it again. */
+    retry: (applicationId: string): Promise<AgentStartResult> =>
+      ipcRenderer.invoke('agent:retry', applicationId),
+    /* Halts the active run at its current step; retry resumes from there. */
+    stop: (applicationId: string): Promise<AgentStartResult> =>
+      ipcRenderer.invoke('agent:stop', applicationId),
+    /* Subscribes to run/step updates; returns the unsubscribe. */
+    onEvent: (cb: (e: AgentEvent) => void): (() => void) => {
+      const handler = (_e: Electron.IpcRendererEvent, event: AgentEvent) => cb(event);
+      ipcRenderer.on('agent:event', handler);
+      return () => {
+        ipcRenderer.removeListener('agent:event', handler);
+      };
+    },
+  },
+  /* The profile-wide templates, as Fassungen per slot. There is no database
+     behind these — the files on disk are the state, so every call reads fresh. */
   templates: {
-    list: (): Promise<Record<TemplateKind, TemplateInfo | null>> => ipcRenderer.invoke('templates:list'),
-    /* Copies a picked file into its slot, resolving to what now sits there. */
-    save: (kind: TemplateKind, sourcePath: string): Promise<TemplateInfo> =>
-      ipcRenderer.invoke('templates:save', kind, sourcePath),
-    /* Hands the slot's file to the OS; '' on success, else the reason. */
-    open: (kind: TemplateKind): Promise<string> => ipcRenderer.invoke('templates:open', kind),
+    list: (): Promise<Record<TemplateKind, TemplateVersion[]>> => ipcRenderer.invoke('templates:list'),
+    /* Copies a picked file in as a new Fassung under the next free name. */
+    add: (kind: TemplateKind, sourcePath: string): Promise<TemplateVersion> =>
+      ipcRenderer.invoke('templates:add', kind, sourcePath),
+    /* Swaps the file of an existing Fassung. */
+    replace: (kind: TemplateKind, label: string, sourcePath: string): Promise<TemplateVersion> =>
+      ipcRenderer.invoke('templates:replace', kind, label, sourcePath),
+    /* Marks the Fassung Kepler uses. */
+    select: (kind: TemplateKind, label: string): Promise<void> =>
+      ipcRenderer.invoke('templates:select', kind, label),
+    rename: (kind: TemplateKind, from: string, to: string): Promise<TemplateVersion> =>
+      ipcRenderer.invoke('templates:rename', kind, from, to),
+    /* Refused for the selected Fassung. */
+    remove: (kind: TemplateKind, label: string): Promise<void> =>
+      ipcRenderer.invoke('templates:remove', kind, label),
+    /* Hands a Fassung's file to the OS — the selected one when no label is
+       given; '' on success, else the reason. */
+    open: (kind: TemplateKind, label?: string): Promise<string> =>
+      ipcRenderer.invoke('templates:open', kind, label),
   },
   /* Further profile documents (Immatrikulationsbescheinigung, Zeugnisse, …).
      Like the templates there is no database — the folder listing is the state

@@ -135,8 +135,6 @@ export interface AppState {
      ("Plattform") it was found on. */
   jobUrl: string;
   jobChannel: string;
-  /* Whether the dialog's channel dropdown is open. */
-  jobChannelOpen: boolean;
   /* Whether the posting is given as a link; off means jobText carries the
      listing pasted by hand. */
   jobHasUrl: boolean;

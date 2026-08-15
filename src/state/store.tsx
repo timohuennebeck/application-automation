@@ -27,9 +27,10 @@ export const EMPTY_FILTER: BoardFilter = {
 const EMPTY_DRAFT = {
   jobUrl: '',
   jobChannel: '',
-  jobChannelOpen: false,
   jobHasUrl: true,
   jobText: '',
+  /* The channel dropdown lives in AppState.dropdown like every other select. */
+  dropdown: null,
 } satisfies Partial<AppState>;
 
 const initialState = (): AppState => ({

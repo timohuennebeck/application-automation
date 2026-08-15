@@ -1,11 +1,15 @@
 import { CHANNEL_BG, CHANNEL_OPTIONS } from '../../data/config';
 import { useApp } from '../../state/store-context';
 import { FieldChip } from '../../ui/FieldChip';
-import { MenuItem } from '../../ui/MenuItem';
 import { FieldHint, FieldLabel, ModalShell, SubmitButton } from '../../ui/ModalShell';
-import { Popover, PopoverAnchor } from '../../ui/Popover';
+import { PopoverAnchor } from '../../ui/Popover';
+import { SelectPopover } from '../../ui/SelectPopover';
 import { Switch } from '../../ui/Switch';
 import { Avatar, KeplerAvatar } from '../../ui/icons';
+
+/* The dialog's channel dropdown shares AppState.dropdown with every other
+   select, so the global outside-click handler closes it like the rest. */
+const CHANNEL_DD = 'jobChannel';
 
 /* ⌘C dialog: paste a posting URL — or, without one, the listing text itself —
    and pick the channel the posting was found on. */
@@ -13,11 +17,12 @@ export function NewApplicationModal() {
   const { st, set, createCard } = useApp();
   const close = () => set({ modalOpen: false });
   const valid = !!(st.jobHasUrl ? st.jobUrl.trim() : st.jobText.trim());
+  const channelOpen = st.dropdown === CHANNEL_DD;
 
   return (
     <ModalShell
       onClose={close}
-      overflowVisible={st.jobChannelOpen}
+      overflowVisible={channelOpen}
       header={
         <div
           style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: 14, color: 'var(--c-5f5c56)' }}
@@ -90,7 +95,8 @@ export function NewApplicationModal() {
             }}
           />
           <FieldHint>
-            Link zur Stellenanzeige einfügen. Kepler liest Titel, Unternehmen und Kernanforderungen automatisch aus.
+            Link zur Stellenanzeige einfügen. Kepler liest Titel, Unternehmen und Kernanforderungen
+            automatisch aus.
           </FieldHint>
         </div>
       ) : (
@@ -117,7 +123,8 @@ export function NewApplicationModal() {
             }}
           />
           <FieldHint>
-            Text der Stellenanzeigenbeschreibung einfügen. Kepler liest Titel, Unternehmen und Kernanforderungen daraus aus.
+            Text der Stellenanzeigenbeschreibung einfügen. Kepler liest Titel, Unternehmen und
+            Kernanforderungen daraus aus.
           </FieldHint>
         </div>
       )}
@@ -126,13 +133,13 @@ export function NewApplicationModal() {
         <FieldLabel>Plattform</FieldLabel>
         <PopoverAnchor style={{ width: 'fit-content' }}>
           <FieldChip
-            open={st.jobChannelOpen}
+            open={channelOpen}
             empty={!st.jobChannel}
             chevron
             gap={7}
             style={{ padding: '3px 7px' }}
-            onClick={() => set((s) => ({ jobChannelOpen: !s.jobChannelOpen }))}
-            onClear={st.jobChannel ? () => set({ jobChannel: '', jobChannelOpen: false }) : undefined}
+            onClick={() => set((s) => ({ dropdown: s.dropdown === CHANNEL_DD ? null : CHANNEL_DD }))}
+            onClear={st.jobChannel ? () => set({ jobChannel: '', dropdown: null }) : undefined}
             clearTitle="Plattform entfernen"
           >
             {st.jobChannel ? (
@@ -146,27 +153,29 @@ export function NewApplicationModal() {
               <span style={{ color: 'var(--c-a5a29a)' }}>Eintrag auswählen</span>
             )}
           </FieldChip>
-          {st.jobChannelOpen && (
-            <Popover top={28} minWidth={200} zIndex={70}>
-              {CHANNEL_OPTIONS.map((c) => (
-                <MenuItem
-                  key={c}
-                  selected={st.jobChannel === c}
-                  onClick={() => set({ jobChannel: c, jobChannelOpen: false })}
-                >
+          {channelOpen && (
+            <SelectPopover
+              options={CHANNEL_OPTIONS}
+              value={st.jobChannel}
+              searchable
+              top={28}
+              minWidth={200}
+              zIndex={70}
+              onPick={(c) => set({ jobChannel: c, dropdown: null })}
+              onClose={() => set({ dropdown: null })}
+              renderRow={(c) => (
+                <>
                   <Avatar bg={CHANNEL_BG[c]} size={16} fontSize={8}>
                     {c.charAt(0)}
                   </Avatar>
                   <span style={{ whiteSpace: 'nowrap' }}>{c}</span>
                   <span style={{ flex: '1 1 auto' }} />
-                </MenuItem>
-              ))}
-            </Popover>
+                </>
+              )}
+            />
           )}
         </PopoverAnchor>
-        <FieldHint>
-          Falls du hier nichts auswählst, ergänzt Kepler die Plattform automatisch.
-        </FieldHint>
+        <FieldHint>Falls du hier nichts auswählst, ergänzt Kepler die Plattform automatisch.</FieldHint>
       </div>
     </ModalShell>
   );

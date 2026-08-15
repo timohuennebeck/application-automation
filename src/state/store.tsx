@@ -599,6 +599,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   /* Halts Kepler at the current step; the panel then offers the retry. */
   const stopAgent = useCallback((id: string) => agentCall(window.desktop?.agent.stop(id)), []);
 
+  /* A role a card or person is given joins the vocabulary (the repo does the
+     same on its side). Defined ahead of its callers so they can list it as a
+     dependency — a const cannot be named by a deps array declared above it. */
+  const rememberRole = useCallback(
+    (role: string) => {
+      const name = role.trim();
+      if (!name || name === UNKNOWN_ROLE) return;
+      if (!stRef.current.roles.includes(name)) set((s) => ({ roles: [...s.roles, name] }));
+    },
+    [set],
+  );
+
   const createCard = useCallback(() => {
     const s = stRef.current;
     const url = s.jobHasUrl ? s.jobUrl.trim() : '';
@@ -651,10 +663,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
             factsByApp: { ...s2.factsByApp, [res.application.id]: [] },
             activitiesByApp: { ...s2.activitiesByApp, [res.application.id]: [] },
           }));
+          /* The repo puts the role into the vocabulary on its side; without
+             this the dropdown cannot offer it until the next app start. */
+          rememberRole(res.application.role);
           // The card exists, unassigned — Kepler starts once it is assigned.
         }),
     );
-  }, [set]);
+  }, [set, rememberRole]);
 
   /* Drops the application from the board and discards everything stored under
      its id; the DB cascade removes the rows. */
@@ -668,10 +683,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
           delete next[id];
           return next;
         };
+        /* The repo prunes the placeholder company once the last card pointing
+           at it is gone; dropping it here too keeps the pickers honest. */
+        const companyId = s.applications[id]?.company_id;
+        const orphanPlaceholder =
+          companyId != null &&
+          s.companies[companyId]?.name === UNKNOWN_COMPANY &&
+          !Object.entries(s.applications).some(([k, a]) => k !== id && a.company_id === companyId);
+        const companies = { ...s.companies };
+        if (orphanPlaceholder) delete companies[companyId];
+
         return {
           ...CLOSED_EDITORS,
           board: s.board.map((c) => c.filter((x) => x !== id)),
           applications: drop(s.applications),
+          companies,
           factsByApp: drop(s.factsByApp),
           linksByApp: drop(s.linksByApp),
           commentsByApp: drop(s.commentsByApp),
@@ -689,17 +715,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
           overCol: null,
         };
       });
-    },
-    [set],
-  );
-
-  /* A role a card or person is given joins the vocabulary (the repo does the
-     same on its side). */
-  const rememberRole = useCallback(
-    (role: string) => {
-      const name = role.trim();
-      if (!name || name === UNKNOWN_ROLE) return;
-      if (!stRef.current.roles.includes(name)) set((s) => ({ roles: [...s.roles, name] }));
     },
     [set],
   );
@@ -982,10 +997,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
           db()
             ?.applications.relinkCompany(id, value)
             .then(({ application, company }) => {
-              set((s2) => ({
-                applications: { ...s2.applications, [id]: application },
-                companies: { ...s2.companies, [company.id]: company },
-              }));
+              set((s2) => {
+                const companies = { ...s2.companies, [company.id]: company };
+                /* The repo prunes the placeholder once nothing points at it.
+                   Keeping it in memory leaves the picker offering a company
+                   whose row is gone, and choosing it creates a second one. */
+                const prevId = s2.applications[id]?.company_id;
+                if (
+                  prevId != null &&
+                  prevId !== company.id &&
+                  s2.companies[prevId]?.name === UNKNOWN_COMPANY
+                ) {
+                  delete companies[prevId];
+                }
+                return { applications: { ...s2.applications, [id]: application }, companies };
+              });
             }),
         );
         return;
@@ -1139,7 +1165,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
               ? { ...s.attachmentsByComment, [String(res.comment.id)]: res.attachments }
               : s.attachmentsByComment,
           }));
-        })(),
+        })().catch((err) => {
+          /* The composer empties on send so it feels sent, but nothing here is
+             optimistic — the comment itself only appears once the database
+             answers. If it never does, put the text and the staged files back
+             rather than losing what was typed. */
+          set({ commentDraft: body, commentAttachments: staged });
+          throw err;
+        }),
       );
     },
     [set],

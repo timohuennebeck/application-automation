@@ -201,7 +201,12 @@ export function InterviewCard({
       <div style={{ display: 'flex', flexDirection: 'column', gap: 7, minWidth: 0, flex: '1 1 0' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
           {/* The ring sits on the text's centre, not on its baseline. */}
-          <RoundDot index={ri} total={rounds} style={{ alignSelf: 'center', opacity: done ? 0.6 : 1 }} />
+          <RoundDot
+            index={ri}
+            total={rounds}
+            stage={round.stage}
+            style={{ alignSelf: 'center', opacity: done ? 0.6 : 1 }}
+          />
           <div style={{ fontSize: 13.5, fontWeight: 600, color: sy.titleColor, lineHeight: 1.3 }}>
             {round.title}
           </div>

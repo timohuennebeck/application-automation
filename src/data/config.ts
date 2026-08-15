@@ -257,6 +257,17 @@ export function roundStage(index: number, total: number): ColumnDef {
   return COLUMNS[stage];
 }
 
+/* The column a round is drawn and named from. Rounds have carried their own
+   stage since migration 10, so that is the answer whenever it is set; the
+   positional guess above only stands in for rounds saved before the column
+   existed. Guessing where a stage is stored gets it wrong at every size the
+   ladder does not fit — a lone Screening reads as the final conversation,
+   because index 0 is also the last index. */
+export function roundColumn(stage: string, index: number, total: number): ColumnDef {
+  const named = ROUND_STAGES.map((i) => COLUMNS[i]).find((col) => col.name === stage);
+  return named ?? roundStage(index, total);
+}
+
 /* What the board can be sorted by. The board's own order (drag and drop) is
    what SortKey.NONE means — no comparator, the stage positions decide. */
 export const SortKey = {

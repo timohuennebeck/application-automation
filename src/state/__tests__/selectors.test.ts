@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { SortDir, SortKey, Urgency } from '../../data/config.ts';
-import { AgentRunStatus, Assignee, Interest, LinkKind } from '../../shared/enums.ts';
-import { shiftISO, todayISO } from '../../lib/date.ts';
+import { AgentRunStatus, Assignee, Interest, LinkKind, RoundState } from '../../shared/enums.ts';
+import { isoToDate, shiftISO, todayISO } from '../../lib/date.ts';
 import type { ApplicationRow, CompanyRow, FactRow } from '../../shared/db-types.ts';
 import {
   activeFilterCount,
   cardSubtitle,
+  interviewChip,
   isSorted,
   keplerHoldReason,
   keplerStartBlocked,
@@ -237,5 +238,40 @@ describe('peopleKeysForCard', () => {
       { application_id: 'A', person_id: 42, kind: LinkKind.CONTACT, position: 1 },
     ];
     expect(peopleKeysForCard(st, 'A').map((p) => p.key)).toEqual(['9', '8', '7', '5']);
+  });
+});
+
+/* One card whose only round is scheduled for tomorrow, in the given stage. */
+function cardWithRound(stage: string, extraRounds = 0): AppState {
+  const round = (s: string, days: number) => ({
+    stage: s,
+    state: RoundState.OPEN,
+    title: s,
+    date: isoToDate(shiftISO(todayISO(), days)),
+    time: '10:00',
+    where: 'Google Meet',
+    people: [],
+  });
+  const rounds = [round(stage, 1)];
+  for (let i = 0; i < extraRounds; i++) rounds.push(round('Interview', 10 + i));
+  return {
+    applications: { A: application('A', 'UX Researcher', 1, Interest.LOW, 'LinkedIn') },
+    roundsState: { A: rounds },
+  } as unknown as AppState;
+}
+
+describe('interviewChip', () => {
+  /* The stage is its own column since migration 10. Deriving it from the
+     round's index instead calls a lone Screening the final conversation,
+     because index 0 is also the last index. */
+  it('names the stage the round actually carries, not the one its position implies', () => {
+    expect(interviewChip(cardWithRound('Screening'), 'A')?.meta).toBe('Screening · Google Meet');
+    expect(interviewChip(cardWithRound('Interview'), 'A')?.meta).toBe('Interview · Google Meet');
+    expect(interviewChip(cardWithRound('2. Interview'), 'A')?.meta).toBe('2. Interview · Google Meet');
+  });
+
+  it('falls back to the position for a round saved before rounds carried a stage', () => {
+    expect(interviewChip(cardWithRound(''), 'A')?.meta).toBe('Finales Gespräch · Google Meet');
+    expect(interviewChip(cardWithRound('', 1), 'A')?.meta).toBe('Screening · Google Meet');
   });
 });

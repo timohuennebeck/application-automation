@@ -53,7 +53,7 @@ export function InterviewsSection({ cardId, company }: { cardId: string; company
             style={{ padding: '3px 7px', opacity: round.state === RoundState.DONE ? 0.6 : 1 }}
             onClick={() => set((s) => ({ dropdown: s.dropdown === 'roundsel' ? null : 'roundsel' }))}
           >
-            <RoundDot index={idx} total={rounds.length} />
+            <RoundDot index={idx} total={rounds.length} stage={round.stage} />
             <span style={{ fontWeight: 600 }}>{round.title}</span>
             {selISO && <span style={{ color: 'var(--c-8d8a83)' }}>{shortDate(selISO)}</span>}
             {selISO && <span style={{ color: 'var(--c-a5a29a)' }}>· {relLabel(dayDiff(selISO))}</span>}
@@ -69,7 +69,7 @@ export function InterviewsSection({ cardId, company }: { cardId: string; company
                     dim={r.state === RoundState.DONE ? 0.6 : undefined}
                     onClick={() => set((s) => ({ roundSel: { ...s.roundSel, [cardId]: i }, dropdown: null }))}
                   >
-                    <RoundDot index={i} total={rounds.length} />
+                    <RoundDot index={i} total={rounds.length} stage={r.stage} />
                     <span style={{ whiteSpace: 'nowrap' }}>{r.title}</span>
                     <span style={{ color: 'var(--c-8d8a83)', whiteSpace: 'nowrap' }}>{shortDate(iso)}</span>
                     <span style={{ flex: '1 1 auto' }} />

@@ -1,7 +1,7 @@
 /* Derived views over the domain state. The board card's subtitle, interview
    chip and salary line were pre-rendered strings in the sample data; now they
    are computed from rounds, follow-ups and facts at render time. */
-import { INTEREST, roundStage, SortDir, SortKey, Urgency } from '../data/config';
+import { INTEREST, roundColumn, SortDir, SortKey, Urgency } from '../data/config';
 import { AgentRunStatus, Assignee, Interest, LinkKind, RoundState } from '../shared/enums';
 import type { AgentRunView } from './db-view';
 import { MON_DE3, DOW_DE, dateToISO, dayDiff, todayISO } from '../lib/date';
@@ -186,7 +186,7 @@ export function interviewChip(st: AppState, id: string): InterviewChip | null {
     month: MON_DE3[d.getMonth()].toUpperCase(),
     day: String(d.getDate()),
     time: next.r.time,
-    meta: roundStage(next.i, rounds.length).name + (next.r.where ? ' · ' + next.r.where : ''),
+    meta: roundColumn(next.r.stage, next.i, rounds.length).name + (next.r.where ? ' · ' + next.r.where : ''),
   };
 }
 

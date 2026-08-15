@@ -142,7 +142,7 @@ export function InterviewEditModal({ company, channel }: { company: string; chan
           >
             {statusIdx >= 0 ? (
               <>
-                <RoundDot index={statusIdx} total={CANONICAL_ROUNDS.length} />
+                <RoundDot index={statusIdx} total={CANONICAL_ROUNDS.length} stage={draft.stage} />
                 <span>{draft.stage}</span>
               </>
             ) : (
@@ -160,7 +160,7 @@ export function InterviewEditModal({ company, channel }: { company: string; chan
                     set({ roundPop: null });
                   }}
                 >
-                  <RoundDot index={i} total={CANONICAL_ROUNDS.length} />
+                  <RoundDot index={i} total={CANONICAL_ROUNDS.length} stage={t} />
                   <span style={{ whiteSpace: 'nowrap' }}>{t}</span>
                   <span style={{ flex: '1 1 auto' }} />
                 </MenuItem>

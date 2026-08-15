@@ -113,6 +113,13 @@ export function TemplateSlot({
     if (err) onError(err);
   };
 
+  const openPdf = async (label: string) => {
+    set({ dropdown: null });
+    onError(null);
+    const err = await window.desktop?.templates.openPdf(kind, label);
+    if (err) onError(err);
+  };
+
   const remove = async (label: string) => {
     const api = desktop();
     set({ dropdown: null });
@@ -236,6 +243,9 @@ export function TemplateSlot({
                   >
                     <MenuItem style={{ whiteSpace: 'nowrap' }} onClick={() => open(v.label)}>
                       Im Browser öffnen
+                    </MenuItem>
+                    <MenuItem style={{ whiteSpace: 'nowrap' }} onClick={() => openPdf(v.label)}>
+                      PDF herunterladen
                     </MenuItem>
                     <MenuItem style={{ whiteSpace: 'nowrap' }} onClick={() => replace(v.label)}>
                       Ersetzen mit eigener Datei

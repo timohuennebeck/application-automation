@@ -1,5 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell } from 'electron';
-import { rmSync, statSync } from 'node:fs';
+import { existsSync, rmSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { openDb } from './db/open.ts';
@@ -230,6 +230,24 @@ ipcMain.handle('templates:open', (_e, kind: TemplateKind, label?: string) => {
     ? templateVersionPath(root, kind, label)
     : (selectedTemplatePath(root, kind)?.path ?? null);
   return filePath ? shell.openPath(filePath) : 'Noch keine Datei hochgeladen.';
+});
+
+/* The PDF of one Fassung, rendered beside its HTML on first request and again
+   whenever the HTML is newer than the last render — the profile has nothing
+   else that would trigger the export. Returns '' on success, else the reason. */
+ipcMain.handle('templates:openPdf', async (_e, kind: TemplateKind, label: string) => {
+  const htmlPath = templateVersionPath(app.getPath('userData'), kind, label);
+  if (!htmlPath) return 'Noch keine Datei hochgeladen.';
+  const pdfPath = htmlPath.replace(/\.[^.]+$/, '.pdf');
+  try {
+    if (!existsSync(pdfPath) || statSync(pdfPath).mtimeMs < statSync(htmlPath).mtimeMs) {
+      await renderPdf(htmlPath, pdfPath);
+    }
+  } catch (err) {
+    rmSync(pdfPath, { force: true });
+    return 'Das PDF ließ sich nicht erzeugen: ' + String(err);
+  }
+  return shell.openPath(pdfPath);
 });
 
 /* Profile documents: any further files kept with the profile. The picker is

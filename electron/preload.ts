@@ -135,6 +135,10 @@ const api = {
        given; '' on success, else the reason. */
     open: (kind: TemplateKind, label?: string): Promise<string> =>
       ipcRenderer.invoke('templates:open', kind, label),
+    /* Renders the Fassung to PDF (once per change) and hands that to the OS;
+       '' on success, else the reason. */
+    openPdf: (kind: TemplateKind, label: string): Promise<string> =>
+      ipcRenderer.invoke('templates:openPdf', kind, label),
   },
   /* Further profile documents (Immatrikulationsbescheinigung, Zeugnisse, …).
      Like the templates there is no database — the folder listing is the state

@@ -287,8 +287,11 @@ export const SORT_OPTIONS: [SortKey, string, SortDir][] = [
 /* Sidebar field catalog. Most labels route to real DB columns; only the
    free-form POSITION fields are stored in the facts table. */
 export const SECTIONS: [string, string[]][] = [
-  ['Bewerbung', ['Plattform', 'Beworben via', 'Beworben am']],
+  ['Bewerbung', ['Plattform', 'Stellenanzeige', 'Beworben via', 'Beworben am']],
   ['Position', ['Berufsbezeichnung', 'Standort', 'Gehalt', 'Erfahrung']],
-  ['Unternehmen', ['Firma', 'Branche', 'Mitarbeiterzahl', 'Karriereseite', 'Email', 'Telefon']],
+  ['Unternehmen', ['Firma', 'Branche', 'Mitarbeiterzahl', 'Firmenseite', 'Email', 'Telefon']],
 ];
 export const DATE_FIELDS: Record<string, boolean> = { 'Beworben am': true };
+/* Sidebar rows that hold a web address. Only a full http(s) URL is accepted
+   — see lib/url.isHttpUrl; anything else is not a link and is not stored. */
+export const URL_FIELDS = new Set(['Stellenanzeige', 'Firmenseite']);

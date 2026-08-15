@@ -16,7 +16,10 @@ export interface CompanyRow {
   name: string;
   sector: string | null;
   headcount: string | null;
+  /* The company homepage ("Firmenseite"). `website` once held the careers
+     page; the column stays for old rows but nothing reads or writes it. */
   website: string | null;
+  homepage: string | null;
   email: string | null;
   phone: string | null;
   notes: string | null;
@@ -208,10 +211,20 @@ export interface CreateApplicationResult {
 /* stage_id is not patchable — stage changes go through applications.move,
    which keeps stage_position contiguous. */
 export type ApplicationPatch = Partial<
-  Pick<ApplicationRow, 'role' | 'interest' | 'channel' | 'summary' | 'applied_at' | 'applied_via'>
+  Pick<
+    ApplicationRow,
+    | 'role'
+    | 'interest'
+    | 'channel'
+    | 'summary'
+    | 'applied_at'
+    | 'applied_via'
+    | 'posting_url'
+    | 'posting_text'
+  >
 >;
 export type CompanyPatch = Partial<
-  Pick<CompanyRow, 'name' | 'sector' | 'headcount' | 'website' | 'email' | 'phone' | 'notes'>
+  Pick<CompanyRow, 'name' | 'sector' | 'headcount' | 'website' | 'homepage' | 'email' | 'phone' | 'notes'>
 >;
 export type PersonPatch = Partial<
   Pick<PersonRow, 'name' | 'role' | 'email' | 'phone' | 'linkedin' | 'initials'>

@@ -22,7 +22,7 @@ export interface CardView {
   channel: string;
   salary: string;
   summary: string;
-  website: string;
+  homepage: string;
 }
 
 export function cardView(st: AppState, id: string): CardView | null {
@@ -42,7 +42,7 @@ export function cardView(st: AppState, id: string): CardView | null {
     /* Empty is a real state: the detail view shows its placeholder rather
        than a sentence nobody wrote. */
     summary: app.summary ?? '',
-    website: company?.website || '',
+    homepage: company?.homepage || '',
   };
 }
 

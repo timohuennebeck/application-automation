@@ -44,6 +44,7 @@ const company = (id: number, name: string): CompanyRow => ({
   sector: null,
   headcount: null,
   website: null,
+  homepage: null,
   email: null,
   phone: null,
   notes: null,

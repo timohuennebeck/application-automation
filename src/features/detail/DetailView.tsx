@@ -1,8 +1,10 @@
 import { AGENT_RUNS } from '../../data/sample-data';
 import { CHANNEL_BG, COLUMNS } from '../../data/config';
+import { isHttpUrl } from '../../lib/url';
 import { cardView } from '../../state/selectors';
 import { useApp } from '../../state/store-context';
 import { MenuItem } from '../../ui/MenuItem';
+import { LinkChip } from '../../ui/MentionText';
 import { Popover, PopoverAnchor } from '../../ui/Popover';
 import { Avatar, DotsGlyph } from '../../ui/icons';
 import { FollowUpSection } from '../followup/FollowUpSection';
@@ -34,7 +36,7 @@ function useCard(cardId: string) {
     companyFull: view.companyLine,
     city: view.city,
     channel: view.channel,
-    website: view.website,
+    homepage: view.homepage,
     summary: view.summary,
     columnIndex,
   };
@@ -204,10 +206,13 @@ export function DetailView() {
                   overflowWrap: 'anywhere',
                 }}
               >
-                {card.companyFull.replace(/,\s*/g, ' · ')} ·{' '}
-                <a href="#" style={{ textDecoration: 'none' }}>
-                  {card.website || 'karriere.' + card.company.toLowerCase().replace(/[^a-z]/g, '') + '.de'}
-                </a>
+                {card.companyFull.replace(/,\s*/g, ' · ')}
+                {isHttpUrl(card.homepage) && (
+                  <>
+                    {' · '}
+                    <LinkChip url={card.homepage} />
+                  </>
+                )}
               </div>
             </div>
           </div>

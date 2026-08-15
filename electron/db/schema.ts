@@ -299,4 +299,11 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE applications ADD COLUMN posting_url TEXT;
   ALTER TABLE applications ADD COLUMN posting_text TEXT;
   `,
+
+  /* Migration 14: the company homepage, separate from the careers page —
+     Kepler records both, and the sidebar shows them as Website and
+     Karriereseite. */
+  `
+  ALTER TABLE companies ADD COLUMN homepage TEXT;
+  `,
 ];

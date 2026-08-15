@@ -3,7 +3,8 @@
    in-memory view in sync and owns all transient UI state. */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { COLUMNS, SortDir, SortKey, STAGE_IDS } from '../data/config';
+import { URL_FIELDS, COLUMNS, SortDir, SortKey, STAGE_IDS } from '../data/config';
+import { isHttpUrl } from '../lib/url';
 import { Author, DocumentKind, FactKind, Interest, LinkKind, RoundState } from '../shared/enums';
 import type { ActivityRow, FollowupRow } from '../shared/db-types';
 import { indexSnapshot, roundInput, personView } from './db-view';
@@ -109,16 +110,17 @@ const emptyRound = (title: string): RoundView => ({
 });
 
 /* Sidebar labels that live on the applications row. */
-const APP_FIELD: Record<string, 'channel' | 'applied_via' | 'applied_at'> = {
+const APP_FIELD: Record<string, 'channel' | 'applied_via' | 'applied_at' | 'posting_url'> = {
   Plattform: 'channel',
+  Stellenanzeige: 'posting_url',
   'Beworben via': 'applied_via',
   'Beworben am': 'applied_at',
 };
 /* Sidebar labels that live on the shared companies row. */
-const COMPANY_FIELD: Record<string, 'sector' | 'headcount' | 'website' | 'email' | 'phone'> = {
+const COMPANY_FIELD: Record<string, 'sector' | 'headcount' | 'homepage' | 'email' | 'phone'> = {
   Branche: 'sector',
   Mitarbeiterzahl: 'headcount',
-  Karriereseite: 'website',
+  Firmenseite: 'homepage',
   Email: 'email',
   Telefon: 'phone',
 };
@@ -759,6 +761,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const app = s.applications[id];
       if (!app) return;
       const cleared = !value || value === '—';
+      // A URL row never stores anything but a full web address.
+      if (!cleared && URL_FIELDS.has(label) && !isHttpUrl(value)) return;
 
       if (label === 'Berufsbezeichnung') {
         if (cleared) return;

@@ -6,6 +6,7 @@ import { PopoverAnchor } from '../../ui/Popover';
 import { SelectPopover } from '../../ui/SelectPopover';
 import { Switch } from '../../ui/Switch';
 import { Avatar, KeplerAvatar } from '../../ui/icons';
+import { isHttpUrl } from '../../lib/url';
 
 /* The dialog's channel dropdown shares AppState.dropdown with every other
    select, so the global outside-click handler closes it like the rest. */
@@ -16,7 +17,8 @@ const CHANNEL_DD = 'jobChannel';
 export function NewApplicationModal() {
   const { st, set, createCard } = useApp();
   const close = () => set({ modalOpen: false });
-  const valid = !!(st.jobHasUrl ? st.jobUrl.trim() : st.jobText.trim());
+  /* A posting link has to be a full web address; anything else is text. */
+  const valid = st.jobHasUrl ? isHttpUrl(st.jobUrl) : !!st.jobText.trim();
   const channelOpen = st.dropdown === CHANNEL_DD;
 
   return (

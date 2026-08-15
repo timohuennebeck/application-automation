@@ -53,12 +53,15 @@ const APPLICATION_FIELDS: (keyof ApplicationPatch)[] = [
   'summary',
   'applied_at',
   'applied_via',
+  'posting_url',
+  'posting_text',
 ];
 const COMPANY_FIELDS: (keyof CompanyPatch)[] = [
   'name',
   'sector',
   'headcount',
   'website',
+  'homepage',
   'email',
   'phone',
   'notes',

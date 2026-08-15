@@ -9,6 +9,9 @@ export interface FieldChipProps {
   /* Greyed out and non-interactive (e.g. while the agent owns the record). */
   locked?: boolean;
   chevron?: boolean;
+  /* Blue "this opens somewhere" pill (Slack-style link) instead of the grey
+     editable one; the click is expected to open the value, not edit it. */
+  link?: boolean;
   onClick?: () => void;
   /* Empties the field. On a dropdown (chevron) the ✕ takes the chevron's place
      while the pill is hovered; elsewhere it sits after the value. Leave it off
@@ -29,6 +32,7 @@ export function FieldChip({
   empty,
   locked,
   chevron,
+  link,
   onClick,
   onClear,
   clearTitle,
@@ -51,7 +55,13 @@ export function FieldChip({
   );
   return (
     <div
-      className={locked ? 'chip-locked' : open ? 'chip chip-open' : 'chip'}
+      className={[
+        locked ? 'chip-locked' : 'chip',
+        !locked && link && 'chip-link',
+        !locked && open && 'chip-open',
+      ]
+        .filter(Boolean)
+        .join(' ')}
       title={title}
       onClick={locked ? undefined : onClick}
       style={{
@@ -60,7 +70,7 @@ export function FieldChip({
         gap,
         fontSize: 12.5,
         lineHeight: 1.45,
-        color: color ?? (empty ? 'var(--c-a5a29a)' : 'var(--c-28261f)'),
+        color: color ?? (link ? 'var(--c-3f6ea8)' : empty ? 'var(--c-a5a29a)' : 'var(--c-28261f)'),
         borderRadius: 5,
         padding: '2px 6px',
         cursor: locked ? 'not-allowed' : 'pointer',

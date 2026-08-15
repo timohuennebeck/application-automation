@@ -53,11 +53,14 @@ export function PropertiesSidebar({ cardId, role, company, columnIndex }: Proper
     Berufsbezeichnung: { value: role },
     Firma: { value: company },
     Plattform: { value: app?.channel || '' },
+    /* The listing's URL — the link the application was (or will be) sent
+       through, and the source Kepler reads from. */
+    Stellenanzeige: { value: app?.posting_url || '', link: true },
     'Beworben via': { value: app?.applied_via || '' },
     'Beworben am': { value: app?.applied_at ? isoToDate(app.applied_at) : '' },
     Branche: { value: comp?.sector || '' },
     Mitarbeiterzahl: { value: comp?.headcount || '' },
-    Karriereseite: { value: comp?.website || '', link: true },
+    Firmenseite: { value: comp?.homepage || '', link: true },
     Email: { value: comp?.email || '', link: true },
     Telefon: { value: comp?.phone || '' },
   };

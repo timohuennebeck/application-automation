@@ -252,6 +252,8 @@ export async function runPipeline(applicationId: string, runId: number, deps: Pi
           listing,
           extraction: needExtraction(),
           profileFacts: repo.load().profileFacts.map((f) => f.text),
+          contacts: linkedContacts(repo, applicationId),
+          cv: kind === TemplateKind.ANSCHREIBEN ? cvTemplateText(deps.userDataPath) : null,
           company: company.name,
           role: app.role,
         },
@@ -375,6 +377,25 @@ function linkContacts(repo: Repo, applicationId: string, people: ExtractedPerson
     }).person.id;
   });
   repo.setApplicationPeople(applicationId, LinkKind.CONTACT, ids);
+}
+
+/* The card's contacts as the letter prompt wants them — the rows written by
+   linkContacts, so a resumed run addresses the same person as a fresh one. */
+function linkedContacts(repo: Repo, applicationId: string): string[] {
+  const { people, applicationPeople } = repo.load();
+  return applicationPeople
+    .filter((l) => l.application_id === applicationId && l.kind === LinkKind.CONTACT)
+    .map((l) => people.find((p) => p.id === l.person_id))
+    .filter((p): p is NonNullable<typeof p> => p !== undefined)
+    .map((p) => (p.role ? `${p.name} (${p.role})` : p.name));
+}
+
+/* The Lebenslauf Fassung as the letter's source of facts about the applicant.
+   Is null when none is uploaded — the letter step then works from the profile
+   alone rather than failing for a slot it does not generate. */
+function cvTemplateText(userDataPath: string): string | null {
+  const selected = selectedTemplatePath(userDataPath, TemplateKind.LEBENSLAUF);
+  return selected ? readFileSync(selected.path, 'utf8') : null;
 }
 
 /* On resume, everything the extraction wrote is read back from where it

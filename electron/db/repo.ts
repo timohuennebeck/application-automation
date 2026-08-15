@@ -580,16 +580,18 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
 
     /* Points a document row at the pair of files it now stands for: the HTML
        the user supplied and the PDF rendered from it, which is NULL when the
-       export failed. Bumping updated_at is what makes the card read
-       "aktualisiert am" instead of "erstellt am". */
+       export failed. The row exists as an empty slot from the application's
+       creation, so the first file is what creates the document — created_at
+       moves with it; only a later replacement bumps updated_at alone, which is
+       what makes the card read "aktualisiert am" instead of "erstellt am". */
     setDocumentFile(documentId: number, filePath: string, pdfPath: string | null): DocumentRow {
       return tx(() => {
-        db.prepare('UPDATE documents SET file_path = ?, pdf_path = ?, updated_at = ? WHERE id = ?').run(
-          filePath,
-          pdfPath,
-          nowISO(),
-          documentId,
-        );
+        const before = one<DocumentRow>('SELECT * FROM documents WHERE id = ?', documentId);
+        const t = nowISO();
+        const firstFile = !before.file_path && !before.pdf_path;
+        db.prepare(
+          'UPDATE documents SET file_path = ?, pdf_path = ?, updated_at = ?, created_at = ? WHERE id = ?',
+        ).run(filePath, pdfPath, t, firstFile ? t : before.created_at, documentId);
         return one<DocumentRow>('SELECT * FROM documents WHERE id = ?', documentId);
       });
     },

@@ -15,7 +15,11 @@ export function DocumentsSection({ card }: { card: { id: string; role: string; c
   /* Sizes by stored path, read from disk rather than stored — a row that lost
      its file would otherwise keep quoting a size that is no longer true. */
   const [sizes, setSizes] = useState<Record<string, number | null>>({});
-  const docs = st.documentsByApp[card.id] || [];
+  /* Every application carries an empty slot per document kind from the moment
+     it is created; the section only lists the ones that have a file behind
+     them, so a fresh card shows no documents until Kepler (or the user) has
+     actually put one there. */
+  const docs = (st.documentsByApp[card.id] || []).filter((d) => d.file_path || d.pdf_path);
 
   const paths = docs.flatMap((d) => [d.file_path, d.pdf_path].filter((p): p is string => !!p));
   const key = paths.join(',') + '|' + docs.map((d) => d.updated_at).join(',');
@@ -57,10 +61,7 @@ export function DocumentsSection({ card }: { card: { id: string; role: string; c
           return (
             <DocumentCard
               key={d.id}
-              /* Red once there is a PDF to hand over, orange otherwise: a
-                 document here is an HTML one whether or not its file has been
-                 generated yet. The drained glyph belongs to the profile, where
-                 an empty slot is a state you are meant to act on. */
+              /* Red once there is a PDF to hand over, orange for HTML only. */
               format={d.pdf_path ? DocFormat.PDF : DocFormat.HTML}
               title={d.title}
               caption={caption(d)}
@@ -87,17 +88,12 @@ export function DocumentsSection({ card }: { card: { id: string; role: string; c
                 {st.dropdown === menuKey && (
                   <div onClick={(e) => e.stopPropagation()}>
                     <Popover top={32} right={0} minWidth={196}>
-                      {/* Only the renditions that exist are named. A document
-                          that has no files yet keeps the plain wording, because
-                          what it hands over is the placeholder export — calling
-                          that "HTML" would be a promise it does not keep. */}
-                      {d.file_path ? (
+                      {/* Only the renditions that exist are named. */}
+                      {d.file_path && (
                         <MenuItem onClick={() => open(d, d.file_path)}>
                           <span style={{ flex: '1 1 auto', whiteSpace: 'nowrap' }}>HTML herunterladen</span>
                           <Size bytes={sizes[d.file_path]} />
                         </MenuItem>
-                      ) : (
-                        !d.pdf_path && <MenuItem onClick={() => open(d, null)}>Herunterladen</MenuItem>
                       )}
                       {d.pdf_path && (
                         <MenuItem onClick={() => open(d, d.pdf_path)}>

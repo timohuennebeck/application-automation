@@ -43,11 +43,28 @@ describe('repo', () => {
 
     const html = 'documents/BEW-45/cover-letter.html';
     const pdf = 'documents/BEW-45/cover-letter.pdf';
-    const row = repo.setDocumentFile(doc.id, html, pdf);
+    const later = new Date('2026-08-13T09:00:00.000Z');
+    const row = createRepo(db, () => later).setDocumentFile(doc.id, html, pdf);
 
     expect(row).toMatchObject({ file_path: html, pdf_path: pdf });
-    /* "aktualisiert am" on the card hangs off this being later than created_at. */
-    expect(row.updated_at >= row.created_at).toBe(true);
+    /* The first file IS the document's creation: the placeholder row's own
+       insert time would make a freshly generated document read as an update. */
+    expect(row.created_at).toBe(later.toISOString());
+    expect(row.updated_at).toBe(later.toISOString());
+  });
+
+  it('keeps created_at when a document that already has a file is replaced', () => {
+    const doc = repo.createApplication({ role: 'Designer', company: 'Acme GmbH', channel: null })
+      .documents[0];
+    const first = repo.setDocumentFile(doc.id, 'documents/BEW-45/cover-letter.html', null);
+    const later = new Date('2026-08-13T09:00:00.000Z');
+    const second = createRepo(db, () => later).setDocumentFile(
+      doc.id,
+      'documents/BEW-45/cover-letter.html',
+      null,
+    );
+    expect(second.created_at).toBe(first.created_at);
+    expect(second.updated_at).toBe(later.toISOString());
   });
 
   /* A failed export leaves the source without its rendition; the row has to be

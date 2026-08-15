@@ -88,6 +88,7 @@ export function letterPrompt(input: DocumentInput): string {
 
 Regeln:
 - Übernimm Layout, Stile und Briefkopf der Vorlage; ersetze den Text durch ein auf die Anzeige zugeschnittenes Anschreiben.
+- Platzhalter in doppelten geschweiften Klammern ({{...}}) füllst du aus; ein Platzhalter mit OPTIONAL entfällt ersatzlos, wenn nichts passt. Kein Platzhalter bleibt im Ergebnis stehen.
 - Beziehe dich konkret auf die Stelle und das Unternehmen; kein generischer Text.
 - Die Profil-Angaben unten machen den Brief persönlich — nutze ein bis zwei davon, wo sie natürlich passen.
 - Erfinde keine Fakten, die weder Vorlage noch Profil hergeben.

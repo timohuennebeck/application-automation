@@ -12,7 +12,7 @@ import type { LlmRequest, LlmRunner } from './orchestrator.ts';
 const MODEL = 'sonnet';
 const DEFAULT_TIMEOUT = 120_000;
 
-export interface ModelCall {
+interface ModelCall {
   prompt: string;
   schema: object;
   tools: string[];
@@ -93,8 +93,10 @@ export function sdkInvoke(): ModelInvoke {
     stopped.catch(() => {});
     if (signal?.aborted) onStop();
     else signal?.addEventListener('abort', onStop, { once: true });
+    /* Held outside the try so the finally can close it on every path. */
+    let pending: ReturnType<typeof query> | undefined;
     try {
-      const q = query({
+      const q = (pending = query({
         prompt,
         options: {
           model: MODEL,
@@ -108,14 +110,26 @@ export function sdkInvoke(): ModelInvoke {
           tools,
           allowedTools: tools,
           /* Isolation mode: never load ~/.claude or project settings/CLAUDE.md
-             into Kepler's calls. */
+             into Kepler's calls. settingSources covers settings files only —
+             strictMcpConfig is the separate lever that stops a project
+             .mcp.json contributing mcp__* tools, which `tools: []` does not
+             govern because they are not built-ins. */
           settingSources: [],
+          strictMcpConfig: true,
+          /* Nothing here resumes a session, and the transcript would carry the
+             user's CV, letter and contacts into ~/.claude/projects — outside
+             userData, unpruned, in an app that is otherwise local-first. */
+          persistSession: false,
+          /* Without this the CLI's own startup failures are discarded, which
+             is the difference between a diagnosable packaged build and one
+             opaque German sentence. */
+          stderr: (data) => console.error('[kepler cli]', data.trimEnd()),
           /* The one place our schema objects meet the SDK's index-signature
              type — cast here rather than at every call site. */
           outputFormat: { type: 'json_schema', schema: schema as Record<string, unknown> },
           abortController: controller,
         },
-      });
+      }));
       const consume = async (): Promise<unknown> => {
         for await (const message of q) {
           if (message.type !== 'result') continue;
@@ -125,7 +139,13 @@ export function sdkInvoke(): ModelInvoke {
                the validator, whose complaint drives the retry. */
             return message.result;
           }
-          throw new Error(`${message.subtype} (stop_reason: ${message.stop_reason ?? 'unbekannt'})`);
+          /* The CLI reports many failures — an expired login among them — as an
+             error result rather than a throw, with the real text in errors[].
+             Drop it and classify() can never match its auth pattern. */
+          const detail = message.errors?.length
+            ? message.errors.join('; ')
+            : `stop_reason: ${message.stop_reason ?? 'unbekannt'}`;
+          throw new Error(`${message.subtype} (${detail})`);
         }
         /* An aborted stream may simply end without a result message. */
         throw new Error('Claude hat nicht geantwortet.');
@@ -139,6 +159,10 @@ export function sdkInvoke(): ModelInvoke {
     } finally {
       clearTimeout(timer);
       signal?.removeEventListener('abort', onStop);
+      /* A no-op once consume() returned; on the stop and timeout paths it is
+         the documented teardown. Without it the 300 MB CLI subprocess is left
+         to wind itself down with nothing bounding how long that takes. */
+      pending?.close();
     }
   };
 }

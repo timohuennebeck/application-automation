@@ -5,10 +5,21 @@
    Everything here takes the userData root as its first argument rather than
    reaching for Electron's app.getPath, which keeps it testable and keeps the
    Electron import out of the pure parts. */
-import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import path from 'node:path';
 import { toISO } from '../src/lib/date.ts';
-import type { ProfileDocumentInfo, TemplateInfo } from '../src/shared/domain.ts';
+import type { ProfileDocumentInfo, TemplateInfo, TemplateVersion } from '../src/shared/domain.ts';
+import { DOCUMENT_STEMS } from '../src/shared/applicant.ts';
 import { DocumentKind, TemplateKind } from '../src/shared/enums.ts';
 
 /* The one format the whole pipeline starts from: the agent edits the markup and
@@ -19,13 +30,15 @@ export function isHtml(filePath: string): boolean {
   return ext === '.html' || ext === '.htm';
 }
 
-/* Stored under the kind, not under whatever the file was called when it was
-   picked — there is one document of each kind per application, so the name
-   carries no information and a stray name could escape the folder. The two
-   renditions of a document share this stem and differ only in extension. */
+/* Stored under the applicant's name and the kind, not under whatever the file
+   was called when it was picked — there is one document of each kind per
+   application, so the picked name carries no information and a stray name
+   could escape the folder. The recruiter sees this name when the PDF lands in
+   their downloads, which is why it says whose it is. The two renditions of a
+   document share this stem and differ only in extension. */
 const BASE_NAMES: Record<DocumentKind, string> = {
-  [DocumentKind.LEBENSLAUF]: 'lebenslauf',
-  [DocumentKind.COVER_LETTER]: 'cover-letter',
+  [DocumentKind.LEBENSLAUF]: DOCUMENT_STEMS.LEBENSLAUF,
+  [DocumentKind.COVER_LETTER]: DOCUMENT_STEMS.ANSCHREIBEN,
   [DocumentKind.OTHER]: 'other',
 };
 
@@ -172,13 +185,21 @@ export function removeStoredFile(userDataPath: string, storedPath: string): void
    The CV and cover letter kept once for the whole profile, in userData/templates.
    There is no table behind them: the file being there *is* the state — its
    name, size and date come from the filesystem. That leaves nothing to keep in
-   sync and no row that can outlive its file. Each slot is a directory holding
-   the one uploaded file under its own name, so what the user picked is what
-   every chip and caption shows. */
+   sync and no row that can outlive its file. Each slot is a directory of
+   Fassungen; each Fassung is a subdirectory named by its label, holding the one
+   uploaded file renamed to the applicant's document name — the same name every
+   generated copy carries — so what the card shows is what a recruiter would
+   see. A `.selected` marker in the slot names the Fassung Kepler uses. */
 
 const TEMPLATE_DIRS: Record<TemplateKind, string> = {
   [TemplateKind.LEBENSLAUF]: 'lebenslauf',
   [TemplateKind.ANSCHREIBEN]: 'anschreiben',
+};
+
+/* What an upload is renamed to, extension aside. */
+const TEMPLATE_STEMS: Record<TemplateKind, string> = {
+  [TemplateKind.LEBENSLAUF]: DOCUMENT_STEMS.LEBENSLAUF,
+  [TemplateKind.ANSCHREIBEN]: DOCUMENT_STEMS.ANSCHREIBEN,
 };
 
 /* Where uploads landed before original names were kept: one fixed file per
@@ -188,6 +209,13 @@ const LEGACY_TEMPLATE_FILES: Record<TemplateKind, string> = {
   [TemplateKind.ANSCHREIBEN]: 'anschreiben.html',
 };
 
+/* The label a slot's first Fassung gets, and the stem further ones are
+   numbered from. */
+export const FIRST_TEMPLATE_LABEL = 'Standard';
+const AUTO_LABEL_PREFIX = 'Fassung ';
+const SELECTED_MARKER = '.selected';
+const MAX_LABEL_LENGTH = 40;
+
 /* Absolute path of a slot's directory. The kind comes from the renderer, so an
    unknown one is rejected here rather than joined into the path as `undefined`. */
 function templateDir(userDataPath: string, kind: TemplateKind): string {
@@ -196,57 +224,257 @@ function templateDir(userDataPath: string, kind: TemplateKind): string {
   return path.join(userDataPath, 'templates', dir);
 }
 
-/* The file sitting in a slot, or null while nothing has been uploaded. */
-export function templatePath(userDataPath: string, kind: TemplateKind): string | null {
-  const dir = templateDir(userDataPath, kind);
-  try {
-    const entry = readdirSync(dir).find(isHtml);
-    if (entry) return path.join(dir, entry);
-  } catch {
-    /* no slot directory yet — fall through to the legacy location */
+/* A label is a directory name that arrives from the renderer: one plain path
+   segment, no dotfile, short enough for a card title. Returns it trimmed. */
+function checkLabel(label: string): string {
+  const trimmed = label.trim();
+  if (!trimmed || trimmed.length > MAX_LABEL_LENGTH || trimmed.startsWith('.') || /[/\\]/.test(trimmed)) {
+    throw new Error('Ungültiger Name für eine Fassung.');
   }
-  const legacy = path.join(userDataPath, 'templates', LEGACY_TEMPLATE_FILES[kind]);
-  return existsSync(legacy) ? legacy : null;
+  return trimmed;
 }
 
-/* Puts a picked file into its slot under its own name, replacing whatever was
-   there, and reports what now sits in it so the dialog can redraw without a
-   second round trip. */
-export function copyTemplate(userDataPath: string, kind: TemplateKind, sourcePath: string): TemplateInfo {
-  if (!isHtml(sourcePath)) throw new Error(`not an HTML file: ${sourcePath}`);
-  const dir = templateDir(userDataPath, kind);
-  /* One file per slot: clear the directory and the legacy flat file, or the
-     replaced upload would shadow the new one. */
-  rmSync(dir, { recursive: true, force: true });
-  rmSync(path.join(userDataPath, 'templates', LEGACY_TEMPLATE_FILES[kind]), { force: true });
-  mkdirSync(dir, { recursive: true });
-  const target = path.join(dir, path.basename(sourcePath));
-  copyFileSync(sourcePath, target);
-  return describe(target);
+function versionDir(userDataPath: string, kind: TemplateKind, label: string): string {
+  return path.join(templateDir(userDataPath, kind), checkLabel(label));
 }
 
-function describe(filePath: string): TemplateInfo {
-  const s = statSync(filePath);
-  return { name: path.basename(filePath), size: s.size, day: toISO(s.mtime) };
-}
-
-function templateInfo(userDataPath: string, kind: TemplateKind): TemplateInfo | null {
-  const filePath = templatePath(userDataPath, kind);
-  if (!filePath) return null;
+/* The HTML file inside a Fassung directory, or null. */
+function versionFile(dir: string): string | null {
   try {
-    return describe(filePath);
+    if (!statSync(dir).isDirectory()) return null;
+    const entry = readdirSync(dir).find(isHtml);
+    return entry ? path.join(dir, entry) : null;
   } catch {
     return null;
   }
 }
 
-/* Both slots at once — null where nothing has been uploaded, or where the file
-   has since disappeared from disk. */
-export function listTemplates(userDataPath: string): Record<TemplateKind, TemplateInfo | null> {
+function markerPath(userDataPath: string, kind: TemplateKind): string {
+  return path.join(templateDir(userDataPath, kind), SELECTED_MARKER);
+}
+
+/* Moves an install from before Fassungen — one file directly in the slot, or
+   the even older flat templates/<kind>.html — into a "Standard" Fassung. Runs
+   on every read; a no-op once nothing is left to move. */
+function migrateSlot(userDataPath: string, kind: TemplateKind): void {
+  const dir = templateDir(userDataPath, kind);
+  const target = path.join(dir, FIRST_TEMPLATE_LABEL);
+  let entries: string[] = [];
+  try {
+    entries = readdirSync(dir);
+  } catch {
+    /* no slot directory yet */
+  }
+  const flat = entries.find((e) => isHtml(e) && statSync(path.join(dir, e)).isFile());
+  const legacy = path.join(userDataPath, 'templates', LEGACY_TEMPLATE_FILES[kind]);
+  const from = flat ? path.join(dir, flat) : existsSync(legacy) ? legacy : null;
+  if (!from) return;
+  if (existsSync(target)) {
+    /* A leftover from an older layout beside a migrated slot would only be
+       confusing; the migrated Fassung is the one that counts. */
+    rmSync(from, { force: true });
+    return;
+  }
+  mkdirSync(target, { recursive: true });
+  renameSync(from, path.join(target, TEMPLATE_STEMS[kind] + path.extname(from).toLowerCase()));
+  writeFileSync(markerPath(userDataPath, kind), FIRST_TEMPLATE_LABEL);
+}
+
+/* The labels present in a slot, by name. A Fassung whose file is gone does not
+   count — Finder deletions leave an empty directory behind. */
+function labelsIn(userDataPath: string, kind: TemplateKind): string[] {
+  migrateSlot(userDataPath, kind);
+  const dir = templateDir(userDataPath, kind);
+  let entries: string[] = [];
+  try {
+    entries = readdirSync(dir);
+  } catch {
+    return [];
+  }
+  return entries
+    .filter((e) => !e.startsWith('.') && versionFile(path.join(dir, e)) !== null)
+    .sort((a, b) => a.localeCompare(b, 'de'));
+}
+
+/* Which Fassung the marker names, healed to the first label when it is missing
+   or names one that no longer exists. Null for an empty slot. */
+function selectedLabel(
+  userDataPath: string,
+  kind: TemplateKind,
+  labels = labelsIn(userDataPath, kind),
+): string | null {
+  if (!labels.length) return null;
+  let wanted: string | null = null;
+  try {
+    wanted = readFileSync(markerPath(userDataPath, kind), 'utf8').trim();
+  } catch {
+    /* no marker yet */
+  }
+  if (wanted && labels.includes(wanted)) return wanted;
+  writeFileSync(markerPath(userDataPath, kind), labels[0]);
+  return labels[0];
+}
+
+function describeVersion(
+  userDataPath: string,
+  kind: TemplateKind,
+  label: string,
+  selected: boolean,
+): TemplateVersion {
+  const file = versionFile(versionDir(userDataPath, kind, label));
+  if (!file) throw new Error(`Fassung „${label}“ ist nicht vorhanden.`);
+  return { ...describe(file), label, selected };
+}
+
+/* Two labels collide when they differ only in case — the Mac's filesystem
+   would fold them into one directory. */
+function labelTaken(labels: string[], label: string): boolean {
+  const lower = label.toLowerCase();
+  return labels.some((l) => l.toLowerCase() === lower);
+}
+
+/* Every Fassung of a slot, by label, with the one Kepler uses flagged. */
+export function listTemplateVersions(userDataPath: string, kind: TemplateKind): TemplateVersion[] {
+  const labels = labelsIn(userDataPath, kind);
+  const selected = selectedLabel(userDataPath, kind, labels);
+  return labels.flatMap((label) => {
+    try {
+      return [describeVersion(userDataPath, kind, label, label === selected)];
+    } catch {
+      return []; // vanished between readdir and stat
+    }
+  });
+}
+
+/* Both slots at once. */
+export function listTemplates(userDataPath: string): Record<TemplateKind, TemplateVersion[]> {
   return {
-    [TemplateKind.LEBENSLAUF]: templateInfo(userDataPath, TemplateKind.LEBENSLAUF),
-    [TemplateKind.ANSCHREIBEN]: templateInfo(userDataPath, TemplateKind.ANSCHREIBEN),
+    [TemplateKind.LEBENSLAUF]: listTemplateVersions(userDataPath, TemplateKind.LEBENSLAUF),
+    [TemplateKind.ANSCHREIBEN]: listTemplateVersions(userDataPath, TemplateKind.ANSCHREIBEN),
   };
+}
+
+/* The file of the Fassung Kepler uses, with its label; null for an empty slot. */
+export function selectedTemplatePath(
+  userDataPath: string,
+  kind: TemplateKind,
+): { label: string; path: string } | null {
+  const label = selectedLabel(userDataPath, kind);
+  if (!label) return null;
+  const file = versionFile(versionDir(userDataPath, kind, label));
+  return file ? { label, path: file } : null;
+}
+
+/* The file of one named Fassung, or null when there is no such Fassung. */
+export function templateVersionPath(userDataPath: string, kind: TemplateKind, label: string): string | null {
+  return versionFile(versionDir(userDataPath, kind, label));
+}
+
+/* Writes the picked file into a Fassung directory under the applicant's
+   document name, replacing whatever was there. Only the extension is kept from
+   the picked name — a .htm stays a .htm. */
+function writeVersionFile(userDataPath: string, kind: TemplateKind, label: string, sourcePath: string): void {
+  if (!isHtml(sourcePath)) throw new Error(`not an HTML file: ${sourcePath}`);
+  const dir = versionDir(userDataPath, kind, label);
+  rmSync(dir, { recursive: true, force: true });
+  mkdirSync(dir, { recursive: true });
+  copyFileSync(sourcePath, path.join(dir, TEMPLATE_STEMS[kind] + path.extname(sourcePath).toLowerCase()));
+}
+
+/* Adds a Fassung under the next free name: "Standard" for an empty slot, else
+   "Fassung 2", "Fassung 3", … skipping names in use. The first Fassung of a
+   slot is selected; later ones leave the selection alone. */
+export function addTemplateVersion(
+  userDataPath: string,
+  kind: TemplateKind,
+  sourcePath: string,
+): TemplateVersion {
+  if (!isHtml(sourcePath)) throw new Error(`not an HTML file: ${sourcePath}`);
+  const labels = labelsIn(userDataPath, kind);
+  let label = FIRST_TEMPLATE_LABEL;
+  if (labels.length) {
+    for (let n = 2; labelTaken(labels, (label = AUTO_LABEL_PREFIX + n)); n++);
+  }
+  writeVersionFile(userDataPath, kind, label, sourcePath);
+  if (!labels.length) writeFileSync(markerPath(userDataPath, kind), label);
+  return describeVersion(userDataPath, kind, label, selectedLabel(userDataPath, kind) === label);
+}
+
+function requireLabel(userDataPath: string, kind: TemplateKind, label: string): string {
+  const clean = checkLabel(label);
+  if (!labelsIn(userDataPath, kind).includes(clean))
+    throw new Error(`Fassung „${clean}“ ist nicht vorhanden.`);
+  return clean;
+}
+
+/* Swaps the file of an existing Fassung. */
+export function replaceTemplateVersion(
+  userDataPath: string,
+  kind: TemplateKind,
+  label: string,
+  sourcePath: string,
+): TemplateVersion {
+  const clean = requireLabel(userDataPath, kind, label);
+  writeVersionFile(userDataPath, kind, clean, sourcePath);
+  return describeVersion(userDataPath, kind, clean, selectedLabel(userDataPath, kind) === clean);
+}
+
+/* Marks the Fassung Kepler uses from now on. */
+export function selectTemplateVersion(userDataPath: string, kind: TemplateKind, label: string): void {
+  writeFileSync(markerPath(userDataPath, kind), requireLabel(userDataPath, kind, label));
+}
+
+/* Renames a Fassung; the selection follows it. Renaming to the same name is a
+   no-op; a name that only differs in case from another Fassung is refused. */
+export function renameTemplateVersion(
+  userDataPath: string,
+  kind: TemplateKind,
+  from: string,
+  to: string,
+): TemplateVersion {
+  const oldLabel = requireLabel(userDataPath, kind, from);
+  const newLabel = checkLabel(to);
+  const labels = labelsIn(userDataPath, kind);
+  const wasSelected = selectedLabel(userDataPath, kind, labels) === oldLabel;
+  if (newLabel !== oldLabel) {
+    if (
+      labelTaken(
+        labels.filter((l) => l !== oldLabel),
+        newLabel,
+      )
+    ) {
+      throw new Error(`Eine Fassung „${newLabel}“ gibt es schon.`);
+    }
+    renameSync(versionDir(userDataPath, kind, oldLabel), versionDir(userDataPath, kind, newLabel));
+    if (wasSelected) writeFileSync(markerPath(userDataPath, kind), newLabel);
+  }
+  return describeVersion(userDataPath, kind, newLabel, wasSelected);
+}
+
+/* Deletes a Fassung. The selected one stays — a slot with files always has a
+   Fassung Kepler can use. Tolerates one that is already gone. */
+export function removeTemplateVersion(userDataPath: string, kind: TemplateKind, label: string): void {
+  const clean = checkLabel(label);
+  if (selectedLabel(userDataPath, kind) === clean) {
+    throw new Error('Diese Fassung wird gerade verwendet und kann nicht gelöscht werden.');
+  }
+  rmSync(versionDir(userDataPath, kind, clean), { recursive: true, force: true });
+}
+
+/* ── Compatibility wrappers, removed once every caller reads Fassungen ──── */
+export function templatePath(userDataPath: string, kind: TemplateKind): string | null {
+  return selectedTemplatePath(userDataPath, kind)?.path ?? null;
+}
+export function copyTemplate(userDataPath: string, kind: TemplateKind, sourcePath: string): TemplateInfo {
+  const selected = selectedLabel(userDataPath, kind);
+  return selected
+    ? replaceTemplateVersion(userDataPath, kind, selected, sourcePath)
+    : addTemplateVersion(userDataPath, kind, sourcePath);
+}
+
+function describe(filePath: string): TemplateInfo {
+  const s = statSync(filePath);
+  return { name: path.basename(filePath), size: s.size, day: toISO(s.mtime) };
 }
 
 /* ── Profile documents ────────────────────────────────────────────────────

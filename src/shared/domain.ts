@@ -5,9 +5,14 @@
    interview stages of the kanban board. */
 export const CANONICAL_ROUNDS: string[] = ['Screening', 'Interview', '2. Interview', 'Finales Gespräch'];
 
+/* The company a card gets when none is known — created without one, or
+   emptied in the sidebar. A card always points at some company row. */
+export const UNKNOWN_COMPANY = 'Unbekanntes Unternehmen';
+/* Likewise the role of a card created without one, or emptied in the sidebar. */
+export const UNKNOWN_ROLE = 'Neue Bewerbung';
+
 /* The comment Kepler leaves on every freshly created card. */
-export const DEFAULT_COMMENT =
-  'Karte aus der Stellenanzeige angelegt. Anschreiben und Lebenslauf liegen im Reiter Bewerbungsunterlagen.';
+export const DEFAULT_COMMENT = 'Karte angelegt – Bewerbung steht noch aus.';
 
 /* The default follow-up cadence as [days after the anchor, label]. A card
    created today counts from today (repo); a seeded card counts from the seed's
@@ -31,7 +36,9 @@ export interface DocumentUpload {
 /* What the profile dialog knows about a stored template. Read from the file
    itself on every call — there is no row that could disagree with it. */
 export interface TemplateInfo {
-  /* The file's own name as it was uploaded — what every chip and caption shows. */
+  /* The file's name on disk — what every chip and caption shows. A template is
+     renamed to the applicant's document name on upload; a profile document
+     keeps the name it was picked under. */
   name: string;
   size: number;
   /* Local calendar day the file was last written, as YYYY-MM-DD. */
@@ -41,4 +48,11 @@ export interface TemplateInfo {
 /* A file in the profile's document folder — Immatrikulationsbescheinigung,
    Zeugnisse, whatever should be kept in one place. Same shape as a template,
    and read from disk in the same way; the name doubles as its id. */
+/* One Fassung of a template slot: its file plus the label it is filed under
+   (the directory name) and whether it is the one Kepler uses. */
+export interface TemplateVersion extends TemplateInfo {
+  label: string;
+  selected: boolean;
+}
+
 export type ProfileDocumentInfo = TemplateInfo;

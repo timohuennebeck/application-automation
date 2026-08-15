@@ -93,5 +93,19 @@ export function MenuLabel({ children, style }: { children: ReactNode; style?: CS
 export function MenuSize({ bytes }: { bytes?: number | null }) {
   const text = formatBytes(bytes ?? null);
   if (!text) return null;
-  return <span style={{ fontSize: 11.5, color: 'var(--c-a5a29a)' }}>{text}</span>;
+  return (
+    <span
+      style={{
+        fontSize: 11.5,
+        color: 'var(--c-a5a29a)',
+        /* One piece, pushed to the trailing edge — the label gives way, not
+           the number ("25,4" over "KB"). */
+        flex: 'none',
+        marginLeft: 'auto',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {text}
+    </span>
+  );
 }

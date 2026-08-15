@@ -1,8 +1,7 @@
 /* One-time transform of the design prototype's sample data into real rows.
    Runs only on an empty database, inside a single transaction. The messy parts
    (yearless dates, phone-in-email slots, same-name different-person contacts)
-   are speced in docs/superpowers/specs/2026-08-12-sqlite-persistence-design.md
-   and covered by __tests__/seed.test.ts. */
+   are each covered by a case in __tests__/seed.test.ts. */
 import type { DatabaseSync } from 'node:sqlite';
 import { UNKNOWN_ROLE } from '../../src/shared/domain.ts';
 import {

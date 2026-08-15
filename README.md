@@ -1,32 +1,64 @@
-# React + TypeScript + Vite
+# Bewerbungen
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+A local-first desktop app for tracking job applications, in German. Applications
+move across a board, each one opens into a detail view holding the posting, the
+contacts, the interview rounds and the documents — and an in-app agent
+("Kepler") drafts the CV and cover letter for a posting from your profile.
 
-Currently, two official plugins are available:
+Everything lives on your machine: a SQLite database and the document files in
+Electron's `userData` directory. There is no server and no account.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Stack
 
-## React Compiler
+- **Electron 43** — main process in `electron/`
+- **React 19 + Vite 8** — renderer in `src/`
+- **node:sqlite** — persistence, schema and migrations in `electron/db/`
+- **Claude Agent SDK** — Kepler, in `electron/agent/`
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Getting started
 
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```sh
+npm install
+npm run dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+The first launch creates `bewerbungen.db` in `userData` and seeds it with sample
+applications so the board isn't empty.
+
+Kepler uses the Claude Agent SDK, which authenticates through your existing
+Claude subscription via the bundled CLI.
+
+## Scripts
+
+| Command          | What it does                              |
+| ---------------- | ----------------------------------------- |
+| `npm run dev`    | Vite dev server + Electron, with HMR      |
+| `npm run build`  | Typecheck and build renderer + main       |
+| `npm test`       | Vitest, once                              |
+| `npm run lint`   | Oxlint                                    |
+| `npm run format` | Prettier, write                           |
+| `npm run dist`   | Package a macOS .dmg via electron-builder |
+
+## How Kepler works
+
+A run is a deterministic step chain, not an autonomous loop —
+`electron/agent/orchestrator.ts` decides what happens next and the model only
+fills in individual steps:
+
+```
+FETCH → EXTRACT → CONTACTS → READ_CV → READ_LETTER → GEN_CV → GEN_LETTER → VALIDATE → COMMENT
+```
+
+It reads the posting, pulls out the role facts and contacts, reads your profile
+CV and letter templates, drafts both documents for this specific posting,
+validates the result, and leaves a comment on the application. Progress streams
+to the renderer as `agent:event` pushes; a run can be stopped mid-step.
+
+Every dependency with a side channel — network, model, PDF printing, events —
+is injected, so the whole pipeline runs in tests against fakes and an in-memory
+database.
+
+## Conventions
+
+See [CLAUDE.md](./CLAUDE.md) for layout, style and the rules that apply when
+changing this codebase.

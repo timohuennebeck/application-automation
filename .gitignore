@@ -13,9 +13,6 @@ dist-electron
 dist-ssr
 *.local
 
-# Design references
-detail.png
-
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

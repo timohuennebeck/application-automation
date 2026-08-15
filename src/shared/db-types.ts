@@ -1,7 +1,8 @@
 /* Row types for every table in bewerbungen.db, shared between the Electron
    main process (schema, seed, repo) and the renderer (snapshot state).
-   Mirrors docs/superpowers/specs/2026-08-12-sqlite-persistence-design.md.
-   The closed value sets these rows carry are the enums in ./enums.ts. */
+   Mirrors the CREATE TABLE statements in electron/db/schema.ts — the two must
+   move together. The closed value sets these rows carry are the enums in
+   ./enums.ts. */
 
 import type {
   AgentRunStatus,
@@ -28,8 +29,9 @@ export interface CompanyRow {
   name: string;
   sector: string | null;
   headcount: string | null;
-  /* The company homepage ("Firmenseite"). `website` once held the careers
-     page; the column stays for old rows but nothing reads or writes it. */
+  /* `website` once held the careers page, and the seed still fills it; no
+     sidebar label routes to it any more — "Firmenseite" writes `homepage` —
+     so nothing reads it back. The column stays for old rows. */
   website: string | null;
   homepage: string | null;
   email: string | null;

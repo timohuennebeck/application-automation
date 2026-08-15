@@ -20,6 +20,11 @@ const stageInserts = STAGES.map(
   ([id, title], i) => `INSERT INTO stages (id, title, position) VALUES ('${id}', '${title}', ${i});`,
 ).join('\n');
 
+/* Append-only: a migration's index here is its `user_version`, and the hash
+   guard in __tests__/migrate.test.ts refuses any edit to an existing entry.
+   The "Migration N" labels below are historical and no longer line up — three
+   numbers were consumed by entries that later moved — so trust the index, not
+   the label. */
 export const MIGRATIONS: string[] = [
   /* Migration 1: the full initial schema. */
   `

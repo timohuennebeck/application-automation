@@ -75,7 +75,7 @@ export function PropertiesSidebar({ cardId, role, company, columnIndex }: Proper
   /* The catalog value for each routed label; facts fill in the rest. */
   const routed: Record<string, { value: string; link?: boolean }> = {
     Berufsbezeichnung: { value: role },
-    Firma: { value: company },
+    Unternehmen: { value: company },
     Plattform: { value: app?.channel || '' },
     /* The listing's URL — the link the application was (or will be) sent
        through, and the source Kepler reads from. */

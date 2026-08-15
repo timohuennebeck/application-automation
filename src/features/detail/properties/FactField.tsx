@@ -74,7 +74,7 @@ export function FactField({ fact, cardId, locked }: { fact: FactView; cardId: st
   };
   /* Clearing routes an empty write; role and company must never be empty, so
      those two rows offer no ✕. */
-  const clearable = !fact.empty && fact.label !== 'Berufsbezeichnung' && fact.label !== 'Firma';
+  const clearable = !fact.empty && fact.label !== 'Berufsbezeichnung' && fact.label !== 'Unternehmen';
   const clearValue = clearable ? () => write('') : undefined;
 
   if (fact.isSalary) {
@@ -83,7 +83,7 @@ export function FactField({ fact, cardId, locked }: { fact: FactView; cardId: st
 
   /* Berufsbezeichnung picks from (or adds to) the role list. A card always
      has a role, so ✕ resets it to the placeholder, which the row shows as
-     empty — like Firma. */
+     empty — like Unternehmen. */
   if (fact.label === 'Berufsbezeichnung') {
     const unknown = fact.value === UNKNOWN_ROLE;
     return (
@@ -134,11 +134,11 @@ export function FactField({ fact, cardId, locked }: { fact: FactView; cardId: st
     );
   }
 
-  /* Firma picks from (or adds to) the company list; the write re-links the
+  /* Unternehmen picks from (or adds to) the company list; the write re-links the
      card, creating the company when the name is new. A card always points at
      some company, so ✕ files it under the placeholder, which the row shows
      as empty. */
-  if (fact.label === 'Firma') {
+  if (fact.label === 'Unternehmen') {
     const unknown = fact.value === UNKNOWN_COMPANY;
     return (
       <PopoverAnchor style={{ marginLeft: -6, minWidth: 0 }}>
@@ -150,9 +150,9 @@ export function FactField({ fact, cardId, locked }: { fact: FactView; cardId: st
           gap={5}
           onClick={toggle}
           onClear={unknown ? undefined : () => write(UNKNOWN_COMPANY)}
-          clearTitle="Firma entfernen"
+          clearTitle="Unternehmen entfernen"
         >
-          <span style={ELLIPSIS}>{unknown ? 'Firma auswählen' : fact.value}</span>
+          <span style={ELLIPSIS}>{unknown ? 'Unternehmen auswählen' : fact.value}</span>
         </FieldChip>
         {open && (
           <CompanyPopover

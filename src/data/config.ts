@@ -280,7 +280,7 @@ export const SORT_OPTIONS: [SortKey, string, SortDir][] = [
   [SortKey.NONE, 'Eigene Reihenfolge', SortDir.ASC],
   [SortKey.SALARY, 'Gehalt', SortDir.DESC],
   [SortKey.INTEREST, 'Interesse', SortDir.DESC],
-  [SortKey.COMPANY, 'Firma', SortDir.ASC],
+  [SortKey.COMPANY, 'Unternehmen', SortDir.ASC],
   [SortKey.ROLE, 'Position', SortDir.ASC],
 ];
 
@@ -289,7 +289,7 @@ export const SORT_OPTIONS: [SortKey, string, SortDir][] = [
 export const SECTIONS: [string, string[]][] = [
   ['Bewerbung', ['Plattform', 'Stellenanzeige', 'Beworben via', 'Beworben am']],
   ['Position', ['Berufsbezeichnung', 'Standort', 'Gehalt', 'Erfahrung']],
-  ['Unternehmen', ['Firma', 'Branche', 'Mitarbeiterzahl', 'Firmenseite', 'Email', 'Telefon']],
+  ['Unternehmen', ['Unternehmen', 'Branche', 'Mitarbeiterzahl', 'Firmenseite', 'Email', 'Telefon']],
 ];
 export const DATE_FIELDS: Record<string, boolean> = { 'Beworben am': true };
 /* Sidebar rows that hold a web address. Only a full http(s) URL is accepted

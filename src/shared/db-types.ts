@@ -289,7 +289,7 @@ export type CompanyPatch = Partial<
   Pick<CompanyRow, 'name' | 'sector' | 'headcount' | 'website' | 'homepage' | 'email' | 'phone' | 'notes'>
 >;
 /* `company` is the company's name — the repo finds or creates the row, the
-   same way relinking Firma on a card does. null detaches; leaving it out
+   same way relinking Unternehmen on a card does. null detaches; leaving it out
    keeps the current company. */
 export type PersonPatch = Partial<
   Pick<PersonRow, 'name' | 'role' | 'email' | 'phone' | 'linkedin' | 'initials'>

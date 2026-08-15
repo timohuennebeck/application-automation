@@ -162,7 +162,7 @@ export function SearchPalette() {
           <input
             value={st.searchQ}
             autoFocus
-            placeholder="Bewerbung, Firma oder Person"
+            placeholder="Bewerbung, Unternehmen oder Person"
             onChange={(e) => set({ searchQ: e.target.value })}
             style={{
               fontSize: 15,

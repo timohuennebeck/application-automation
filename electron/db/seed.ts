@@ -33,7 +33,7 @@ const DAY = 86_400_000;
 /* Labels that route to real columns and must never become facts rows. */
 const ROUTED_LABELS = new Set([
   'Berufsbezeichnung',
-  'Firma',
+  'Unternehmen',
   'Plattform',
   'Beworben via',
   'Beworben am',

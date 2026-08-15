@@ -974,7 +974,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         persist(db()?.applications.update(id, { role: value }));
         return;
       }
-      if (label === 'Firma') {
+      if (label === 'Unternehmen') {
         if (cleared) return;
         persist(
           db()

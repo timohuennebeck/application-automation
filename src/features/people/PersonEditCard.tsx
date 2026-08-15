@@ -23,7 +23,7 @@ interface FieldDef {
 const FIELDS: FieldDef[] = [
   { label: 'Name', prop: 'name' },
   { label: 'Berufsbezeichnung', prop: 'role', select: true },
-  { label: 'Firma', prop: 'company', select: true },
+  { label: 'Unternehmen', prop: 'company', select: true },
   { label: 'Email', prop: 'email' },
   { label: 'Telefon', prop: 'phone' },
   { label: 'LinkedIn', prop: 'linkedin', url: true },

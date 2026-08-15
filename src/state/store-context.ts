@@ -23,7 +23,7 @@ export type Round = RoundView;
 /* A person as the pickers and chips read them: the stored view plus its key,
    guaranteed initials and the resolved company name. */
 export type PersonEntry = PersonView & { key: string; initials: string; company: string };
-/* A picker row: `known` groups the person under "Bei <Firma>" — linked to the
+/* A picker row: `known` groups the person under "Bei <Unternehmen>" — linked to the
    card, on one of its rounds, or filed under its company. */
 export type PersonSuggestion = PersonEntry & { known: boolean };
 

@@ -79,7 +79,7 @@ const GLYPHS: Record<string, () => ReactNode> = {
   Standort: () => <PinGlyph size={SIZE} />,
   Gehalt: () => <EuroGlyph size={SIZE} />,
   Erfahrung: () => <Outline d={PATH.clipboardList} />,
-  Firma: () => <BriefcaseGlyph size={SIZE} />,
+  Unternehmen: () => <BriefcaseGlyph size={SIZE} />,
   Branche: () => <Outline d={PATH.grid} />,
   Mitarbeiterzahl: () => <Outline d={PATH.calculator} />,
   Firmenseite: () => <GlobeGlyph size={SIZE} />,

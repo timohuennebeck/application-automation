@@ -3,7 +3,7 @@ import { UNKNOWN_COMPANY } from '../../shared/domain';
 import { useApp } from '../../state/store-context';
 import { ManagedSelectPopover } from '../../ui/ManagedSelectPopover';
 
-/* The company dropdown behind a Firma chip — the sidebar's and the person
+/* The company dropdown behind an Unternehmen chip — the sidebar's and the person
    editor's alike. Every known company; a new name is created on write; the
    companies no card applies at any more can be removed. */
 export function CompanyPopover({
@@ -42,7 +42,7 @@ export function CompanyPopover({
       options={companies}
       value={value}
       removable={(name) => unused.has(name)}
-      removeTitle="Firma löschen – keine Bewerbung verwendet sie"
+      removeTitle="Unternehmen löschen – keine Bewerbung verwendet sie"
       onRemove={(name) => {
         const id = unused.get(name);
         if (id !== undefined) deleteCompany(id);

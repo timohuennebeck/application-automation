@@ -1,6 +1,6 @@
 /* All database operations, one synchronous function per mutation. The IPC
    layer maps these 1:1 onto db:* channels; the renderer never sees SQL.
-   Fact-label routing (Berufsbezeichnung → role, Firma → company re-link, …)
+   Fact-label routing (Berufsbezeichnung → role, Unternehmen → company re-link, …)
    lives here so the sidebar's two write paths cannot diverge. */
 import type { DatabaseSync } from 'node:sqlite';
 import type {
@@ -388,7 +388,7 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
           'SELECT COUNT(*) AS n FROM applications WHERE company_id = ?',
           companyId,
         ).n;
-        if (Number(used) > 0) throw new Error('Die Firma wird noch von Bewerbungen verwendet.');
+        if (Number(used) > 0) throw new Error('Das Unternehmen wird noch von Bewerbungen verwendet.');
         db.prepare('DELETE FROM companies WHERE id = ?').run(companyId);
       });
     },

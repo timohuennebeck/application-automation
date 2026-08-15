@@ -413,6 +413,22 @@ export function RegenGlyph() {
   );
 }
 
+/* The classic two-segment chain, drawn diagonally. */
+export function LinkGlyph() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
+      <path
+        d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71 M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"
+        fill="none"
+        stroke="var(--c-a5a29a)"
+        strokeWidth="1.9"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 export function PaperclipGlyph() {
   return (
     <svg width="15" height="15" viewBox="0 0 16 16" style={{ flexShrink: 0 }}>

@@ -76,6 +76,25 @@
   color: var(--c-5f5c56);
   background: var(--c-d8d4ca);
 }
+/* A filled link value (job posting, website, e-mail): blue pill, blue text,
+   the whole thing opens the address on click — only the ✕ does otherwise. */
+.chip-link {
+  background: var(--c-e9eff8);
+  color: var(--c-3f6ea8);
+}
+.chip-link:hover {
+  background: var(--c-dbe5f5);
+}
+.chip-link svg path {
+  stroke: var(--c-3f6ea8);
+}
+.chip-link .chip-clear {
+  color: var(--c-6d8cc0);
+}
+.chip-link .chip-clear:hover {
+  color: var(--c-3f6ea8);
+  background: var(--c-c9d8ee);
+}
 /* A dropdown holding a clearable value trades its chevron for the ✕ under the
    cursor: same spot, same width, one click to empty the field. */
 .chip-swap {
@@ -427,6 +446,14 @@
 }
 .attachment-chip:hover {
   background: var(--c-eae7e0);
+}
+/* Link chips in comment text share the blue link tone of the sidebar rows;
+   file attachments keep the grey. */
+.attachment-chip.chip-link {
+  background: var(--c-e9eff8);
+}
+.attachment-chip.chip-link:hover {
+  background: var(--c-dbe5f5);
 }
 
 /* Comment ⋯ button */

@@ -6,7 +6,7 @@
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import type { Repo } from '../db/repo.ts';
-import { documentFileName, documentPaths, templatePath } from '../files.ts';
+import { documentFileName, documentPaths, selectedTemplatePath } from '../files.ts';
 import type { AgentEvent } from '../../src/shared/agent.ts';
 import type { AgentStepRow, ApplicationRow, CompanyRow } from '../../src/shared/db-types.ts';
 import {
@@ -230,35 +230,41 @@ export async function runPipeline(applicationId: string, runId: number, deps: Pi
     }
 
     /* ── Generate both documents ──────────────────────────────────────── */
-    const docInput = (kind: TemplateKind, name: string): DocumentInput => ({
-      template: readTemplate(deps.userDataPath, kind, name),
-      listing,
-      extraction: needExtraction(),
-      profileFacts: repo.load().profileFacts.map((f) => f.text),
-      company: company.name,
-      role: app.role,
-    });
+    /* The prompt input plus the label of the Fassung it was read from — the
+       label is stamped on the generated document, never shown to the model. */
+    const docInput = (kind: TemplateKind, name: string): { input: DocumentInput; label: string } => {
+      const { html, label } = readTemplate(deps.userDataPath, kind, name);
+      return {
+        label,
+        input: {
+          template: html,
+          listing,
+          extraction: needExtraction(),
+          profileFacts: repo.load().profileFacts.map((f) => f.text),
+          company: company.name,
+          role: app.role,
+        },
+      };
+    };
 
     let cvHtml: string | null = null;
     if (pending(AgentStepKey.GEN_CV)) {
       start(AgentStepKey.GEN_CV);
-      cvHtml = await generateDocument(
-        deps,
-        applicationId,
-        DocumentKind.LEBENSLAUF,
-        cvPrompt(docInput(TemplateKind.LEBENSLAUF, 'Lebenslauf')),
-      );
+      const { input, label } = docInput(TemplateKind.LEBENSLAUF, 'Lebenslauf');
+      cvHtml = await generateDocument(deps, applicationId, DocumentKind.LEBENSLAUF, cvPrompt(input), label);
       done(AgentStepKey.GEN_CV, true);
     }
 
     let letterHtml: string | null = null;
     if (pending(AgentStepKey.GEN_LETTER)) {
       start(AgentStepKey.GEN_LETTER);
+      const { input, label } = docInput(TemplateKind.ANSCHREIBEN, 'Anschreiben');
       letterHtml = await generateDocument(
         deps,
         applicationId,
         DocumentKind.COVER_LETTER,
-        letterPrompt(docInput(TemplateKind.ANSCHREIBEN, 'Anschreiben')),
+        letterPrompt(input),
+        label,
       );
       done(AgentStepKey.GEN_LETTER, true);
     }
@@ -395,14 +401,20 @@ function readGeneratedHtml(userDataPath: string, applicationId: string, kind: Do
   }
 }
 
-function readTemplate(userDataPath: string, kind: TemplateKind, name: string): string {
-  const filePath = templatePath(userDataPath, kind);
-  if (!filePath) {
+/* The selected Fassung of a slot: its markup and the label the generated
+   document is stamped with. */
+function readTemplate(
+  userDataPath: string,
+  kind: TemplateKind,
+  name: string,
+): { html: string; label: string } {
+  const selected = selectedTemplatePath(userDataPath, kind);
+  if (!selected) {
     throw new KeplerError(
       `Keine ${name}-Vorlage hochgeladen. Bitte im Profil (⌘P) eine HTML-Vorlage hinterlegen.`,
     );
   }
-  return readFileSync(filePath, 'utf8');
+  return { html: readFileSync(selected.path, 'utf8'), label: selected.label };
 }
 
 /* Asks for the document, writes the HTML into the application's folder and
@@ -413,6 +425,7 @@ async function generateDocument(
   applicationId: string,
   kind: DocumentKind,
   prompt: string,
+  templateLabel: string,
 ): Promise<string> {
   const html = await deps.llm({
     prompt,
@@ -445,7 +458,7 @@ async function generateDocument(
       row.id,
       path.join('documents', applicationId, documentFileName(kind, 'html')),
       storedPdf,
-      null,
+      templateLabel,
     );
   }
   return html;

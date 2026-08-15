@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { UNKNOWN_COMPANY } from '../../shared/domain';
+import { usedCompanyIds } from '../../state/selectors';
 import { useApp } from '../../state/store-context';
 import { ManagedSelectPopover } from '../../ui/ManagedSelectPopover';
 
@@ -29,7 +30,7 @@ export function CompanyPopover({
     [st.companies],
   );
   const unused = useMemo(() => {
-    const used = new Set(Object.values(st.applications).map((a) => a.company_id));
+    const used = usedCompanyIds(st);
     return new Map(
       Object.values(st.companies)
         .filter((c) => !used.has(c.id))

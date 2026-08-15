@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { UNKNOWN_ROLE } from '../../../shared/domain';
+import { usedRoles } from '../../../state/selectors';
 import { useApp } from '../../../state/store-context';
 import { ManagedSelectPopover } from '../../../ui/ManagedSelectPopover';
 
@@ -21,14 +22,7 @@ export function RolePopover({
     () => st.roles.filter((r) => r !== UNKNOWN_ROLE).sort((a, b) => a.localeCompare(b, 'de')),
     [st.roles],
   );
-  const used = useMemo(
-    () =>
-      new Set([
-        ...Object.values(st.applications).map((a) => a.role.trim()),
-        ...Object.values(st.people).map((p) => p.role.trim()),
-      ]),
-    [st.applications, st.people],
-  );
+  const used = useMemo(() => usedRoles(st), [st.applications, st.people]);
   return (
     <ManagedSelectPopover
       options={options}

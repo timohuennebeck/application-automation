@@ -19,15 +19,44 @@ export function agentLocked(st: AppState, id: string): boolean {
   return status === AgentRunStatus.QUEUED || status === AgentRunStatus.RUNNING;
 }
 
-/* Why Kepler cannot be taken off the card right now, or null when it can:
-   a run is underway, or stopped at a failed step that a retry picks back up. */
+/* Why Kepler cannot be taken off the card right now, or null when it can.
+   Only a run actually underway holds the name — a failed run is inert, so
+   unassigning stays possible (the strip keeps offering the retry either way,
+   and a retry puts Kepler back on the card). */
 export function keplerHoldReason(st: AppState, id: string): string | null {
   if (st.applications[id]?.assignee !== Assignee.KEPLER) return null;
   if (agentLocked(st, id)) return 'Kepler arbeitet gerade – erst stoppen';
-  if (st.agentRuns[id]?.run.status === AgentRunStatus.FAILED) {
-    return 'Kepler ist an einem Schritt gescheitert – erst wiederholen oder den Lauf beenden';
-  }
   return null;
+}
+
+/* Why handing the card to Kepler would be refused, or null when a run can
+   start — the same check the main process makes, so the menu can disable the
+   row instead of silently claiming work that never begins. */
+export function keplerStartBlocked(st: AppState, id: string): string | null {
+  const app = st.applications[id];
+  if (!app || app.posting_url || app.posting_text) return null;
+  return 'Keine Stellenanzeige hinterlegt – Link oder Text fehlt';
+}
+
+/* What is still referenced by a card or person — the guard the vocabulary
+   popovers' trash icons and the store's delete actions share, so the icon can
+   never promise a delete the store then refuses. */
+export function usedCompanyIds(st: AppState): Set<number> {
+  return new Set(Object.values(st.applications).map((a) => a.company_id));
+}
+export function usedLocations(st: AppState): Set<string> {
+  return new Set(
+    Object.values(st.factsByApp)
+      .flat()
+      .filter((f) => f.label === 'Standort')
+      .map((f) => f.value.trim()),
+  );
+}
+export function usedRoles(st: AppState): Set<string> {
+  return new Set([
+    ...Object.values(st.applications).map((a) => a.role.trim()),
+    ...Object.values(st.people).map((p) => p.role.trim()),
+  ]);
 }
 
 export function factOf(st: AppState, id: string, label: string): string {

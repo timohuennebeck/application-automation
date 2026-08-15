@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { usedLocations } from '../../../state/selectors';
 import { useApp } from '../../../state/store-context';
 import { ManagedSelectPopover } from '../../../ui/ManagedSelectPopover';
 
@@ -15,16 +16,7 @@ export function LocationPopover({
 }) {
   const { st, deleteLocation } = useApp();
   const options = useMemo(() => [...st.locations].sort((a, b) => a.localeCompare(b, 'de')), [st.locations]);
-  const used = useMemo(
-    () =>
-      new Set(
-        Object.values(st.factsByApp)
-          .flat()
-          .filter((f) => f.label === 'Standort')
-          .map((f) => f.value.trim()),
-      ),
-    [st.factsByApp],
-  );
+  const used = useMemo(() => usedLocations(st), [st.factsByApp]);
   return (
     <ManagedSelectPopover
       options={options}

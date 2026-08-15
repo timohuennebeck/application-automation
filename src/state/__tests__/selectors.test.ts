@@ -1,9 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { SortDir, SortKey, Urgency } from '../../data/config.ts';
-import { Interest, LinkKind } from '../../shared/enums.ts';
+import { AgentRunStatus, Assignee, Interest, LinkKind } from '../../shared/enums.ts';
 import { shiftISO, todayISO } from '../../lib/date.ts';
 import type { ApplicationRow, CompanyRow, FactRow } from '../../shared/db-types.ts';
-import { activeFilterCount, cardSubtitle, isSorted, peopleKeysForCard, visibleCards } from '../selectors.ts';
+import {
+  activeFilterCount,
+  cardSubtitle,
+  isSorted,
+  keplerHoldReason,
+  keplerStartBlocked,
+  peopleKeysForCard,
+  visibleCards,
+} from '../selectors.ts';
 import type { AppState, BoardFilter } from '../store-context.ts';
 
 const application = (
@@ -136,6 +144,37 @@ describe('cardSubtitle', () => {
 
   it('stops calling it overdue once it has been sent', () => {
     expect(cardSubtitle(cardWithFollowup(-4, true), 'A').tone).toBe(Urgency.MUTED);
+  });
+});
+
+describe('kepler assignment guards', () => {
+  /* One card owned by Kepler, its latest run in the given state. */
+  function keplerState(status: AgentRunStatus | null, posting = true): AppState {
+    const app = application('A', 'UX Researcher', 1, Interest.LOW, 'LinkedIn');
+    app.assignee = Assignee.KEPLER;
+    if (posting) app.posting_url = 'https://example.com/jobs/1';
+    return {
+      applications: { A: app },
+      agentRuns: status ? { A: { run: { id: 1, application_id: 'A', status }, steps: [] } } : {},
+    } as unknown as AppState;
+  }
+
+  it('holds the name only while a run is queued or underway', () => {
+    expect(keplerHoldReason(keplerState(AgentRunStatus.QUEUED), 'A')).toContain('stoppen');
+    expect(keplerHoldReason(keplerState(AgentRunStatus.RUNNING), 'A')).toContain('stoppen');
+    expect(keplerHoldReason(keplerState(null), 'A')).toBeNull();
+    /* A failed run is inert — Kepler can be taken off; the retry would put
+       the name back on the card anyway. */
+    expect(keplerHoldReason(keplerState(AgentRunStatus.FAILED), 'A')).toBeNull();
+    expect(keplerHoldReason(keplerState(AgentRunStatus.DONE), 'A')).toBeNull();
+  });
+
+  it('blocks assigning Kepler only while there is no posting to work from', () => {
+    expect(keplerStartBlocked(keplerState(null, false), 'A')).toContain('Stellenanzeige');
+    expect(keplerStartBlocked(keplerState(null, true), 'A')).toBeNull();
+    const pasted = keplerState(null, false);
+    pasted.applications.A.posting_text = 'Wir suchen …';
+    expect(keplerStartBlocked(pasted, 'A')).toBeNull();
   });
 });
 

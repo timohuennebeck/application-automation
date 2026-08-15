@@ -1,5 +1,5 @@
 import { Assignee } from '../../shared/enums';
-import { keplerHoldReason } from '../../state/selectors';
+import { keplerHoldReason, keplerStartBlocked } from '../../state/selectors';
 import { useApp } from '../../state/store-context';
 import { KeplerAvatar } from '../../ui/icons';
 import { MenuItem, MenuLabel } from '../../ui/MenuItem';
@@ -24,7 +24,9 @@ export function CardMenu() {
   const app = st.applications[menu.id];
   const role = app?.role;
   const assigned = app?.assignee === Assignee.KEPLER;
-  const hold = keplerHoldReason(st, menu.id);
+  /* Unassigning is held while a run is underway; assigning is held while
+     there is no posting for Kepler to work from. */
+  const hold = assigned ? keplerHoldReason(st, menu.id) : keplerStartBlocked(st, menu.id);
   const left = Math.max(EDGE, Math.min(menu.x, window.innerWidth - MAX_WIDTH - EDGE));
   const top = Math.max(EDGE, Math.min(menu.y, window.innerHeight - HEIGHT - EDGE));
 

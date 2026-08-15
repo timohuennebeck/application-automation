@@ -9,7 +9,15 @@ import { Assignee, Author, DocumentKind, FactKind, Interest, LinkKind, RoundStat
 import type { ActivityRow, FollowupRow, PersonWithCompany } from '../shared/db-types';
 import { indexSnapshot, roundInput, personView } from './db-view';
 import type { PersonView, RoundView } from './db-view';
-import { keplerHoldReason, peopleKeysForCard } from './selectors';
+import {
+  keplerHoldReason,
+  keplerStartBlocked,
+  peopleKeysForCard,
+  usedCompanyIds,
+  usedLocations,
+  usedRoles,
+} from './selectors';
+import type { AgentStartResult } from '../shared/agent';
 import { UNKNOWN_COMPANY, UNKNOWN_ROLE } from '../shared/domain';
 import { dateToISO } from '../lib/date';
 import { isInFocusedField } from '../lib/dom';
@@ -26,6 +34,16 @@ import type {
   PersonSuggestion,
   Round,
 } from './store-context';
+
+/* Fire-and-forget bridge call to Kepler: progress arrives as agent:event
+   pushes, so the promise only carries a refusal — which lands in the console
+   (the menus are gated on the same checks the main process makes). */
+const agentCall = (p?: Promise<AgentStartResult>) =>
+  p
+    ?.then((r) => {
+      if (!r.ok) console.warn('[agent]', r.error);
+    })
+    .catch((err) => console.error('[agent]', err));
 
 /* An untouched board: every card, in the order the stages hold them. */
 export const EMPTY_FILTER: BoardFilter = {
@@ -227,7 +245,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       timer = window.setTimeout(() => {
         db()
           ?.load()
-          .then((snap) => set(indexSnapshot(snap)))
+          .then((snap) => {
+            /* The snapshot replaces domain state wholesale. Applying it while
+               a drag or field edit is in flight would visually revert work
+               whose write is still on its way — hold off and pull a fresh
+               snapshot once the interaction has settled. */
+            if (stRef.current.dragId || stRef.current.editing) {
+              resync();
+              return;
+            }
+            set(indexSnapshot(snap));
+          })
           .catch((err) => console.error('[agent] resync failed', err));
       }, 150);
     };
@@ -546,19 +574,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [set],
   );
 
-  /* Hands a card to Kepler. Fire-and-forget: progress arrives as agent:event
-     pushes, a refused start just leaves the card as-is. */
-  const startAgent = useCallback((id: string) => {
-    window.desktop?.agent
-      .start(id)
-      .then((r) => {
-        if (!r.ok) console.warn('[agent]', r.error);
-      })
-      .catch((err) => console.error('[agent]', err));
-  }, []);
+  /* Hands a card to Kepler. */
+  const startAgent = useCallback((id: string) => agentCall(window.desktop?.agent.start(id)), []);
 
-  /* Retries the failed step of the latest run — everything already done
-     stays done. */
   /* Picks a failed run back up. Kepler is the one doing the work again, so
      the retry puts Kepler back on the card if it had been taken off. */
   const retryAgentStep = useCallback(
@@ -571,25 +589,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         persist(db()?.applications.update(id, { assignee: Assignee.KEPLER }));
         logAct(id, 'hat Kepler als Bearbeiter eingesetzt');
       }
-      window.desktop?.agent
-        .retry(id)
-        .then((r) => {
-          if (!r.ok) console.warn('[agent]', r.error);
-        })
-        .catch((err) => console.error('[agent]', err));
+      agentCall(window.desktop?.agent.retry(id));
     },
     [logAct, persist, set],
   );
 
   /* Halts Kepler at the current step; the panel then offers the retry. */
-  const stopAgent = useCallback((id: string) => {
-    window.desktop?.agent
-      .stop(id)
-      .then((r) => {
-        if (!r.ok) console.warn('[agent]', r.error);
-      })
-      .catch((err) => console.error('[agent]', err));
-  }, []);
+  const stopAgent = useCallback((id: string) => agentCall(window.desktop?.agent.stop(id)), []);
 
   const createCard = useCallback(() => {
     const s = stRef.current;
@@ -802,8 +808,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [contactsFor, emailContactsFor, idsOf, linksOf, logAct, mutateRounds, rememberRole, saveLinks, set]);
 
-  /* Removes a person everywhere they are referenced: the directory, every
-     card's links and rounds. The DB cascade does the same on its side. */
   /* Removes a company nobody applies at any more. Its people stay and are
      merely detached; a draft naming it is emptied so the editor does not
      recreate it on save. */
@@ -811,7 +815,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     (companyId: number) => {
       const s = stRef.current;
       const name = s.companies[companyId]?.name;
-      if (Object.values(s.applications).some((a) => a.company_id === companyId)) return;
+      if (usedCompanyIds(s).has(companyId)) return;
       const companies = { ...s.companies };
       delete companies[companyId];
       set({
@@ -835,10 +839,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const deleteLocation = useCallback(
     (name: string) => {
       const s = stRef.current;
-      const inUse = Object.values(s.factsByApp)
-        .flat()
-        .some((f) => f.label === 'Standort' && f.value.trim() === name);
-      if (inUse) return;
+      if (usedLocations(s).has(name)) return;
       set({ locations: s.locations.filter((l) => l !== name) });
       persist(db()?.locations.delete(name));
     },
@@ -848,16 +849,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const deleteRole = useCallback(
     (name: string) => {
       const s = stRef.current;
-      const inUse =
-        Object.values(s.applications).some((a) => a.role.trim() === name) ||
-        Object.values(s.people).some((p) => p.role.trim() === name);
-      if (inUse) return;
+      if (usedRoles(s).has(name)) return;
       set({ roles: s.roles.filter((r) => r !== name) });
       persist(db()?.roles.delete(name));
     },
     [set],
   );
 
+  /* Removes a person everywhere they are referenced: the directory, every
+     card's links and rounds. The DB cascade does the same on its side. */
   const deletePerson = useCallback(
     (id: string, key: string, isNew: boolean) => {
       const s = stRef.current;
@@ -1084,8 +1084,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     (id: string, assignee: Assignee | null) => {
       const s = stRef.current;
       if ((s.applications[id]?.assignee ?? null) === assignee) return;
-      /* Kepler stays while a run is underway or waiting at a failed step. */
+      /* Kepler stays while a run is underway. */
       if (assignee !== Assignee.KEPLER && keplerHoldReason(s, id)) return;
+      /* Without a posting source the main process would refuse the start —
+         the card must not move and claim work that never begins. */
+      if (assignee === Assignee.KEPLER && keplerStartBlocked(s, id)) return;
       set((s2) => ({ applications: { ...s2.applications, [id]: { ...s2.applications[id], assignee } } }));
       persist(db()?.applications.update(id, { assignee }));
       if (assignee !== Assignee.KEPLER) {
@@ -1378,7 +1381,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         else if (s.contactEdit) set({ contactEdit: null });
         else if (s.roundPop) set({ roundPop: null });
         else if (s.roundEdit) set({ roundEdit: null, roundDraft: null, roundPop: null });
-        else if (s.dropdown || s.editing) set({ dropdown: null, editing: null });
+        /* An open dropdown was already handled above, so only the edit is left. */
+        else if (s.editing) set({ editing: null });
         else set({ modalOpen: false, openCardId: null });
         return;
       }

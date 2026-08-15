@@ -67,8 +67,8 @@ export function ProfileModal() {
       </FieldGroup>
 
       <FieldGroup
-        label="Dokumente"
-        hint="Weitere Unterlagen, die du griffbereit haben willst — Immatrikulationsbescheinigung, etc. Beliebiges Format."
+        label="Unterlagen"
+        hint="Alles, was du griffbereit haben willst — Immatrikulationsbescheinigung, Zeugnisse, etc. Beliebiges Format."
       >
         <ProfileDocuments />
       </FieldGroup>

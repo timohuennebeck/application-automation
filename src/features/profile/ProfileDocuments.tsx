@@ -49,7 +49,7 @@ export function ProfileDocuments() {
     }
     setError(null);
     try {
-      const added = await api.profileDocuments.add('Dokumente auswählen');
+      const added = await api.profileDocuments.add('Unterlagen auswählen');
       if (!added) return; // cancelled
       /* Re-sort rather than append: the list is what the folder shows, and
          the folder is by name. */
@@ -135,7 +135,7 @@ export function ProfileDocuments() {
           </DocumentCard>
         );
       })}
-      <AddRow label="Dokument hinzufügen" onClick={add} />
+      <AddRow label="Unterlage hinzufügen" onClick={add} />
     </div>
   );
 }

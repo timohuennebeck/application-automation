@@ -1,3 +1,4 @@
+import type { CSSProperties, ReactNode } from 'react';
 import { INTEREST } from '../../data/config';
 import type { ColumnDef } from '../../data/config';
 import { Urgency } from '../../data/config';
@@ -33,6 +34,20 @@ const FACT_ROW = {
   fontWeight: 500,
   minWidth: 0,
 } as const;
+
+/* Every glyph on the card is drawn in the same muted tone. */
+const GLYPH_TINT = { color: 'var(--c-a5a29a)' } as const;
+
+/* One icon-and-value line. Only the company row overrides the type, which it
+   does through `style`. */
+function CardFactLine({ glyph, value, style }: { glyph: ReactNode; value: string; style?: CSSProperties }) {
+  return (
+    <div style={{ ...FACT_ROW, ...style }}>
+      {glyph}
+      <span style={ELLIPSIS}>{value}</span>
+    </div>
+  );
+}
 
 /* A single application on the board. */
 export function ApplicationCard({ id, col, ci }: { id: string; col: ColumnDef; ci: number }) {
@@ -132,28 +147,15 @@ export function ApplicationCard({ id, col, ci }: { id: string; col: ColumnDef; c
       >
         {role}
       </div>
-      <div style={{ ...FACT_ROW, fontSize: 11, color: 'var(--c-77746d)', fontWeight: 400 }}>
-        <BriefcaseGlyph style={{ color: 'var(--c-a5a29a)' }} />
-        <span style={ELLIPSIS}>{company}</span>
-      </div>
-      {card.city && (
-        <div style={FACT_ROW}>
-          <PinGlyph style={{ color: 'var(--c-a5a29a)' }} />
-          <span style={ELLIPSIS}>{card.city}</span>
-        </div>
-      )}
-      {card.salary && (
-        <div style={FACT_ROW}>
-          <EuroGlyph style={{ color: 'var(--c-a5a29a)' }} />
-          <span style={ELLIPSIS}>{card.salary}</span>
-        </div>
-      )}
-      {card.channel && (
-        <div style={FACT_ROW}>
-          <GlobeGlyph style={{ color: 'var(--c-a5a29a)' }} />
-          <span style={ELLIPSIS}>{card.channel}</span>
-        </div>
-      )}
+      {/* The company reads one step larger and lighter than the facts under it. */}
+      <CardFactLine
+        glyph={<BriefcaseGlyph style={GLYPH_TINT} />}
+        value={company}
+        style={{ fontSize: 11, color: 'var(--c-77746d)', fontWeight: 400 }}
+      />
+      {card.city && <CardFactLine glyph={<PinGlyph style={GLYPH_TINT} />} value={card.city} />}
+      {card.salary && <CardFactLine glyph={<EuroGlyph style={GLYPH_TINT} />} value={card.salary} />}
+      {card.channel && <CardFactLine glyph={<GlobeGlyph style={GLYPH_TINT} />} value={card.channel} />}
 
       {/* While a Kepler strip owns the card's foot — running or failed — the
           contact and due-date row steps aside and Kepler takes the contact's

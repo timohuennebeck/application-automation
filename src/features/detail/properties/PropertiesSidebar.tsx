@@ -9,7 +9,8 @@ import { FieldRow } from '../../../ui/FieldRow';
 import { FIELD_GLYPH_SLOT, FieldGlyph } from '../../../ui/field-glyphs';
 import { MenuItem } from '../../../ui/MenuItem';
 import { Popover, PopoverAnchor } from '../../../ui/Popover';
-import { Avatar, Chevron, ColumnIcon, KeplerAvatar, PriorityBars } from '../../../ui/icons';
+import { Section } from '../../../ui/Section';
+import { Avatar, ColumnIcon, KeplerAvatar, PriorityBars } from '../../../ui/icons';
 import { ContactPicker } from '../../people/ContactPicker';
 import { FactField, type FactView } from './FactField';
 
@@ -130,18 +131,6 @@ export function PropertiesSidebar({ cardId, role, company, columnIndex }: Proper
 
   const col = COLUMNS[columnIndex];
   const interest = app?.interest || Interest.NONE;
-  const open = st.secOpen.props !== false;
-
-  const toggleSection = () =>
-    set((s) => {
-      const m = { ...s.secOpen, props: s.secOpen.props === false };
-      try {
-        localStorage.setItem('kb-sections', JSON.stringify(m));
-      } catch {
-        /* ignore */
-      }
-      return { secOpen: m };
-    });
 
   return (
     <div
@@ -158,44 +147,7 @@ export function PropertiesSidebar({ cardId, role, company, columnIndex }: Proper
         gap: 24,
       }}
     >
-      <div
-        onClick={toggleSection}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 5,
-          cursor: 'pointer',
-          userSelect: 'none',
-          width: 'fit-content',
-        }}
-      >
-        <Chevron
-          size={10}
-          style={{ transform: open ? 'none' : 'rotate(-90deg)', transition: 'transform 140ms ease' }}
-        />
-        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--c-1b1a17)' }}>Eigenschaften</div>
-        <div
-          style={{
-            fontSize: 12,
-            fontWeight: 600,
-            color: 'var(--c-a5a29a)',
-            fontVariantNumeric: 'tabular-nums',
-          }}
-        >
-          ({1 + groups.length})
-        </div>
-      </div>
-
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 24,
-          flexShrink: 0,
-          overflow: open ? 'visible' : 'hidden',
-          maxHeight: open ? 'none' : 0,
-        }}
-      >
+      <Section sectionKey="props" title="Eigenschaften" count={1 + groups.length} gap={24}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
           <GroupTitle>Bewerbung</GroupTitle>
 
@@ -349,7 +301,7 @@ export function PropertiesSidebar({ cardId, role, company, columnIndex }: Proper
             ))}
           </div>
         ))}
-      </div>
+      </Section>
     </div>
   );
 }

@@ -2,22 +2,20 @@ import { useState } from 'react';
 import { ROUND_STATE, WHERE_OPTIONS } from '../../data/config';
 import type { Round } from '../../state/store-context';
 import { dateToISO, dayDiff, isoToDate, relLabel, shiftYM, todayISO } from '../../lib/date';
-import { KEPLER_ENTRY } from '../../lib/mentions';
-import { Author, AUTHOR_LABEL, RoundState } from '../../shared/enums';
+import { RoundState } from '../../shared/enums';
 import { useApp } from '../../state/store-context';
 import { CalendarPopover } from '../../ui/Calendar';
 import { ChipToggle } from '../../ui/ChipToggle';
 import { AvatarStack, stackLabel } from '../../ui/AvatarStack';
 import { FieldChip } from '../../ui/FieldChip';
 import { FieldRow } from '../../ui/FieldRow';
-import { MentionComposer } from '../../ui/MentionComposer';
-import { MentionText } from '../../ui/MentionText';
 import { MenuItem } from '../../ui/MenuItem';
 import { Popover, PopoverAnchor } from '../../ui/Popover';
 import { TimeRangePopover } from '../../ui/TimeRangePicker';
-import { Avatar, DotsGlyph } from '../../ui/icons';
+import { DotsGlyph } from '../../ui/icons';
 import { PeoplePicker } from '../people/PeoplePicker';
 import { PersonEditCard } from '../people/PersonEditCard';
+import { RoundNoteThread } from './RoundNoteThread';
 import { RoundDot } from './RoundDot';
 import { ELLIPSIS } from '../../ui/styles';
 
@@ -42,7 +40,6 @@ export function InterviewCard({
     set,
     mutateRounds,
     resetRound,
-    addRoundNote,
     logAct,
     person,
     peopleForCard,
@@ -51,10 +48,7 @@ export function InterviewCard({
     createPersonForRound,
   } = useApp();
 
-  // The note draft is local: a global editing key would be cleared by the
-  // document mousedown handler the moment the user clicks the send button.
-  const [note, setNote] = useState('');
-  // The link draft too — committing on every keystroke would persist the
+  // The link draft is local: committing on every keystroke would persist the
   // whole round list once per character.
   const [linkDraft, setLinkDraft] = useState<string | null>(null);
 
@@ -126,18 +120,7 @@ export function InterviewCard({
     );
   };
 
-  const sendNote = () => {
-    if (!note.trim()) return;
-    // Notes append to their own table; addRoundNote also writes the activity.
-    addRoundNote(cardId, ri, note);
-    setNote('');
-  };
-
   const people = round.people.map(person);
-  // Notes take the same mentions as the card comments: the assistant plus
-  // everyone attached to this application, not only this round's participants.
-  const mentionable = [KEPLER_ENTRY, ...peopleForCard(cardId)];
-  const mentionNames = mentionable.map((p) => p.name);
   const meetLink = round.where === 'Google Meet' || round.where === 'Microsoft Teams';
   const addingPerson = st.editing === key('person');
   const menuOpen = isOpen('menu');
@@ -433,61 +416,7 @@ export function InterviewCard({
           </PopoverAnchor>
         </FieldRow>
 
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 10,
-            marginTop: 5,
-            maxWidth: 430,
-            width: '100%',
-          }}
-        >
-          {(round.notes || []).length > 0 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {(round.notes || []).map((n, i) => (
-                <div key={i} style={{ display: 'flex', gap: 9 }}>
-                  <Avatar
-                    bg={n.author === Author.KEPLER ? 'var(--c-1b1a17)' : 'var(--c-5b7a5e)'}
-                    size={20}
-                    fontSize={8.5}
-                    style={{ marginTop: 1 }}
-                  >
-                    {n.author === Author.KEPLER ? 'K' : AUTHOR_LABEL[n.author]}
-                  </Avatar>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--c-1b1a17)' }}>
-                        {AUTHOR_LABEL[n.author]}
-                      </div>
-                      <div style={{ fontSize: 11, color: 'var(--c-a5a29a)' }}>{n.time}</div>
-                    </div>
-                    <MentionText
-                      text={n.text}
-                      names={mentionNames}
-                      style={{ lineHeight: 1.6, whiteSpace: 'pre-line' }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-          <MentionComposer
-            value={note}
-            onChange={setNote}
-            onSend={sendNote}
-            people={mentionable}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                e.stopPropagation();
-                setNote('');
-              } else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                e.preventDefault();
-                sendNote();
-              }
-            }}
-          />
-        </div>
+        <RoundNoteThread cardId={cardId} ri={ri} notes={round.notes || []} people={peopleForCard(cardId)} />
       </div>
 
       <PopoverAnchor style={{ flexShrink: 0 }}>

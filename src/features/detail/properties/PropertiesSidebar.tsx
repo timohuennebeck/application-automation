@@ -164,7 +164,7 @@ export function PropertiesSidebar({ cardId, role, company, columnIndex }: Proper
               <FieldChip
                 open={st.dropdown === 'status'}
                 chevron
-                style={{ background: col.tint }}
+                tint={col.tint}
                 onClick={() =>
                   set((s) => ({ dropdown: s.dropdown === 'status' ? null : 'status', editing: null }))
                 }

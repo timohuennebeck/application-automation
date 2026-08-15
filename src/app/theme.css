@@ -125,9 +125,12 @@
   --colt-9: #fbf1f0;
   --colt-10: #f3f2f0;
   --run: #e0186c;
+  /* Hover/open darkening laid over a chip that carries its own tint. */
+  --chip-shade: rgba(0, 0, 0, 0.045);
   color-scheme: light;
 }
 :root[data-theme='dark'] {
+  --chip-shade: rgba(255, 255, 255, 0.06);
   --c-fff: #1e1f23;
   --c-fbfaf7: #0f1012;
   --c-f7f5f0: #1b1c1f;

@@ -63,6 +63,15 @@
 .chip-open {
   background: var(--c-e7e4dc);
 }
+/* A chip coloured by its content (the status pill takes the stage's tint):
+   hover and open shade that tint instead of swapping to the grey. */
+.chip-tinted {
+  background: var(--chip-tint);
+}
+.chip-tinted:hover,
+.chip-tinted.chip-open {
+  background: linear-gradient(var(--chip-shade), var(--chip-shade)), var(--chip-tint);
+}
 .chip-clear {
   font-size: 11px;
   line-height: 1;

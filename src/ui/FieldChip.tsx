@@ -12,6 +12,8 @@ export interface FieldChipProps {
   /* Blue "this opens somewhere" pill (Slack-style link) instead of the grey
      editable one; the click is expected to open the value, not edit it. */
   link?: boolean;
+  /* Background of the chip's own colour (a stage tint); hover/open shade it. */
+  tint?: string;
   onClick?: () => void;
   /* Empties the field. On a dropdown (chevron) the ✕ takes the chevron's place
      while the pill is hovered; elsewhere it sits after the value. Leave it off
@@ -33,6 +35,7 @@ export function FieldChip({
   locked,
   chevron,
   link,
+  tint,
   onClick,
   onClear,
   clearTitle,
@@ -58,6 +61,7 @@ export function FieldChip({
       className={[
         locked ? 'chip-locked' : 'chip',
         !locked && link && 'chip-link',
+        !locked && tint && 'chip-tinted',
         !locked && open && 'chip-open',
       ]
         .filter(Boolean)
@@ -85,6 +89,7 @@ export function FieldChip({
         width: 'fit-content',
         maxWidth: '100%',
         minWidth: 0,
+        ...(tint ? ({ '--chip-tint': tint } as CSSProperties) : null),
         ...style,
       }}
     >

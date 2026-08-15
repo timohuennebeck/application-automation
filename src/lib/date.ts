@@ -111,6 +111,12 @@ export function clock(sec: number): string {
   return m + ':' + String(sec % 60).padStart(2, '0');
 }
 
+/* mm:ss elapsed since an ISO timestamp — the board card's and the run
+   panel's timers count with the same clock. */
+export function elapsed(iso: string, now = Date.now()): string {
+  return clock(Math.max(0, Math.floor((now - Date.parse(iso)) / 1000)));
+}
+
 /* 'vor 9 Min' / 'vor 3 Std' — minute-level relative time for the agent
    panel's step metas, counted from an ISO timestamp. */
 export function ago(iso: string, now = new Date()): string {
@@ -119,5 +125,6 @@ export function ago(iso: string, now = new Date()): string {
   if (mins < 60) return 'vor ' + mins + ' Min';
   const hours = Math.floor(mins / 60);
   if (hours < 24) return 'vor ' + hours + ' Std';
-  return 'vor ' + Math.floor(hours / 24) + ' Tagen';
+  const days = Math.floor(hours / 24);
+  return days === 1 ? 'vor 1 Tag' : 'vor ' + days + ' Tagen';
 }

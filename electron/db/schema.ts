@@ -300,10 +300,118 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE applications ADD COLUMN posting_text TEXT;
   `,
 
+  /* Migration 12: Kepler's runs become rows instead of the renderer stub. One
+     run per launch — re-runs append, so older rows are the run history. Steps
+     are created up front as WAIT and advanced in place; labels are stored
+     fully rendered (the main process knows the company name at transition
+     time), keeping only the {m}/{doc} placeholders the panel turns into chips.
+     "vor 9 Min" is never stored — the renderer counts from finished_at. */
+  `
+  CREATE TABLE agent_runs (
+    id              INTEGER PRIMARY KEY,
+    application_id  TEXT NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
+    status          TEXT NOT NULL,
+    label           TEXT NOT NULL,
+    error           TEXT,
+    started_at      TEXT NOT NULL,
+    finished_at     TEXT
+  );
+  CREATE INDEX idx_agent_runs_app ON agent_runs(application_id);
+
+  CREATE TABLE agent_steps (
+    id           INTEGER PRIMARY KEY,
+    run_id       INTEGER NOT NULL REFERENCES agent_runs(id) ON DELETE CASCADE,
+    position     INTEGER NOT NULL,
+    key          TEXT NOT NULL,
+    status       TEXT NOT NULL,
+    label        TEXT NOT NULL,
+    doc          TEXT,
+    error        TEXT,
+    started_at   TEXT,
+    finished_at  TEXT,
+    UNIQUE (run_id, position)
+  );
+  `,
+
+  /* Migration 13: the listing text the run worked from is kept on the run.
+     Retrying a failed step downstream of the fetch then reads it from here
+     instead of scraping the page again (which may be walled by now). */
+  `
+  ALTER TABLE agent_runs ADD COLUMN listing TEXT;
+  `,
+
   /* Migration 14: the company homepage, separate from the careers page —
      Kepler records both, and the sidebar shows them as Website and
      Karriereseite. */
   `
   ALTER TABLE companies ADD COLUMN homepage TEXT;
+  `,
+
+  /* Migration 15: who owns the card. Creating a card no longer starts Kepler;
+     assigning Kepler does, and moves the card to In Bearbeitung. Nullable —
+     a fresh card belongs to nobody. */
+  `
+  ALTER TABLE applications ADD COLUMN assignee TEXT;
+  `,
+
+  /* Migration 16: which company a person belongs to. The people pickers group
+     by it ("Bei Gemini" first, everyone else after). Nullable — a person can
+     be filed without one; a deleted company detaches its people. Existing
+     people are filed under the company of the first card they are linked to. */
+  `
+  ALTER TABLE people ADD COLUMN company_id INTEGER REFERENCES companies(id) ON DELETE SET NULL;
+  UPDATE people SET company_id = (
+    SELECT a.company_id FROM application_people ap
+    JOIN applications a ON a.id = ap.application_id
+    WHERE ap.person_id = people.id
+    ORDER BY a.created_at, ap.kind, ap.position LIMIT 1
+  );
+  `,
+
+  /* Migration 17: the Standort vocabulary. Every location a card was ever
+     filed under, so the sidebar can offer, add to and prune the list — like
+     companies. Cards keep pointing at it by name through their Standort fact;
+     seeded with the values already in use. */
+  `
+  CREATE TABLE locations (
+    id          INTEGER PRIMARY KEY,
+    name        TEXT NOT NULL UNIQUE,
+    created_at  TEXT NOT NULL
+  );
+  INSERT OR IGNORE INTO locations (name, created_at)
+    SELECT DISTINCT TRIM(value), MIN(COALESCE(
+      (SELECT created_at FROM applications a WHERE a.id = facts.application_id), ''))
+    FROM facts WHERE label = 'Standort' AND TRIM(value) <> '' GROUP BY TRIM(value);
+  `,
+
+  /* Migration 18: the Berufsbezeichnung vocabulary — every role a card or a
+     person was ever given, so the sidebar and the person editor can offer,
+     add to and prune the list like companies and locations. Seeded from both;
+     the "Neue Bewerbung" placeholder of a card without a role stays out. */
+  `
+  CREATE TABLE roles (
+    id          INTEGER PRIMARY KEY,
+    name        TEXT NOT NULL UNIQUE,
+    created_at  TEXT NOT NULL
+  );
+  INSERT OR IGNORE INTO roles (name, created_at)
+    SELECT DISTINCT TRIM(role), MIN(created_at) FROM applications
+    WHERE TRIM(role) <> '' AND TRIM(role) <> 'Neue Bewerbung' GROUP BY TRIM(role);
+  INSERT OR IGNORE INTO roles (name, created_at)
+    SELECT DISTINCT TRIM(role), MIN(created_at) FROM people WHERE role IS NOT NULL AND TRIM(role) <> '' GROUP BY TRIM(role);
+  `,
+
+  /* Migration 19: databases that ran migration 18 before it excluded the
+     placeholder still hold it in the vocabulary. */
+  `
+  DELETE FROM roles WHERE name = 'Neue Bewerbung';
+  `,
+
+  /* Migration 20: which Fassung of the profile template a generated document
+     came from — NULL for older documents and for files the user uploaded by
+     hand. And the letter row is called what the rest of the app calls it. */
+  `
+  ALTER TABLE documents ADD COLUMN template_label TEXT;
+  UPDATE documents SET title = 'Anschreiben' WHERE kind = 'COVER_LETTER' AND title = 'Cover Letter';
   `,
 ];

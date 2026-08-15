@@ -4,6 +4,7 @@
    are speced in docs/superpowers/specs/2026-08-12-sqlite-persistence-design.md
    and covered by __tests__/seed.test.ts. */
 import type { DatabaseSync } from 'node:sqlite';
+import { UNKNOWN_ROLE } from '../../src/shared/domain.ts';
 import {
   CARD_DEFS,
   DETAILS,
@@ -262,6 +263,33 @@ export function seedIfEmpty(db: DatabaseSync, now = new Date()): boolean {
       keys.forEach((key, idx) => insLink.run(appId, personIdByKey.get(key)!, LinkKind.POOL, idx));
     }
 
+    /* The Standort vocabulary: every location the seeded cards use. */
+    db.prepare(
+      `INSERT OR IGNORE INTO locations (name, created_at)
+       SELECT DISTINCT TRIM(value), ? FROM facts WHERE label = 'Standort' AND TRIM(value) <> ''`,
+    ).run(nowISO);
+
+    /* The Berufsbezeichnung vocabulary: every role the seeded cards and people carry. */
+    db.prepare(
+      `INSERT OR IGNORE INTO roles (name, created_at)
+       SELECT DISTINCT TRIM(role), ? FROM applications WHERE TRIM(role) <> '' AND TRIM(role) <> ?`,
+    ).run(nowISO, UNKNOWN_ROLE);
+    db.prepare(
+      `INSERT OR IGNORE INTO roles (name, created_at)
+       SELECT DISTINCT TRIM(role), ? FROM people WHERE role IS NOT NULL AND TRIM(role) <> ''`,
+    ).run(nowISO);
+
+    /* Every seeded person is filed under the company of the first card they
+       are linked to — the sample data has no company per person of its own. */
+    db.exec(`
+      UPDATE people SET company_id = (
+        SELECT a.company_id FROM application_people ap
+        JOIN applications a ON a.id = ap.application_id
+        WHERE ap.person_id = people.id
+        ORDER BY a.created_at, ap.kind, ap.position LIMIT 1
+      ) WHERE company_id IS NULL
+    `);
+
     /* Comments — cards without DETAILS get the default Kepler comment the UI
        currently fabricates at render time. */
     for (const id of Object.keys(CARD_DEFS)) {
@@ -332,7 +360,7 @@ export function seedIfEmpty(db: DatabaseSync, now = new Date()): boolean {
       insDocument.run(
         id,
         DocumentKind.COVER_LETTER,
-        'Cover Letter',
+        'Anschreiben',
         atNine('2026-07-26'),
         atNine('2026-07-26'),
       );

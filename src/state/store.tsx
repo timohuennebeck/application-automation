@@ -5,16 +5,27 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { URL_FIELDS, COLUMNS, SortDir, SortKey, STAGE_IDS } from '../data/config';
 import { isHttpUrl } from '../lib/url';
-import { Author, DocumentKind, FactKind, Interest, LinkKind, RoundState } from '../shared/enums';
-import type { ActivityRow, FollowupRow } from '../shared/db-types';
+import { Assignee, Author, DocumentKind, FactKind, Interest, LinkKind, RoundState } from '../shared/enums';
+import type { ActivityRow, FollowupRow, PersonWithCompany } from '../shared/db-types';
 import { indexSnapshot, roundInput, personView } from './db-view';
-import type { RoundView } from './db-view';
+import type { PersonView, RoundView } from './db-view';
+import { keplerHoldReason, peopleKeysForCard } from './selectors';
+import { UNKNOWN_COMPANY, UNKNOWN_ROLE } from '../shared/domain';
 import { dateToISO } from '../lib/date';
 import { isInFocusedField } from '../lib/dom';
 import { initials } from '../lib/text';
 import { parsePosting } from '../features/create/parse-posting';
 import { CLOSED_PROFILE, Ctx } from './store-context';
-import type { AppState, AppStore, BoardFilter, ContactEntry, Patch, Round } from './store-context';
+import type {
+  AppState,
+  AppStore,
+  BoardFilter,
+  ContactEntry,
+  Patch,
+  PersonEntry,
+  PersonSuggestion,
+  Round,
+} from './store-context';
 
 /* An untouched board: every card, in the order the stages hold them. */
 export const EMPTY_FILTER: BoardFilter = {
@@ -51,6 +62,9 @@ const initialState = (): AppState => ({
   documentsByApp: {},
   activitiesByApp: {},
   profileFacts: [],
+  locations: [],
+  roles: [],
+  agentRuns: {},
   board: STAGE_IDS.map(() => []),
   boardFilter: EMPTY_FILTER,
 
@@ -199,6 +213,50 @@ export function AppProvider({ children }: { children: ReactNode }) {
         console.error('[db] load failed', err);
         set({ loadError: String(err) });
       });
+  }, [set]);
+
+  /* Kepler's progress arrives as pushes. Run and step rows are merged
+     directly; when a step also wrote domain data the event says so and the
+     snapshot is re-pulled — debounced, since several steps can land at once. */
+  useEffect(() => {
+    const agent = window.desktop?.agent;
+    if (!agent) return;
+    let timer: number | undefined;
+    const resync = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        db()
+          ?.load()
+          .then((snap) => set(indexSnapshot(snap)))
+          .catch((err) => console.error('[agent] resync failed', err));
+      }, 150);
+    };
+    const unsub = agent.onEvent((e) => {
+      // Malformed events must never take down the React tree.
+      if (!e?.run) return;
+      // An update for a run whose creation event we never saw carries no step
+      // list — the snapshot has it, so pull instead of rendering an empty panel.
+      const prev = stRef.current.agentRuns[e.run.application_id];
+      const sameRun = prev && prev.run.id === e.run.id;
+      if (!sameRun && !e.steps) {
+        resync();
+        return;
+      }
+      set((s) => {
+        const known = s.agentRuns[e.run.application_id];
+        const steps =
+          e.steps ??
+          (e.step
+            ? (known?.steps ?? []).map((row) => (row.id === e.step!.id ? e.step! : row))
+            : (known?.steps ?? []));
+        return { agentRuns: { ...s.agentRuns, [e.run.application_id]: { run: e.run, steps } } };
+      });
+      if (e.refresh) resync();
+    });
+    return () => {
+      unsub();
+      window.clearTimeout(timer);
+    };
   }, [set]);
 
   const applyTheme = (dark: boolean) => {
@@ -400,21 +458,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [idsOf, saveLinks],
   );
 
-  const person = useCallback((key: string) => {
-    const p = stRef.current.people[key] || { name: 'Unbekannt', role: '', bg: 'var(--c-b3b0a8)' };
-    return { key, ...p, initials: p.initials || initials(p.name) || '?' };
+  const person = useCallback((key: string): PersonEntry => {
+    const s = stRef.current;
+    const p: PersonView = s.people[key] || {
+      name: 'Unbekannt',
+      role: '',
+      bg: 'var(--c-b3b0a8)',
+      companyId: null,
+    };
+    const company = p.companyId === null ? '' : s.companies[p.companyId]?.name || '';
+    return { key, ...p, company, initials: p.initials || initials(p.name) || '?' };
+  }, []);
+
+  /* The name of the company a card belongs to — what a person created from
+     the card is filed under. */
+  const companyOfCard = useCallback((id: string): string => {
+    const s = stRef.current;
+    const app = s.applications[id];
+    const name = (app && s.companies[app.company_id]?.name) || '';
+    /* The placeholder is not a company to file anyone under. */
+    return name === UNKNOWN_COMPANY ? '' : name;
   }, []);
 
   const peopleForCard = useCallback(
-    (id: string) => {
-      const s = stRef.current;
-      const pool = linksOf(id, LinkKind.POOL).map((l) => String(l.person_id));
-      const base = pool.length ? pool : Object.keys(s.people);
-      const onRounds = roundsFor(id).flatMap((r) => r.people);
-      // Dedupe, drop keys whose person has been deleted, keep pool order.
-      return [...new Set([...base, ...onRounds])].filter((k) => s.people[k]).map(person);
-    },
-    [linksOf, person, roundsFor],
+    (id: string): PersonSuggestion[] =>
+      peopleKeysForCard(stRef.current, id).map(({ key, known }) => ({ ...person(key), known })),
+    [person],
   );
 
   /* Reads from stRef and fires the IPC outside the setState updater —
@@ -477,6 +546,51 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [set],
   );
 
+  /* Hands a card to Kepler. Fire-and-forget: progress arrives as agent:event
+     pushes, a refused start just leaves the card as-is. */
+  const startAgent = useCallback((id: string) => {
+    window.desktop?.agent
+      .start(id)
+      .then((r) => {
+        if (!r.ok) console.warn('[agent]', r.error);
+      })
+      .catch((err) => console.error('[agent]', err));
+  }, []);
+
+  /* Retries the failed step of the latest run — everything already done
+     stays done. */
+  /* Picks a failed run back up. Kepler is the one doing the work again, so
+     the retry puts Kepler back on the card if it had been taken off. */
+  const retryAgentStep = useCallback(
+    (id: string) => {
+      const s = stRef.current;
+      if (s.applications[id] && s.applications[id].assignee !== Assignee.KEPLER) {
+        set((s2) => ({
+          applications: { ...s2.applications, [id]: { ...s2.applications[id], assignee: Assignee.KEPLER } },
+        }));
+        persist(db()?.applications.update(id, { assignee: Assignee.KEPLER }));
+        logAct(id, 'hat Kepler als Bearbeiter eingesetzt');
+      }
+      window.desktop?.agent
+        .retry(id)
+        .then((r) => {
+          if (!r.ok) console.warn('[agent]', r.error);
+        })
+        .catch((err) => console.error('[agent]', err));
+    },
+    [logAct, persist, set],
+  );
+
+  /* Halts Kepler at the current step; the panel then offers the retry. */
+  const stopAgent = useCallback((id: string) => {
+    window.desktop?.agent
+      .stop(id)
+      .then((r) => {
+        if (!r.ok) console.warn('[agent]', r.error);
+      })
+      .catch((err) => console.error('[agent]', err));
+  }, []);
+
   const createCard = useCallback(() => {
     const s = stRef.current;
     const url = s.jobHasUrl ? s.jobUrl.trim() : '';
@@ -529,6 +643,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             factsByApp: { ...s2.factsByApp, [res.application.id]: [] },
             activitiesByApp: { ...s2.activitiesByApp, [res.application.id]: [] },
           }));
+          // The card exists, unassigned — Kepler starts once it is assigned.
         }),
     );
   }, [set]);
@@ -556,6 +671,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           followupsByApp: drop(s.followupsByApp),
           documentsByApp: drop(s.documentsByApp),
           activitiesByApp: drop(s.activitiesByApp),
+          agentRuns: drop(s.agentRuns),
           roundExpanded: drop(s.roundExpanded),
           roundSel: drop(s.roundSel),
           cardMenu: null,
@@ -565,6 +681,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
           overCol: null,
         };
       });
+    },
+    [set],
+  );
+
+  /* A role a card or person is given joins the vocabulary (the repo does the
+     same on its side). */
+  const rememberRole = useCallback(
+    (role: string) => {
+      const name = role.trim();
+      if (!name || name === UNKNOWN_ROLE) return;
+      if (!stRef.current.roles.includes(name)) set((s) => ({ roles: [...s.roles, name] }));
     },
     [set],
   );
@@ -583,11 +710,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
       phone: (draft.phone || '').trim(),
       linkedin: (draft.linkedin || '').trim(),
     };
+    const company = (draft.company || '').trim() || null;
+    rememberRole(fields.role);
+    /* The repo resolves the company name to a row (creating it if new); that
+       row and the person's link to it land in state from the response. */
+    const mergePerson = ({ person: row, company: comp }: PersonWithCompany) =>
+      set((s2) => ({
+        people: { ...s2.people, [String(row.id)]: personView(row) },
+        companies: comp ? { ...s2.companies, [comp.id]: comp } : s2.companies,
+      }));
     const clearEdit: Partial<AppState> = {
       personEdit: null,
       personDraft: null,
       personField: null,
       personFieldDraft: '',
+      /* The editor's own company dropdown must not outlive it. */
+      dropdown: null,
       contactEdit: e.forContact ? null : s.contactEdit,
     };
 
@@ -638,7 +776,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ...clearEdit,
       }));
       persist(
-        db()?.people.update(pid, { ...(name ? { name } : {}), ...fields, initials: initials(keptName) }),
+        db()
+          ?.people.update(pid, {
+            ...(name ? { name } : {}),
+            ...fields,
+            company,
+            initials: initials(keptName),
+          })
+          .then(mergePerson),
       );
       attachContact(pid);
     } else if (name) {
@@ -646,19 +791,73 @@ export function AppProvider({ children }: { children: ReactNode }) {
       set(clearEdit);
       persist(
         db()
-          ?.people.create({ name, ...fields })
-          .then((row) => {
-            set((s2) => ({ people: { ...s2.people, [String(row.id)]: personView(row) } }));
-            attachContact(row.id);
+          ?.people.create({ name, ...fields, company })
+          .then((res) => {
+            mergePerson(res);
+            attachContact(res.person.id);
           }),
       );
     } else {
       set(clearEdit);
     }
-  }, [contactsFor, emailContactsFor, idsOf, linksOf, logAct, mutateRounds, saveLinks, set]);
+  }, [contactsFor, emailContactsFor, idsOf, linksOf, logAct, mutateRounds, rememberRole, saveLinks, set]);
 
   /* Removes a person everywhere they are referenced: the directory, every
      card's links and rounds. The DB cascade does the same on its side. */
+  /* Removes a company nobody applies at any more. Its people stay and are
+     merely detached; a draft naming it is emptied so the editor does not
+     recreate it on save. */
+  const deleteCompany = useCallback(
+    (companyId: number) => {
+      const s = stRef.current;
+      const name = s.companies[companyId]?.name;
+      if (Object.values(s.applications).some((a) => a.company_id === companyId)) return;
+      const companies = { ...s.companies };
+      delete companies[companyId];
+      set({
+        companies,
+        people: Object.fromEntries(
+          Object.entries(s.people).map(([k, p]) => [
+            k,
+            p.companyId === companyId ? { ...p, companyId: null } : p,
+          ]),
+        ),
+        personDraft:
+          s.personDraft && name && s.personDraft.company === name
+            ? { ...s.personDraft, company: '' }
+            : s.personDraft,
+      });
+      persist(db()?.companies.delete(companyId));
+    },
+    [set],
+  );
+
+  const deleteLocation = useCallback(
+    (name: string) => {
+      const s = stRef.current;
+      const inUse = Object.values(s.factsByApp)
+        .flat()
+        .some((f) => f.label === 'Standort' && f.value.trim() === name);
+      if (inUse) return;
+      set({ locations: s.locations.filter((l) => l !== name) });
+      persist(db()?.locations.delete(name));
+    },
+    [set],
+  );
+
+  const deleteRole = useCallback(
+    (name: string) => {
+      const s = stRef.current;
+      const inUse =
+        Object.values(s.applications).some((a) => a.role.trim() === name) ||
+        Object.values(s.people).some((p) => p.role.trim() === name);
+      if (inUse) return;
+      set({ roles: s.roles.filter((r) => r !== name) });
+      persist(db()?.roles.delete(name));
+    },
+    [set],
+  );
+
   const deletePerson = useCallback(
     (id: string, key: string, isNew: boolean) => {
       const s = stRef.current;
@@ -684,6 +883,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         personDraft: null,
         personField: null,
         personFieldDraft: '',
+        dropdown: null,
       });
       if (!isNew) logAct(id, 'hat Person ' + name + ' gelöscht');
     },
@@ -692,10 +892,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const createPersonForRound = useCallback(
     (id: string, ri: number, name: string) => {
+      const company = companyOfCard(id);
       persist(
         db()
-          ?.people.create({ name })
-          .then((row) => {
+          ?.people.create({ name, company })
+          .then(({ person: row }) => {
             const key = String(row.id);
             set((s) => ({ people: { ...s.people, [key]: personView(row) } }));
             const pool = linksOf(id, LinkKind.POOL).map((l) => l.person_id);
@@ -707,14 +908,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
               editing: null,
               editDraft: '',
               personEdit: { id, ri, key, isNew: true },
-              personDraft: { name, role: '', email: '', phone: '', linkedin: '' },
+              personDraft: { name, role: '', email: '', phone: '', linkedin: '', company },
               personField: 'name',
               personFieldDraft: name,
             });
           }),
       );
     },
-    [linksOf, mutateRounds, saveLinks, set],
+    [companyOfCard, linksOf, mutateRounds, saveLinks, set],
   );
 
   const saveRound = useCallback(() => {
@@ -766,6 +967,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       if (label === 'Berufsbezeichnung') {
         if (cleared) return;
+        rememberRole(value);
         set((s2) => ({
           applications: { ...s2.applications, [id]: { ...s2.applications[id], role: value } },
         }));
@@ -811,6 +1013,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const existing = (s.factsByApp[id] || []).find((f) => f.label === label);
       const kind = existing?.kind ?? (SELECT_FACTS.has(label) ? FactKind.SELECT : null);
       const stored = cleared ? '' : value;
+      /* A Standort the card is filed under joins the vocabulary (the repo does
+         the same on its side). */
+      if (label === 'Standort' && !cleared && !s.locations.includes(value.trim())) {
+        set((s2) => ({ locations: [...s2.locations, value.trim()] }));
+      }
       persist(
         db()
           ?.facts.upsert(id, label, stored, kind)
@@ -825,7 +1032,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }),
       );
     },
-    [set],
+    [rememberRole, set],
   );
 
   /* Replaces a document with a file the user picks. Deliberately not
@@ -840,7 +1047,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const source = await api.documents.pick('Dokument ersetzen', 'html');
         if (!source) return null; // cancelled
         const { filePath, pdfPath, pdfError } = await api.documents.copy(id, kind, source);
-        const row = await api.db.documents.setFile(documentId, filePath, pdfPath);
+        /* A hand-picked file did not come from a Fassung. */
+        const row = await api.db.documents.setFile(documentId, filePath, pdfPath, null);
         set((s) => ({
           documentsByApp: {
             ...s.documentsByApp,
@@ -865,6 +1073,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
       persist(db()?.applications.update(id, { interest }));
     },
     [set],
+  );
+
+  /* Who owns the card. Assigning Kepler is what starts a run — the card
+     moves to In Bearbeitung first (unless it is already past that column
+     or an earlier run failed there) so the board shows the work where it
+     happens. Unassigning takes the name off the card only; a run already
+     underway keeps going. */
+  const setAssignee = useCallback(
+    (id: string, assignee: Assignee | null) => {
+      const s = stRef.current;
+      if ((s.applications[id]?.assignee ?? null) === assignee) return;
+      /* Kepler stays while a run is underway or waiting at a failed step. */
+      if (assignee !== Assignee.KEPLER && keplerHoldReason(s, id)) return;
+      set((s2) => ({ applications: { ...s2.applications, [id]: { ...s2.applications[id], assignee } } }));
+      persist(db()?.applications.update(id, { assignee }));
+      if (assignee !== Assignee.KEPLER) {
+        logAct(id, 'hat Kepler als Bearbeiter entfernt');
+        return;
+      }
+      logAct(id, 'hat Kepler als Bearbeiter eingesetzt');
+      const IN_PROGRESS = 1;
+      if (s.board.findIndex((c) => c.includes(id)) === 0) moveCard(id, IN_PROGRESS, null);
+      startAgent(id);
+    },
+    [logAct, moveCard, persist, set, startAgent],
   );
 
   const saveSummary = useCallback(
@@ -1134,6 +1367,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const s = stRef.current;
       if (e.key === 'Escape') {
         if (s.cardMenu) set({ cardMenu: null });
+        /* An open dropdown is the topmost thing on screen, wherever it sits —
+           in the sidebar or inside the person editor — so Escape closes it
+           first and leaves what is underneath alone. */
+        else if (s.dropdown) set({ dropdown: null });
         else if (s.personEdit) savePerson();
         else if (s.cardContact) set({ cardContact: null, contactDraft: '' });
         else if (s.searchOpen) set({ searchOpen: false });
@@ -1179,7 +1416,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const s = stRef.current;
       const target = e.target as HTMLElement | null;
       const inDd = !!target?.closest?.('[data-dd]');
-      if (inDd) return;
+      if (inDd) {
+        /* Clicking another popover's surface leaves that popover alone, but a
+           contact picker open elsewhere still has to go — a person editor
+           inside it is saved on the way out, as on any other click-away. */
+        const own = target?.closest?.('[data-contact-pop]') as HTMLElement | null;
+        if (s.contactEdit && own?.dataset.contactPop !== s.contactEdit) {
+          if (s.personEdit?.forContact === s.contactEdit) savePerson();
+          else set({ contactEdit: null, contactDraft: '' });
+        }
+        return;
+      }
       const ae = document.activeElement as HTMLElement | null;
       // Clicking inside the field being edited is not clicking away from it.
       // The second mousedown of a double click lands here, and blurring would
@@ -1222,17 +1469,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setEmailContacts,
       person,
       peopleForCard,
+      companyOfCard,
       moveCard,
       openCard,
       createCard,
+      startAgent,
+      retryAgentStep,
+      stopAgent,
       deleteCard,
       savePerson,
       deletePerson,
+      deleteCompany,
+      deleteLocation,
+      deleteRole,
       createPersonForRound,
       saveRound,
       writeField,
       replaceDocument,
       setInterest,
+      setAssignee,
       saveSummary,
       addComment,
       updateComment,
@@ -1270,16 +1525,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setEmailContacts,
       person,
       peopleForCard,
+      companyOfCard,
       moveCard,
       openCard,
       createCard,
+      startAgent,
+      retryAgentStep,
+      stopAgent,
       deleteCard,
       savePerson,
       deletePerson,
+      deleteCompany,
+      deleteLocation,
+      deleteRole,
       createPersonForRound,
       saveRound,
       writeField,
       setInterest,
+      setAssignee,
       saveSummary,
       addComment,
       updateComment,

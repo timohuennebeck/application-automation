@@ -32,6 +32,8 @@ const TABLES = [
   'activities',
   'profile_facts',
   'comment_attachments',
+  'locations',
+  'roles',
 ];
 
 describe('migrations', () => {
@@ -294,6 +296,69 @@ describe('migrations', () => {
     expect(row).toEqual({ posting_url: null, posting_text: null });
   });
 
+  /* Migration 15: who owns the card. New and existing rows start unassigned. */
+  it('adds the assignee column and leaves existing rows unassigned', () => {
+    const db = dbAtVersion(14);
+    db.exec(`
+      INSERT INTO companies (id, name, created_at, updated_at) VALUES (1, 'Acme', 't', 't');
+      INSERT INTO applications (id, role, company_id, interest, stage_id, stage_position, created_at, updated_at)
+        VALUES ('BEW-1', 'Designer', 1, 'HIGH', 'interessiert', 0, 't', 't');
+    `);
+
+    migrate(db);
+
+    const row = db.prepare('SELECT assignee FROM applications').get() as { assignee: string | null };
+    expect(row).toEqual({ assignee: null });
+  });
+
+  /* Migration 12: Kepler's runs become real rows. Both tables arrive empty and
+     cascade away with their application. */
+  it('adds the agent run tables wired to cascade with the application', () => {
+    const db = dbAtVersion(11);
+    db.exec(`
+      INSERT INTO companies (id, name, created_at, updated_at) VALUES (1, 'Acme', 't', 't');
+      INSERT INTO applications (id, role, company_id, interest, stage_id, stage_position, created_at, updated_at)
+        VALUES ('BEW-1', 'Designer', 1, 'HIGH', 'interessiert', 0, 't', 't');
+    `);
+
+    migrate(db);
+
+    db.exec(`
+      INSERT INTO agent_runs (application_id, status, label, started_at)
+        VALUES ('BEW-1', 'RUNNING', 'Firmendetails werden ergänzt…', 't');
+      INSERT INTO agent_steps (run_id, position, key, status, label)
+        VALUES (1, 0, 'EXTRACT', 'RUN', 'Firmendetails werden ergänzt…');
+    `);
+    db.prepare('DELETE FROM applications WHERE id = ?').run('BEW-1');
+
+    expect((db.prepare('SELECT * FROM agent_runs').all() as unknown[]).length).toBe(0);
+    expect((db.prepare('SELECT * FROM agent_steps').all() as unknown[]).length).toBe(0);
+  });
+
+  /* Migration 13: the fetched listing text is kept on the run so a retried
+     step downstream of the fetch never has to scrape again. */
+  it('adds the listing column to agent runs', () => {
+    const db = dbAtVersion(12);
+    migrate(db);
+    const columns = (db.prepare('PRAGMA table_info(agent_runs)').all() as { name: string }[]).map(
+      (c) => c.name,
+    );
+    expect(columns).toContain('listing');
+  });
+
+  /* Migration 14: the company homepage gets its own column next to the
+     careers page, so Kepler can record both. */
+  it('adds the company homepage column', () => {
+    const db = dbAtVersion(13);
+    db.exec("INSERT INTO companies (id, name, created_at, updated_at) VALUES (1, 'Acme', 't', 't')");
+    migrate(db);
+    const row = db.prepare('SELECT homepage, website FROM companies').get() as {
+      homepage: string | null;
+      website: string | null;
+    };
+    expect(row.homepage).toBeNull();
+  });
+
   it('enforces foreign keys', () => {
     const db = openDb(':memory:');
     expect(() =>
@@ -303,5 +368,133 @@ describe('migrations', () => {
         )
         .run(),
     ).toThrow();
+  });
+});
+
+/* Migration 18 seeds the Berufsbezeichnung vocabulary from card and person
+   roles, once each, trimmed. */
+describe('migration 18', () => {
+  it('collects the distinct roles of cards and people', () => {
+    const db = dbAtVersion(17);
+    const t = '2026-08-01T00:00:00.000Z';
+    db.prepare('INSERT INTO companies (id, name, created_at, updated_at) VALUES (1, ?, ?, ?)').run(
+      'Gemini',
+      t,
+      t,
+    );
+    db.prepare(
+      `INSERT INTO applications (id, role, company_id, interest, channel, stage_id, stage_position, created_at, updated_at)
+       VALUES ('BEW-1', ' Designer ', 1, 'NONE', NULL, 'interessiert', 0, ?, ?)`,
+    ).run(t, t);
+    db.prepare(
+      "INSERT INTO people (name, role, color, created_at, updated_at) VALUES ('A', 'Designer', 'c', ?, ?)",
+    ).run(t, t);
+    db.prepare(
+      "INSERT INTO people (name, role, color, created_at, updated_at) VALUES ('B', 'Recruiter', 'c', ?, ?)",
+    ).run(t, t);
+    db.prepare(
+      "INSERT INTO people (name, role, color, created_at, updated_at) VALUES ('C', NULL, 'c', ?, ?)",
+    ).run(t, t);
+    db.prepare(
+      `INSERT INTO applications (id, role, company_id, interest, channel, stage_id, stage_position, created_at, updated_at)
+       VALUES ('BEW-2', 'Neue Bewerbung', 1, 'NONE', NULL, 'interessiert', 1, ?, ?)`,
+    ).run(t, t);
+
+    migrate(db);
+
+    const rows = db.prepare('SELECT name FROM roles ORDER BY name').all() as { name: string }[];
+    expect(rows.map((r) => r.name)).toEqual(['Designer', 'Recruiter']);
+  });
+});
+
+/* Migration 17 creates the Standort vocabulary from the values cards already
+   use, once each, trimmed. */
+describe('migration 17', () => {
+  it('collects the distinct Standort values', () => {
+    const db = dbAtVersion(16);
+    const t = '2026-08-01T00:00:00.000Z';
+    db.prepare('INSERT INTO companies (id, name, created_at, updated_at) VALUES (1, ?, ?, ?)').run(
+      'Gemini',
+      t,
+      t,
+    );
+    for (const id of ['BEW-1', 'BEW-2', 'BEW-3']) {
+      db.prepare(
+        `INSERT INTO applications (id, role, company_id, interest, channel, stage_id, stage_position, created_at, updated_at)
+         VALUES (?, 'Dev', 1, 'NONE', NULL, 'interessiert', 0, ?, ?)`,
+      ).run(id, t, t);
+    }
+    const ins = db.prepare(
+      'INSERT INTO facts (application_id, label, value, kind, position) VALUES (?,?,?,NULL,0)',
+    );
+    ins.run('BEW-1', 'Standort', 'Berlin');
+    ins.run('BEW-2', 'Standort', ' Berlin ');
+    ins.run('BEW-3', 'Standort', 'Hamburg');
+    ins.run('BEW-3', 'Gehalt', '90k');
+
+    migrate(db);
+
+    const rows = db.prepare('SELECT name FROM locations ORDER BY name').all() as { name: string }[];
+    expect(rows.map((r) => r.name)).toEqual(['Berlin', 'Hamburg']);
+  });
+});
+
+/* Migration 16 adds people.company_id and files existing people under the
+   company of the first card they are linked to; unlinked people stay
+   unfiled. */
+describe('migration 16', () => {
+  it('backfills people from their card links', () => {
+    const db = dbAtVersion(15);
+    const t = '2026-08-01T00:00:00.000Z';
+    db.prepare('INSERT INTO companies (id, name, created_at, updated_at) VALUES (1, ?, ?, ?)').run(
+      'Gemini',
+      t,
+      t,
+    );
+    db.prepare(
+      `INSERT INTO applications (id, role, company_id, interest, channel, stage_id, stage_position, created_at, updated_at)
+       VALUES ('BEW-1', 'Dev', 1, 'NONE', NULL, 'interessiert', 0, ?, ?)`,
+    ).run(t, t);
+    db.prepare(
+      "INSERT INTO people (id, name, color, created_at, updated_at) VALUES (1, 'Test', 'c', ?, ?)",
+    ).run(t, t);
+    db.prepare(
+      "INSERT INTO people (id, name, color, created_at, updated_at) VALUES (2, 'Loner', 'c', ?, ?)",
+    ).run(t, t);
+    db.prepare("INSERT INTO application_people VALUES ('BEW-1', 1, 'CONTACT', 0)").run();
+
+    migrate(db);
+
+    const rows = db.prepare('SELECT id, company_id FROM people ORDER BY id').all() as {
+      id: number;
+      company_id: number | null;
+    }[];
+    expect(rows).toEqual([
+      { id: 1, company_id: 1 },
+      { id: 2, company_id: null },
+    ]);
+  });
+});
+
+describe('migration 20', () => {
+  /* Migration 20: generated documents remember the Fassung they came from, and
+     the letter is called by its German name like everything else. */
+  it('adds template_label and renames the letter rows to Anschreiben', () => {
+    const db = dbAtVersion(19);
+    db.exec(`
+      INSERT INTO companies (id, name, created_at, updated_at) VALUES (1, 'Acme', 't', 't');
+      INSERT INTO applications (id, role, company_id, interest, channel, stage_id, stage_position, created_at, updated_at)
+        VALUES ('BEW-1', 'Dev', 1, 'NONE', NULL, 'interessiert', 0, 't', 't');
+      INSERT INTO documents (application_id, kind, title, created_at, updated_at)
+        VALUES ('BEW-1', 'COVER_LETTER', 'Cover Letter', 't', 't');
+      INSERT INTO documents (application_id, kind, title, created_at, updated_at)
+        VALUES ('BEW-1', 'LEBENSLAUF', 'Lebenslauf', 't', 't');
+    `);
+    migrate(db);
+    const rows = db.prepare('SELECT kind, title, template_label FROM documents ORDER BY id').all();
+    expect(rows).toEqual([
+      { kind: 'COVER_LETTER', title: 'Anschreiben', template_label: null },
+      { kind: 'LEBENSLAUF', title: 'Lebenslauf', template_label: null },
+    ]);
   });
 });

@@ -3,7 +3,19 @@
    Mirrors docs/superpowers/specs/2026-08-12-sqlite-persistence-design.md.
    The closed value sets these rows carry are the enums in ./enums.ts. */
 
-import type { Author, DocumentKind, FactKind, Interest, LinkKind, RoundState } from './enums.ts';
+import type {
+  AgentRunStatus,
+  AgentStepKey,
+  AgentStepStatus,
+  Assignee,
+  Author,
+  DocumentKind,
+  FactKind,
+  Interest,
+  LinkKind,
+  RoundState,
+  TemplateKind,
+} from './enums.ts';
 
 export interface StageRow {
   id: string;
@@ -42,6 +54,7 @@ export interface ApplicationRow {
      listing text when there was no link. At most one is set. */
   posting_url: string | null;
   posting_text: string | null;
+  assignee: Assignee | null;
   created_at: string;
   updated_at: string;
 }
@@ -64,8 +77,21 @@ export interface PersonRow {
   phone: string | null;
   linkedin: string | null;
   color: string;
+  company_id: number | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface LocationRow {
+  id: number;
+  name: string;
+  created_at: string;
+}
+
+export interface RoleRow {
+  id: number;
+  name: string;
+  created_at: string;
 }
 
 export interface ApplicationPersonRow {
@@ -158,6 +184,9 @@ export interface DocumentRow {
      file exists: the HTML that gets edited, and the PDF rendered from it. */
   file_path: string | null;
   pdf_path: string | null;
+  /* The label of the profile-template Fassung this file was generated from;
+     NULL for hand-uploaded files and documents from before Fassungen. */
+  template_label: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -178,6 +207,38 @@ export interface ProfileFactRow {
   position: number;
   created_at: string;
   updated_at: string;
+}
+
+/* One Kepler launch. Re-runs insert a new row; the renderer shows only the
+   latest per application, older rows are history. */
+export interface AgentRunRow {
+  id: number;
+  application_id: string;
+  status: AgentRunStatus;
+  /* The panel headline — always the current step's running form. */
+  label: string;
+  error: string | null;
+  /* The listing text the run worked from (fetched or pasted) — the input a
+     retried step resumes with instead of scraping again. */
+  listing: string | null;
+  started_at: string;
+  finished_at: string | null;
+}
+
+export interface AgentStepRow {
+  id: number;
+  run_id: number;
+  position: number;
+  key: AgentStepKey;
+  status: AgentStepStatus;
+  /* Fully rendered German label; only the {m}/{doc} chip placeholders remain
+     for the panel to resolve. */
+  label: string;
+  /* Which profile template the step reads — drives the {doc} chip. */
+  doc: TemplateKind | null;
+  error: string | null;
+  started_at: string | null;
+  finished_at: string | null;
 }
 
 /* Input shape for the full-list round replace (db:rounds.set). */
@@ -221,20 +282,30 @@ export type ApplicationPatch = Partial<
     | 'applied_via'
     | 'posting_url'
     | 'posting_text'
+    | 'assignee'
   >
 >;
 export type CompanyPatch = Partial<
   Pick<CompanyRow, 'name' | 'sector' | 'headcount' | 'website' | 'homepage' | 'email' | 'phone' | 'notes'>
 >;
+/* `company` is the company's name — the repo finds or creates the row, the
+   same way relinking Firma on a card does. null detaches; leaving it out
+   keeps the current company. */
 export type PersonPatch = Partial<
   Pick<PersonRow, 'name' | 'role' | 'email' | 'phone' | 'linkedin' | 'initials'>
->;
+> & { company?: string | null };
 export interface PersonInput {
   name: string;
   role?: string;
   email?: string;
   phone?: string;
   linkedin?: string;
+  company?: string | null;
+}
+/* A person write hands back the company it resolved to, which may be new. */
+export interface PersonWithCompany {
+  person: PersonRow;
+  company: CompanyRow | null;
 }
 
 /* The renderer-facing async API exposed as window.desktop.db. Preload maps
@@ -256,6 +327,16 @@ export interface DbApi {
   };
   companies: {
     update(companyId: number, patch: CompanyPatch): Promise<CompanyRow>;
+    /* Rejects while a card still points at the company. */
+    delete(companyId: number): Promise<void>;
+  };
+  locations: {
+    /* Rejects while a card's Standort still names it. */
+    delete(name: string): Promise<void>;
+  };
+  roles: {
+    /* Rejects while a card or a person still carries the role. */
+    delete(name: string): Promise<void>;
   };
   facts: {
     upsert(applicationId: string, label: string, value: string, kind: FactKind | null): Promise<FactRow>;
@@ -283,8 +364,8 @@ export interface DbApi {
     add(roundId: number, author: Author, text: string): Promise<RoundNoteRow>;
   };
   people: {
-    create(input: PersonInput): Promise<PersonRow>;
-    update(personId: number, patch: PersonPatch): Promise<PersonRow>;
+    create(input: PersonInput): Promise<PersonWithCompany>;
+    update(personId: number, patch: PersonPatch): Promise<PersonWithCompany>;
     delete(personId: number): Promise<void>;
   };
   applicationPeople: {
@@ -296,7 +377,12 @@ export interface DbApi {
     saveEmail(followupId: number, subject: string, text: string): Promise<FollowupRow>;
   };
   documents: {
-    setFile(documentId: number, filePath: string, pdfPath: string | null): Promise<DocumentRow>;
+    setFile(
+      documentId: number,
+      filePath: string,
+      pdfPath: string | null,
+      templateLabel: string | null,
+    ): Promise<DocumentRow>;
   };
   activities: {
     add(applicationId: string, author: Author, text: string): Promise<ActivityRow>;
@@ -318,6 +404,8 @@ export interface DbSnapshot {
   applications: ApplicationRow[];
   facts: FactRow[];
   people: PersonRow[];
+  locations: LocationRow[];
+  roles: RoleRow[];
   applicationPeople: ApplicationPersonRow[];
   comments: CommentRow[];
   commentAttachments: CommentAttachmentRow[];
@@ -328,4 +416,6 @@ export interface DbSnapshot {
   documents: DocumentRow[];
   activities: ActivityRow[];
   profileFacts: ProfileFactRow[];
+  agentRuns: AgentRunRow[];
+  agentSteps: AgentStepRow[];
 }

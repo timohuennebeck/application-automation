@@ -3,7 +3,8 @@ import type { DatabaseSync } from 'node:sqlite';
 import { openDb } from '../open.ts';
 import { seedIfEmpty } from '../seed.ts';
 import { createRepo, type Repo } from '../repo.ts';
-import { Author, FactKind, LinkKind, RoundState } from '../../../src/shared/enums.ts';
+import { Assignee, Author, FactKind, LinkKind, RoundState } from '../../../src/shared/enums.ts';
+import { UNKNOWN_COMPANY, UNKNOWN_ROLE } from '../../../src/shared/domain.ts';
 
 const NOW = new Date('2026-08-12T12:00:00.000Z');
 
@@ -44,7 +45,7 @@ describe('repo', () => {
     const html = 'documents/BEW-45/cover-letter.html';
     const pdf = 'documents/BEW-45/cover-letter.pdf';
     const later = new Date('2026-08-13T09:00:00.000Z');
-    const row = createRepo(db, () => later).setDocumentFile(doc.id, html, pdf);
+    const row = createRepo(db, () => later).setDocumentFile(doc.id, html, pdf, null);
 
     expect(row).toMatchObject({ file_path: html, pdf_path: pdf });
     /* The first file IS the document's creation: the placeholder row's own
@@ -56,11 +57,12 @@ describe('repo', () => {
   it('keeps created_at when a document that already has a file is replaced', () => {
     const doc = repo.createApplication({ role: 'Designer', company: 'Acme GmbH', channel: null })
       .documents[0];
-    const first = repo.setDocumentFile(doc.id, 'documents/BEW-45/cover-letter.html', null);
+    const first = repo.setDocumentFile(doc.id, 'documents/BEW-45/cover-letter.html', null, null);
     const later = new Date('2026-08-13T09:00:00.000Z');
     const second = createRepo(db, () => later).setDocumentFile(
       doc.id,
       'documents/BEW-45/cover-letter.html',
+      null,
       null,
     );
     expect(second.created_at).toBe(first.created_at);
@@ -73,10 +75,24 @@ describe('repo', () => {
     const doc = repo.createApplication({ role: 'Designer', company: 'Acme GmbH', channel: null })
       .documents[0];
 
-    const row = repo.setDocumentFile(doc.id, 'documents/BEW-45/cover-letter.html', null);
+    const row = repo.setDocumentFile(doc.id, 'documents/BEW-45/cover-letter.html', null, null);
 
     expect(row.pdf_path).toBeNull();
     expect(row.file_path).toBe('documents/BEW-45/cover-letter.html');
+  });
+
+  it('stores which Fassung a generated document came from, and clears it for a hand-uploaded file', () => {
+    const doc = repo.createApplication({ role: 'Designer', company: 'Acme GmbH', channel: null })
+      .documents[0];
+    const generated = repo.setDocumentFile(doc.id, 'documents/BEW-45/x.html', null, 'Kurz');
+    expect(generated.template_label).toBe('Kurz');
+    const uploaded = repo.setDocumentFile(doc.id, 'documents/BEW-45/x.html', null, null);
+    expect(uploaded.template_label).toBeNull();
+  });
+
+  it('creates the letter placeholder as "Anschreiben"', () => {
+    const docs = repo.createApplication({ role: 'Designer', company: 'Acme GmbH', channel: null }).documents;
+    expect(docs.map((d) => d.title)).toEqual(['Anschreiben', 'Lebenslauf']);
   });
 
   it('starts without summary, posting source or links when the dialog gave none', () => {
@@ -107,6 +123,41 @@ describe('repo', () => {
     });
     expect(res.application.posting_text).toBe('Wir suchen eine:n Designer:in mit Fokus auf Design-Systeme.');
     expect(res.application.posting_url).toBeNull();
+  });
+
+  /* The paste-text recovery after a blocked fetch saves the listing through
+     the ordinary application patch. */
+  it('patches the posting text so a blocked fetch can be recovered from', () => {
+    const res = repo.createApplication({ role: 'Designer', company: 'Acme GmbH', channel: null });
+
+    const row = repo.updateApplication(res.application.id, { posting_text: 'Wir suchen …' });
+
+    expect(row.posting_text).toBe('Wir suchen …');
+  });
+
+  /* Assigning Kepler is an ordinary patch; a fresh card belongs to nobody. */
+  it('creates cards unassigned and patches the assignee', () => {
+    const res = repo.createApplication({ role: 'Designer', company: 'Acme GmbH', channel: null });
+    expect(res.application.assignee).toBeNull();
+
+    const row = repo.updateApplication(res.application.id, { assignee: Assignee.KEPLER });
+    expect(row.assignee).toBe('kepler');
+
+    expect(repo.updateApplication(res.application.id, { assignee: null }).assignee).toBeNull();
+  });
+
+  it('hands out an application together with its company', () => {
+    const res = repo.createApplication({ role: 'Designer', company: 'Acme GmbH', channel: null });
+    const ctx = repo.getApplicationWithCompany(res.application.id);
+    expect(ctx?.application.id).toBe(res.application.id);
+    expect(ctx?.company.name).toBe('Acme GmbH');
+    expect(repo.getApplicationWithCompany('BEW-999')).toBeUndefined();
+  });
+
+  it('returns the agent run tables in the snapshot', () => {
+    const snap = repo.load();
+    expect(snap.agentRuns).toEqual([]);
+    expect(snap.agentSteps).toEqual([]);
   });
 
   it('cascade-deletes children but keeps people and companies', () => {
@@ -308,7 +359,7 @@ describe('repo', () => {
   });
 
   it('creates people with cycling colors and kind-scoped link replace', () => {
-    const p = repo.createPerson({ name: 'Neue Person' });
+    const { person: p } = repo.createPerson({ name: 'Neue Person' });
     expect(p.initials).toBe('NP');
     expect(p.color).toMatch(/^var\(--c-/);
     const links = repo.setApplicationPeople('BEW-24', LinkKind.EMAIL, [p.id]);
@@ -319,5 +370,107 @@ describe('repo', () => {
     ).toBe(4);
     repo.deletePerson(p.id);
     expect(count('SELECT COUNT(*) AS n FROM application_people WHERE person_id = ?', p.id)).toBe(0);
+  });
+
+  it('files a person under a company, creating it by name like Firma does', () => {
+    const before = count('SELECT COUNT(*) AS n FROM companies');
+    const created = repo.createPerson({ name: 'Anna Neu', company: 'Brandneu AG' });
+    expect(created.company).not.toBeNull();
+    expect(created.company!.name).toBe('Brandneu AG');
+    expect(created.person.company_id).toBe(created.company!.id);
+    expect(count('SELECT COUNT(*) AS n FROM companies')).toBe(before + 1);
+
+    /* An existing name re-links to the same row rather than duplicating it. */
+    const moved = repo.updatePerson(created.person.id, { company: 'Brandneu AG ' });
+    expect(moved.company!.id).toBe(created.company!.id);
+    expect(count('SELECT COUNT(*) AS n FROM companies')).toBe(before + 1);
+
+    /* Clearing detaches; the company row itself stays. */
+    const cleared = repo.updatePerson(created.person.id, { company: null });
+    expect(cleared.person.company_id).toBeNull();
+    expect(cleared.company).toBeNull();
+    expect(count('SELECT COUNT(*) AS n FROM companies')).toBe(before + 1);
+
+    /* A patch that leaves company out keeps it. */
+    repo.updatePerson(created.person.id, { company: 'Brandneu AG' });
+    expect(repo.updatePerson(created.person.id, { role: 'CTO' }).person.company_id).toBe(created.company!.id);
+  });
+
+  it('keeps the placeholder company only while a card needs it', () => {
+    const { application } = repo.createApplication({ role: 'X', company: '', channel: null });
+    const has = () => count('SELECT COUNT(*) AS n FROM companies WHERE name = ?', UNKNOWN_COMPANY);
+    expect(has()).toBe(1);
+    repo.relinkCompany(application.id, 'Echte GmbH');
+    expect(has()).toBe(0);
+    repo.relinkCompany(application.id, UNKNOWN_COMPANY);
+    expect(has()).toBe(1);
+    repo.deleteApplication(application.id);
+    expect(has()).toBe(0);
+  });
+
+  it('deletes an unused company and detaches its people, but refuses one with cards', () => {
+    const { person, company } = repo.createPerson({ name: 'Otto', company: 'Weg GmbH' });
+    repo.deleteCompany(company!.id);
+    expect(count('SELECT COUNT(*) AS n FROM companies WHERE id = ?', company!.id)).toBe(0);
+    expect(repo.load().people.find((p) => p.id === person.id)?.company_id).toBeNull();
+
+    const app = repo.createApplication({ role: 'X', company: 'Bleibt AG', channel: null });
+    expect(() => repo.deleteCompany(app.company.id)).toThrow(/verwendet/);
+    expect(count('SELECT COUNT(*) AS n FROM companies WHERE id = ?', app.company.id)).toBe(1);
+  });
+
+  it('keeps a Standort vocabulary: seeded from the cards, grown by writes, pruned when unused', () => {
+    const names = () => repo.load().locations.map((l) => l.name);
+    /* Every seeded card has a Standort, so the vocabulary starts populated. */
+    expect(names()).toContain('Berlin');
+
+    repo.upsertFact('BEW-24', 'Standort', ' Bielefeld ', null);
+    expect(names()).toContain('Bielefeld');
+    expect(() => repo.deleteLocation('Bielefeld')).toThrow(/verwendet/);
+
+    repo.upsertFact('BEW-24', 'Standort', 'Berlin', null);
+    repo.deleteLocation('Bielefeld');
+    expect(names()).not.toContain('Bielefeld');
+    /* Clearing a card's Standort does not touch the vocabulary. */
+    repo.upsertFact('BEW-24', 'Standort', '', null);
+    expect(names()).toContain('Berlin');
+  });
+
+  it('keeps a Berufsbezeichnung vocabulary fed by cards and people, pruned when unused', () => {
+    const names = () => repo.load().roles.map((r) => r.name);
+    expect(names().length).toBeGreaterThan(0);
+
+    const app = repo.createApplication({ role: 'Staff Engineer', company: 'Acme', channel: null });
+    expect(names()).toContain('Staff Engineer');
+    /* The placeholder of a card without a role is not a role anyone picks. */
+    repo.createApplication({ role: UNKNOWN_ROLE, company: 'Acme', channel: null });
+    expect(names()).not.toContain(UNKNOWN_ROLE);
+    expect(() => repo.deleteRole('Staff Engineer')).toThrow(/verwendet/);
+
+    repo.updateApplication(app.application.id, { role: 'Principal Engineer' });
+    const { person } = repo.createPerson({ name: 'Rita', role: 'Staff Engineer' });
+    expect(() => repo.deleteRole('Staff Engineer')).toThrow(/verwendet/);
+    repo.updatePerson(person.id, { role: 'Recruiterin' });
+    repo.deleteRole('Staff Engineer');
+    expect(names()).not.toContain('Staff Engineer');
+    expect(names()).toEqual(expect.arrayContaining(['Principal Engineer', 'Recruiterin']));
+  });
+
+  it('nulls a person’s company when the company row goes away', () => {
+    const { person, company } = repo.createPerson({ name: 'Otto', company: 'Weg GmbH' });
+    db.prepare('DELETE FROM companies WHERE id = ?').run(company!.id);
+    expect(repo.load().people.find((p) => p.id === person.id)?.company_id).toBeNull();
+  });
+});
+
+describe('seed', () => {
+  it('files every linked person under a company', () => {
+    const { people, applicationPeople, applications } = repo.load();
+    const linked = new Set(applicationPeople.map((l) => l.person_id));
+    for (const p of people.filter((p) => linked.has(p.id))) {
+      const appIds = applicationPeople.filter((l) => l.person_id === p.id).map((l) => l.application_id);
+      const companyIds = applications.filter((a) => appIds.includes(a.id)).map((a) => a.company_id);
+      expect(companyIds).toContain(p.company_id);
+    }
   });
 });

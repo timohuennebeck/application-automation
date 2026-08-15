@@ -5,6 +5,8 @@
 import type { DatabaseSync } from 'node:sqlite';
 import type {
   ActivityRow,
+  AgentRunRow,
+  AgentStepRow,
   ApplicationPatch,
   ApplicationPersonRow,
   ApplicationRow,
@@ -21,6 +23,9 @@ import type {
   PersonInput,
   PersonPatch,
   PersonRow,
+  PersonWithCompany,
+  LocationRow,
+  RoleRow,
   ProfileFactRow,
   RoundInput,
   RoundNoteRow,
@@ -29,7 +34,12 @@ import type {
   StageRow,
 } from '../../src/shared/db-types.ts';
 import { Author, DocumentKind, FactKind, Interest, LinkKind } from '../../src/shared/enums.ts';
-import { DEFAULT_COMMENT, DEFAULT_FOLLOWUPS } from '../../src/shared/domain.ts';
+import {
+  DEFAULT_COMMENT,
+  DEFAULT_FOLLOWUPS,
+  UNKNOWN_COMPANY,
+  UNKNOWN_ROLE,
+} from '../../src/shared/domain.ts';
 
 /* Person avatar palette — insertion-order assignment, persisted per row. */
 const PERSON_COLORS = [
@@ -55,6 +65,7 @@ const APPLICATION_FIELDS: (keyof ApplicationPatch)[] = [
   'applied_via',
   'posting_url',
   'posting_text',
+  'assignee',
 ];
 const COMPANY_FIELDS: (keyof CompanyPatch)[] = [
   'name',
@@ -120,6 +131,10 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
   };
   const getCompany = (id: number) => one<CompanyRow>('SELECT * FROM companies WHERE id = ?', id);
   const getPerson = (id: number) => one<PersonRow>('SELECT * FROM people WHERE id = ?', id);
+  const personWithCompany = (id: number): PersonWithCompany => {
+    const person = getPerson(id);
+    return { person, company: person.company_id === null ? null : getCompany(person.company_id) };
+  };
   const getFollowup = (id: number) => one<FollowupRow>('SELECT * FROM followups WHERE id = ?', id);
 
   const getProfileFact = (id: number) => one<ProfileFactRow>('SELECT * FROM profile_facts WHERE id = ?', id);
@@ -138,6 +153,24 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
       .prepare('INSERT INTO companies (name, created_at, updated_at) VALUES (?,?,?)')
       .run(name.trim(), t, t);
     return getCompany(Number(res.lastInsertRowid));
+  }
+
+  /* The placeholder company only exists while some card or person needs it;
+     once nothing points at it any more it goes, so it never lingers as a
+     phantom entry. */
+  function pruneUnknownCompany() {
+    db.prepare(
+      `DELETE FROM companies WHERE name = ?
+         AND NOT EXISTS (SELECT 1 FROM applications a WHERE a.company_id = companies.id)
+         AND NOT EXISTS (SELECT 1 FROM people p WHERE p.company_id = companies.id)`,
+    ).run(UNKNOWN_COMPANY);
+  }
+
+  /* A role a card or person is given joins the Berufsbezeichnung vocabulary. */
+  function rememberRole(role: string | null | undefined) {
+    const name = (role || '').trim();
+    if (!name || name === UNKNOWN_ROLE) return;
+    db.prepare('INSERT OR IGNORE INTO roles (name, created_at) VALUES (?, ?)').run(name, nowISO());
   }
 
   function reindexStage(stageId: string) {
@@ -180,7 +213,7 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
     const insDoc = db.prepare(
       'INSERT INTO documents (application_id, kind, title, created_at, updated_at) VALUES (?,?,?,?,?)',
     );
-    insDoc.run(appId, DocumentKind.COVER_LETTER, 'Cover Letter', t, t);
+    insDoc.run(appId, DocumentKind.COVER_LETTER, 'Anschreiben', t, t);
     insDoc.run(appId, DocumentKind.LEBENSLAUF, 'Lebenslauf', t, t);
 
     return {
@@ -202,6 +235,8 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
         applications: all<ApplicationRow>('SELECT * FROM applications'),
         facts: all<FactRow>('SELECT * FROM facts ORDER BY application_id, position'),
         people: all<PersonRow>('SELECT * FROM people'),
+        locations: all<LocationRow>('SELECT * FROM locations ORDER BY name'),
+        roles: all<RoleRow>('SELECT * FROM roles ORDER BY name'),
         applicationPeople: all<ApplicationPersonRow>(
           'SELECT * FROM application_people ORDER BY application_id, kind, position',
         ),
@@ -216,7 +251,17 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
         documents: all<DocumentRow>('SELECT * FROM documents ORDER BY application_id, id'),
         activities: all<ActivityRow>('SELECT * FROM activities ORDER BY application_id, id'),
         profileFacts: allProfileFacts(),
+        agentRuns: all<AgentRunRow>('SELECT * FROM agent_runs ORDER BY application_id, id'),
+        agentSteps: all<AgentStepRow>('SELECT * FROM agent_steps ORDER BY run_id, position'),
       };
+    },
+
+    /* What the agent service needs to plan a run: the posting source and the
+       company the card currently points at. */
+    getApplicationWithCompany(id: string): { application: ApplicationRow; company: CompanyRow } | undefined {
+      const application = getApplication(id);
+      if (!application) return undefined;
+      return { application, company: getCompany(application.company_id) };
     },
 
     createApplication(input: {
@@ -235,7 +280,7 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
         db.prepare("UPDATE meta SET value = ? WHERE key = 'next_bew_num'").run(String(num + 1));
         const id = 'BEW-' + num;
 
-        const company = findOrCreateCompany(input.company || 'Unbekanntes Unternehmen');
+        const company = findOrCreateCompany(input.company || UNKNOWN_COMPANY);
         db.prepare('UPDATE applications SET stage_position = stage_position + 1 WHERE stage_id = ?').run(
           'interessiert',
         );
@@ -256,6 +301,7 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
           t,
         );
 
+        rememberRole(input.role);
         const children = insertDefaultChildren(id, now);
         return {
           application: mustGetApplication(id),
@@ -273,6 +319,7 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
     updateApplication(id: string, patch: ApplicationPatch): ApplicationRow {
       return tx(() => {
         patchRow('applications', APPLICATION_FIELDS, patch, id);
+        rememberRole(patch.role);
         return mustGetApplication(id);
       });
     },
@@ -309,6 +356,7 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
     deleteApplication(id: string): void {
       tx(() => {
         db.prepare('DELETE FROM applications WHERE id = ?').run(id);
+        pruneUnknownCompany();
       });
     },
 
@@ -320,6 +368,7 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
           nowISO(),
           id,
         );
+        pruneUnknownCompany();
         return { application: mustGetApplication(id), company };
       });
     },
@@ -328,6 +377,19 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
       return tx(() => {
         patchRow('companies', COMPANY_FIELDS, patch, companyId);
         return getCompany(companyId);
+      });
+    },
+
+    /* Only a company no card points at can go; its people are detached, not
+       deleted (the FK sets their company_id to NULL). */
+    deleteCompany(companyId: number): void {
+      tx(() => {
+        const used = one<{ n: number }>(
+          'SELECT COUNT(*) AS n FROM applications WHERE company_id = ?',
+          companyId,
+        ).n;
+        if (Number(used) > 0) throw new Error('Die Firma wird noch von Bewerbungen verwendet.');
+        db.prepare('DELETE FROM companies WHERE id = ?').run(companyId);
       });
     },
 
@@ -341,12 +403,43 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
           `INSERT INTO facts (application_id, label, value, kind, position) VALUES (?,?,?,?,?)
            ON CONFLICT (application_id, label) DO UPDATE SET value = excluded.value, kind = excluded.kind`,
         ).run(applicationId, label, value, kind, next);
+        /* A Standort a card is filed under joins the vocabulary. */
+        if (label === 'Standort' && value.trim()) {
+          db.prepare('INSERT OR IGNORE INTO locations (name, created_at) VALUES (?, ?)').run(
+            value.trim(),
+            nowISO(),
+          );
+        }
         touchApplication(applicationId);
         return one<FactRow>(
           'SELECT * FROM facts WHERE application_id = ? AND label = ?',
           applicationId,
           label,
         );
+      });
+    },
+
+    /* Only a role neither a card nor a person carries can go. */
+    deleteRole(name: string): void {
+      tx(() => {
+        const n = name.trim();
+        const used =
+          Number(one<{ n: number }>('SELECT COUNT(*) AS n FROM applications WHERE TRIM(role) = ?', n).n) +
+          Number(one<{ n: number }>('SELECT COUNT(*) AS n FROM people WHERE TRIM(role) = ?', n).n);
+        if (used > 0) throw new Error('Die Berufsbezeichnung wird noch verwendet.');
+        db.prepare('DELETE FROM roles WHERE name = ?').run(n);
+      });
+    },
+
+    /* Only a location no card is filed under can go. */
+    deleteLocation(name: string): void {
+      tx(() => {
+        const used = one<{ n: number }>(
+          "SELECT COUNT(*) AS n FROM facts WHERE label = 'Standort' AND TRIM(value) = ?",
+          name.trim(),
+        ).n;
+        if (Number(used) > 0) throw new Error('Der Standort wird noch von Bewerbungen verwendet.');
+        db.prepare('DELETE FROM locations WHERE name = ?').run(name.trim());
       });
     },
 
@@ -492,7 +585,7 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
       });
     },
 
-    createPerson(input: PersonInput): PersonRow {
+    createPerson(input: PersonInput): PersonWithCompany {
       return tx(() => {
         const count = one<{ n: number }>('SELECT COUNT(*) AS n FROM people').n;
         const initials =
@@ -503,10 +596,11 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
             .join('')
             .toUpperCase()
             .slice(0, 2) || 'NP';
+        const company = input.company?.trim() ? findOrCreateCompany(input.company) : null;
         const t = nowISO();
         const res = db
           .prepare(
-            'INSERT INTO people (name, role, initials, email, phone, linkedin, color, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)',
+            'INSERT INTO people (name, role, initials, email, phone, linkedin, color, company_id, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)',
           )
           .run(
             input.name.trim(),
@@ -516,17 +610,29 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
             input.phone || null,
             input.linkedin || null,
             PERSON_COLORS[Number(count) % PERSON_COLORS.length],
+            company?.id ?? null,
             t,
             t,
           );
-        return getPerson(Number(res.lastInsertRowid));
+        rememberRole(input.role);
+        return { person: getPerson(Number(res.lastInsertRowid)), company };
       });
     },
 
-    updatePerson(personId: number, patch: PersonPatch): PersonRow {
+    updatePerson(personId: number, patch: PersonPatch): PersonWithCompany {
       return tx(() => {
-        patchRow('people', PERSON_FIELDS, patch, personId);
-        return getPerson(personId);
+        const { company: companyName, ...fields } = patch;
+        patchRow('people', PERSON_FIELDS, fields, personId);
+        rememberRole(fields.role);
+        if (companyName !== undefined) {
+          const company = companyName?.trim() ? findOrCreateCompany(companyName) : null;
+          db.prepare('UPDATE people SET company_id = ?, updated_at = ? WHERE id = ?').run(
+            company?.id ?? null,
+            nowISO(),
+            personId,
+          );
+        }
+        return personWithCompany(personId);
       });
     },
 
@@ -580,18 +686,25 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
 
     /* Points a document row at the pair of files it now stands for: the HTML
        the user supplied and the PDF rendered from it, which is NULL when the
-       export failed. The row exists as an empty slot from the application's
-       creation, so the first file is what creates the document — created_at
-       moves with it; only a later replacement bumps updated_at alone, which is
-       what makes the card read "aktualisiert am" instead of "erstellt am". */
-    setDocumentFile(documentId: number, filePath: string, pdfPath: string | null): DocumentRow {
+       export failed — and the profile-template Fassung it was generated from,
+       NULL for a hand-uploaded file. The row exists as an empty slot from the
+       application's creation, so the first file is what creates the document —
+       created_at moves with it; only a later replacement bumps updated_at
+       alone, which is what makes the card read "aktualisiert am" instead of
+       "erstellt am". */
+    setDocumentFile(
+      documentId: number,
+      filePath: string,
+      pdfPath: string | null,
+      templateLabel: string | null,
+    ): DocumentRow {
       return tx(() => {
         const before = one<DocumentRow>('SELECT * FROM documents WHERE id = ?', documentId);
         const t = nowISO();
         const firstFile = !before.file_path && !before.pdf_path;
         db.prepare(
-          'UPDATE documents SET file_path = ?, pdf_path = ?, updated_at = ?, created_at = ? WHERE id = ?',
-        ).run(filePath, pdfPath, t, firstFile ? t : before.created_at, documentId);
+          'UPDATE documents SET file_path = ?, pdf_path = ?, template_label = ?, updated_at = ?, created_at = ? WHERE id = ?',
+        ).run(filePath, pdfPath, templateLabel, t, firstFile ? t : before.created_at, documentId);
         return one<DocumentRow>('SELECT * FROM documents WHERE id = ?', documentId);
       });
     },

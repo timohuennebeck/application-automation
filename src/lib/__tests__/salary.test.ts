@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { SALARY_STEPS, formatSalaryRange, parseSalary, parseSalaryRange } from '../salary.ts';
+import {
+  SALARY_STEPS,
+  formatSalaryRange,
+  normalizeSalaryText,
+  parseSalary,
+  parseSalaryRange,
+} from '../salary.ts';
 
 describe('parseSalary', () => {
   it('reads the lower end of the ranges the cards actually carry', () => {
@@ -23,10 +29,10 @@ describe('parseSalary', () => {
 });
 
 describe('SALARY_STEPS', () => {
-  it('runs 50k to 100k in steps of one thousand', () => {
+  it('runs 50k to 200k in steps of one thousand', () => {
     expect(SALARY_STEPS[0]).toBe(50);
-    expect(SALARY_STEPS.at(-1)).toBe(100);
-    expect(SALARY_STEPS).toHaveLength(51);
+    expect(SALARY_STEPS.at(-1)).toBe(200);
+    expect(SALARY_STEPS).toHaveLength(151);
   });
 });
 
@@ -72,5 +78,27 @@ describe('formatSalaryRange', () => {
     for (const value of ['60–63k €', 'ab 62k €', 'bis 74k €']) {
       expect(formatSalaryRange(parseSalaryRange(value))).toBe(value);
     }
+  });
+});
+
+describe('parseSalaryRange with decimals', () => {
+  it('rounds decimal thousands instead of splitting on the point', () => {
+    expect(parseSalaryRange('87.7–128.4k €')).toEqual({ from: 88, to: 128 });
+    expect(parseSalaryRange('87,5–128,4k €')).toEqual({ from: 88, to: 128 });
+  });
+});
+
+describe('normalizeSalaryText', () => {
+  it('turns whatever a listing states into whole thousands', () => {
+    expect(normalizeSalaryText('87.700–128.400 €')).toBe('88–128k €');
+    expect(normalizeSalaryText('87.7–128.4k €')).toBe('88–128k €');
+    expect(normalizeSalaryText('70–85k €')).toBe('70–85k €');
+    expect(normalizeSalaryText('ab 90.000 €')).toBe('ab 90k €');
+    expect(normalizeSalaryText('bis 74k')).toBe('bis 74k €');
+    expect(normalizeSalaryText('95.000 €')).toBe('95k €');
+  });
+
+  it('gives up on text without numbers', () => {
+    expect(normalizeSalaryText('nach Vereinbarung')).toBeNull();
   });
 });

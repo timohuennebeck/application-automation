@@ -78,7 +78,8 @@ export function Section({
           />
         </svg>
         <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--c-1b1a17)' }}>{title}</div>
-        {count !== undefined && (
+        {/* The count only earns its brackets once there is something to count. */}
+        {count !== undefined && count !== 0 && (
           <div
             style={{
               fontSize: 12,

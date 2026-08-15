@@ -105,9 +105,7 @@ describe('repo', () => {
       channel: null,
       postingText: 'Wir suchen eine:n Designer:in mit Fokus auf Design-Systeme.',
     });
-    expect(res.application.posting_text).toBe(
-      'Wir suchen eine:n Designer:in mit Fokus auf Design-Systeme.',
-    );
+    expect(res.application.posting_text).toBe('Wir suchen eine:n Designer:in mit Fokus auf Design-Systeme.');
     expect(res.application.posting_url).toBeNull();
   });
 

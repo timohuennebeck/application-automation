@@ -111,8 +111,8 @@ export function CommentsSection({ cardId }: { cardId: string }) {
                     }}
                   />
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 2 }}>
-                    <div className="btn-ghost" onClick={() => set({ commentEditing: null })}>
-                      Abbrechen
+                    <div className="btn-plain" onClick={() => set({ commentEditing: null })}>
+                      Cancel
                     </div>
                     <div className="btn-dark" onClick={saveEdit}>
                       Speichern

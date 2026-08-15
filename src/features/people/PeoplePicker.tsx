@@ -64,8 +64,7 @@ export function PeoplePicker({
             }
             if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
               e.preventDefault();
-              const next =
-                e.key === 'ArrowDown' ? (active + 1) % rows : active <= 0 ? rows - 1 : active - 1;
+              const next = e.key === 'ArrowDown' ? (active + 1) % rows : active <= 0 ? rows - 1 : active - 1;
               setActive(next);
               listRef.current?.children[next]?.scrollIntoView({ block: 'nearest' });
             }

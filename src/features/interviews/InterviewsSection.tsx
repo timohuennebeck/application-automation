@@ -25,7 +25,7 @@ export function InterviewsSection({ cardId, company }: { cardId: string; company
 
   if (!rounds.length)
     return (
-      <Section sectionKey="rounds" title="Interviews" gap={14}>
+      <Section sectionKey="rounds" title="Interviews" count={0} gap={14}>
         <AddRow label="Interview hinzufügen" onClick={addRound} />
       </Section>
     );

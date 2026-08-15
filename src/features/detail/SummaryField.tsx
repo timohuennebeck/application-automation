@@ -70,7 +70,9 @@ export function SummaryField({
 
   return (
     <div
-      className="summary-view"
+      /* The hover ground invites a click — while Kepler owns the record there
+         is nothing to click into, so the invitation goes too. */
+      className={locked ? undefined : 'summary-view'}
       onClick={() => {
         if (!locked) set({ editing: 'summary', editDraft: summary, dropdown: null });
       }}

@@ -76,10 +76,16 @@ export async function fetchListingText(url: string, signal?: AbortSignal): Promi
       stopped,
     ]);
     await Promise.race([sleep(SETTLE_MS), stopped]);
-    const raw = (await win.webContents.executeJavaScript(
-      'document.body ? document.body.innerText : ""',
-      true,
-    )) as string;
+    /* The text read runs inside the page's renderer — a page that wedges its
+       own JS would wedge this await, and with it the whole serial run queue.
+       The race keeps the step abortable; the finally destroys the window. */
+    const raw = (await Promise.race([
+      win.webContents.executeJavaScript('document.body ? document.body.innerText : ""', true),
+      sleep(LOAD_TIMEOUT).then(() => {
+        throw new KeplerError(BLOCKED_MESSAGE);
+      }),
+      stopped,
+    ])) as string;
     const text = (raw || '').replace(/\n{3,}/g, '\n\n').trim();
     if (text.length < MIN_TEXT || looksWalled(text)) throw new KeplerError(BLOCKED_MESSAGE);
     return text;

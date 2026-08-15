@@ -19,3 +19,8 @@ export interface AgentStartResult {
   /* German reason when ok is false — shown as-is. */
   error?: string;
 }
+
+/* The headline of a run that ended before finishing — stop, crash or failure
+   alike. Shared because both sides show it: the main process writes it on the
+   run row, the renderer heads the panel and the card strip with it. */
+export const INTERRUPTED_HEADLINE = 'Kepler wurde unterbrochen';

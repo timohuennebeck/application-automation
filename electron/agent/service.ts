@@ -4,6 +4,7 @@
    itself is injected; this file owns only the lifecycle around it. */
 import type { Repo } from '../db/repo.ts';
 import type { RunStore } from './run-store.ts';
+import { INTERRUPTED_HEADLINE } from '../../src/shared/agent.ts';
 import type { AgentEvent, AgentStartResult } from '../../src/shared/agent.ts';
 import { AgentRunStatus, AgentStepStatus } from '../../src/shared/enums.ts';
 import { QUEUE_HEADLINE, STOP_ERROR, stepPlan } from './labels.ts';
@@ -42,7 +43,7 @@ export function createAgentService({ repo, runs, emit, pipeline }: AgentServiceD
           if (runs.activeRun(applicationId)?.id === runId) {
             const failed = runs.failRun(
               runId,
-              'Kepler wurde unterbrochen',
+              INTERRUPTED_HEADLINE,
               'Unerwarteter Fehler: ' + (err instanceof Error ? err.message : String(err)),
             );
             emit({ run: failed, steps: runs.stepsFor(runId) });
@@ -53,8 +54,15 @@ export function createAgentService({ repo, runs, emit, pipeline }: AgentServiceD
           console.error('[agent] backstop failed', backstopErr);
         }
       } finally {
-        if (controllers.get(runId) === controller) controllers.delete(runId);
-        if (runByApp.get(applicationId) === runId) runByApp.delete(applicationId);
+        /* Only the link that still owns the run may clean up. A stopped link
+           draining late must not unhook a retry that re-enqueued the same
+           runId under a fresh controller — abandon() still needs the mapping
+           to reach that retry's controller. */
+        const owns = controllers.get(runId) === controller;
+        if (owns) {
+          controllers.delete(runId);
+          if (runByApp.get(applicationId) === runId) runByApp.delete(applicationId);
+        }
       }
     });
   };
@@ -116,7 +124,7 @@ export function createAgentService({ repo, runs, emit, pipeline }: AgentServiceD
         const next = runs.stepsFor(run.id).find((s) => s.status !== AgentStepStatus.DONE);
         /* A waiting label is already the infinitive the failed form uses. */
         if (next) runs.failStep(next.id, next.label, STOP_ERROR);
-        const failed = runs.failRun(run.id, 'Kepler wurde unterbrochen', STOP_ERROR);
+        const failed = runs.failRun(run.id, INTERRUPTED_HEADLINE, STOP_ERROR);
         emit({ run: failed, steps: runs.stepsFor(run.id) });
       }
       controller?.abort();

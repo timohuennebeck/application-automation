@@ -287,6 +287,36 @@ describe('runPipeline', () => {
       expect(runs.getRun(runId).status).toBe(AgentRunStatus.FAILED);
     });
 
+    /* The stop-window state above used to strand the run: fetch DONE but the
+       listing never stored, so a retry "succeeded" on an empty prompt. */
+    it('resumes after a stop in the fetch window with the listing it scraped', async () => {
+      uploadTemplates();
+      const appId = createApp({ postingUrl: 'https://linkedin.com/jobs/1' });
+      const runId = createRun(appId);
+      const controller = new AbortController();
+      const scrape = vi.fn(async () => {
+        controller.abort();
+        return 'Stellenanzeige: Senior Designer bei Helios …';
+      });
+      await runPipeline(appId, runId, deps({ scrape, signal: controller.signal }));
+      expect(runs.getRun(runId).status).toBe(AgentRunStatus.FAILED);
+      /* Persisted the moment the scrape returned, stop or not. */
+      expect(runs.getRun(runId).listing).toBe('Stellenanzeige: Senior Designer bei Helios …');
+
+      const failed = runs.stepsFor(runId).find((s) => s.status === AgentStepStatus.ERROR)!;
+      runs.resetStep(failed.id, failed.label);
+      runs.requeueRun(runId, 'Kepler wartet in der Warteschlange…');
+      const second = deps();
+      await runPipeline(appId, runId, second);
+
+      expect(second.scrape).not.toHaveBeenCalled();
+      expect(runs.getRun(runId).status).toBe(AgentRunStatus.DONE);
+      const extractionCall = (
+        second.llm as unknown as { mock: { calls: [LlmRequest<unknown>][] } }
+      ).mock.calls.find((c) => c[0].schema === EXTRACTION_SCHEMA)!;
+      expect(extractionCall[0].prompt).toContain('Stellenanzeige: Senior Designer bei Helios');
+    });
+
     it('does nothing for a run that was stopped while still queued', async () => {
       const appId = createApp({ postingText: 'Wir suchen …' });
       const runId = createRun(appId);

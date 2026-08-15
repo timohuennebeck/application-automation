@@ -64,6 +64,12 @@ export const TemplateKind = {
 } as const;
 export type TemplateKind = (typeof TemplateKind)[keyof typeof TemplateKind];
 
+/* What the UI (and Kepler's error messages) call each template slot. */
+export const TEMPLATE_TITLES: Record<TemplateKind, string> = {
+  [TemplateKind.LEBENSLAUF]: 'Lebenslauf',
+  [TemplateKind.ANSCHREIBEN]: 'Anschreiben',
+};
+
 /* Who owns a card. Kepler is the only assignee so far; NULL means nobody. */
 export const Assignee = {
   KEPLER: 'kepler',

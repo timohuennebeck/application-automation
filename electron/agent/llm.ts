@@ -14,7 +14,7 @@ const DEFAULT_TIMEOUT = 120_000;
 
 export interface ModelCall {
   prompt: string;
-  schema: Record<string, unknown>;
+  schema: object;
   tools: string[];
   maxTurns: number;
   timeoutMs: number;
@@ -110,7 +110,9 @@ export function sdkInvoke(): ModelInvoke {
           /* Isolation mode: never load ~/.claude or project settings/CLAUDE.md
              into Kepler's calls. */
           settingSources: [],
-          outputFormat: { type: 'json_schema', schema },
+          /* The one place our schema objects meet the SDK's index-signature
+             type — cast here rather than at every call site. */
+          outputFormat: { type: 'json_schema', schema: schema as Record<string, unknown> },
           abortController: controller,
         },
       });

@@ -17,8 +17,10 @@ import {
   DocumentKind,
   FactKind,
   LinkKind,
+  TEMPLATE_TITLES,
   TemplateKind,
 } from '../../src/shared/enums.ts';
+import { INTERRUPTED_HEADLINE } from '../../src/shared/agent.ts';
 import { KeplerError, userMessage } from './errors.ts';
 import { STOP_ERROR, stepLabel, type LabelCtx } from './labels.ts';
 import {
@@ -45,7 +47,7 @@ import {
 
 export interface LlmRequest<T> {
   prompt: string;
-  schema: Record<string, unknown>;
+  schema: object;
   validate(x: unknown): T;
   /* Tool names the call may use; empty means a single plain completion. */
   tools?: string[];
@@ -161,18 +163,27 @@ export async function runPipeline(applicationId: string, runId: number, deps: Pi
       start(AgentStepKey.FETCH);
       /* Pasted after a blocked fetch: the text is the listing — no scrape. */
       listing = app.posting_text ?? (await deps.scrape(app.posting_url ?? '', signal));
+      /* Persisted the moment it exists: a stop landing between the fetch and
+         the extract must not strand the run — a later retry would otherwise
+         "succeed" on an empty listing. */
+      runs.setListing(runId, listing);
       done(AgentStepKey.FETCH);
+    } else if (!listing && app.posting_url) {
+      /* A run stranded by an older build (fetch done, listing never stored):
+         scrape again rather than working from nothing. */
+      listing = await deps.scrape(app.posting_url, signal);
+      runs.setListing(runId, listing);
     }
 
     /* ── Extract and apply the company details ────────────────────────── */
     let extraction: Extraction | null = null;
     if (pending(AgentStepKey.EXTRACT)) {
       start(AgentStepKey.EXTRACT);
-      /* Whatever the run works from is kept for later step retries. */
+      /* The no-fetch path (pasted text) also keeps what the run works from. */
       runs.setListing(runId, listing);
       extraction = await deps.llm({
         prompt: extractionPrompt(listing),
-        schema: EXTRACTION_SCHEMA as unknown as Record<string, unknown>,
+        schema: EXTRACTION_SCHEMA,
         validate: validateExtraction,
         timeoutMs: SINGLE_CALL_TIMEOUT,
         signal,
@@ -201,7 +212,7 @@ export async function runPipeline(applicationId: string, runId: number, deps: Pi
       if (!people.length) {
         const found = await deps.llm({
           prompt: contactPrompt(company.name, company.homepage, app.role),
-          schema: CONTACT_SCHEMA as unknown as Record<string, unknown>,
+          schema: CONTACT_SCHEMA,
           validate: validateContact,
           tools: ['WebSearch'],
           maxTurns: 8,
@@ -220,20 +231,20 @@ export async function runPipeline(applicationId: string, runId: number, deps: Pi
     /* ── The uploaded templates ───────────────────────────────────────── */
     if (pending(AgentStepKey.READ_CV)) {
       start(AgentStepKey.READ_CV);
-      readTemplate(deps.userDataPath, TemplateKind.LEBENSLAUF, 'Lebenslauf');
+      readTemplate(deps.userDataPath, TemplateKind.LEBENSLAUF);
       done(AgentStepKey.READ_CV);
     }
     if (pending(AgentStepKey.READ_LETTER)) {
       start(AgentStepKey.READ_LETTER);
-      readTemplate(deps.userDataPath, TemplateKind.ANSCHREIBEN, 'Anschreiben');
+      readTemplate(deps.userDataPath, TemplateKind.ANSCHREIBEN);
       done(AgentStepKey.READ_LETTER);
     }
 
     /* ── Generate both documents ──────────────────────────────────────── */
     /* The prompt input plus the label of the Fassung it was read from — the
        label is stamped on the generated document, never shown to the model. */
-    const docInput = (kind: TemplateKind, name: string): { input: DocumentInput; label: string } => {
-      const { html, label } = readTemplate(deps.userDataPath, kind, name);
+    const docInput = (kind: TemplateKind): { input: DocumentInput; label: string } => {
+      const { html, label } = readTemplate(deps.userDataPath, kind);
       return {
         label,
         input: {
@@ -250,7 +261,7 @@ export async function runPipeline(applicationId: string, runId: number, deps: Pi
     let cvHtml: string | null = null;
     if (pending(AgentStepKey.GEN_CV)) {
       start(AgentStepKey.GEN_CV);
-      const { input, label } = docInput(TemplateKind.LEBENSLAUF, 'Lebenslauf');
+      const { input, label } = docInput(TemplateKind.LEBENSLAUF);
       cvHtml = await generateDocument(deps, applicationId, DocumentKind.LEBENSLAUF, cvPrompt(input), label);
       done(AgentStepKey.GEN_CV, true);
     }
@@ -258,7 +269,7 @@ export async function runPipeline(applicationId: string, runId: number, deps: Pi
     let letterHtml: string | null = null;
     if (pending(AgentStepKey.GEN_LETTER)) {
       start(AgentStepKey.GEN_LETTER);
-      const { input, label } = docInput(TemplateKind.ANSCHREIBEN, 'Anschreiben');
+      const { input, label } = docInput(TemplateKind.ANSCHREIBEN);
       letterHtml = await generateDocument(
         deps,
         applicationId,
@@ -279,7 +290,7 @@ export async function runPipeline(applicationId: string, runId: number, deps: Pi
           cvHtml ?? readGeneratedHtml(deps.userDataPath, applicationId, DocumentKind.LEBENSLAUF),
           letterHtml ?? readGeneratedHtml(deps.userDataPath, applicationId, DocumentKind.COVER_LETTER),
         ),
-        schema: CHECKS_SCHEMA as unknown as Record<string, unknown>,
+        schema: CHECKS_SCHEMA,
         validate: validateChecks,
         timeoutMs: SINGLE_CALL_TIMEOUT,
         signal,
@@ -315,7 +326,7 @@ export async function runPipeline(applicationId: string, runId: number, deps: Pi
       const step: AgentStepRow = current;
       current = runs.failStep(step.id, stepLabel(step.key, AgentStepStatus.ERROR, labelCtx()), message);
     }
-    runs.failRun(runId, 'Kepler wurde unterbrochen', message);
+    runs.failRun(runId, INTERRUPTED_HEADLINE, message);
     push(current ?? undefined);
   }
 }
@@ -403,15 +414,11 @@ function readGeneratedHtml(userDataPath: string, applicationId: string, kind: Do
 
 /* The selected Fassung of a slot: its markup and the label the generated
    document is stamped with. */
-function readTemplate(
-  userDataPath: string,
-  kind: TemplateKind,
-  name: string,
-): { html: string; label: string } {
+function readTemplate(userDataPath: string, kind: TemplateKind): { html: string; label: string } {
   const selected = selectedTemplatePath(userDataPath, kind);
   if (!selected) {
     throw new KeplerError(
-      `Keine ${name}-Vorlage hochgeladen. Bitte im Profil (⌘P) eine HTML-Vorlage hinterlegen.`,
+      `Keine ${TEMPLATE_TITLES[kind]}-Vorlage hochgeladen. Bitte im Profil (⌘P) eine HTML-Vorlage hinterlegen.`,
     );
   }
   return { html: readFileSync(selected.path, 'utf8'), label: selected.label };

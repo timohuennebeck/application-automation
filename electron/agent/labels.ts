@@ -16,6 +16,8 @@ export interface LabelCtx {
 }
 
 export const QUEUE_HEADLINE = 'Kepler wartet in der Warteschlange…';
+/* The interrupted-run headline lives in src/shared/agent.ts — the renderer
+   shows it too (panel heading, card strip), so it is contract, not copy. */
 /* The step error after the user pressed stop — the run reads as failed so
    the same retry picks it back up. {m} is the user's mention chip, as in the
    step labels. */

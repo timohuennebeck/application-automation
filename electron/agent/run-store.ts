@@ -64,10 +64,14 @@ export function createRunStore(db: DatabaseSync, nowFn: () => Date = () => new D
         .get(applicationId, AgentRunStatus.QUEUED, AgentRunStatus.RUNNING) as AgentRunRow | undefined;
     },
 
+    /* started_at is re-stamped here: createRun wrote the enqueue time, but the
+       card's elapsed timer should count working time, not queue wait. A
+       requeued retry passes through here again and restarts the clock. */
     startRun(runId: number, label: string): AgentRunRow {
-      db.prepare('UPDATE agent_runs SET status = ?, label = ? WHERE id = ?').run(
+      db.prepare('UPDATE agent_runs SET status = ?, label = ?, started_at = ? WHERE id = ?').run(
         AgentRunStatus.RUNNING,
         label,
+        nowISO(),
         runId,
       );
       return getRun(runId);

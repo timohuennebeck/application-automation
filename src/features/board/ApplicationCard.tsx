@@ -7,6 +7,7 @@ import { elapsed } from '../../lib/date';
 import { initials } from '../../lib/text';
 import { agentLocked, agentRunFor, cardSubtitle, cardView, interviewChip } from '../../state/selectors';
 import { useApp } from '../../state/store-context';
+import { useNow } from '../../state/use-now';
 import {
   Avatar,
   BriefcaseGlyph,
@@ -53,6 +54,8 @@ export function ApplicationCard({ id, col, ci }: { id: string; col: ColumnDef; c
      taken off the card; only the "Kepler" name row follows the assignment. */
   const failedRun = !run && runView?.run.status === AgentRunStatus.FAILED ? runView.run : undefined;
   const keplerRow = !!run || (!!failedRun && assigned);
+  /* Keeps this card's mm:ss timer counting; idle on every other card. */
+  useNow(!!run);
   const interview = interviewChip(st, id);
   const subtitle = cardSubtitle(st, id);
   const contacts = contactsFor(id).filter((c) => c.name && c.name !== '—');

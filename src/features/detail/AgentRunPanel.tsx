@@ -7,6 +7,7 @@ import type { TemplateSlots, TemplateVersion } from '../../shared/domain';
 import { AgentRunStatus, AgentStepKey, AgentStepStatus, TEMPLATE_TITLES } from '../../shared/enums';
 import type { TemplateKind } from '../../shared/enums';
 import { useApp } from '../../state/store-context';
+import { useNow } from '../../state/use-now';
 import { AttachmentChip } from '../../ui/AttachmentChip';
 import { LinkChip } from '../../ui/MentionText';
 import { KeplerAvatar, RegenGlyph, StopGlyph } from '../../ui/icons';
@@ -130,7 +131,7 @@ function tokenize(label: string): Token[] {
 }
 
 /* 'seit 1:14' while running, 'vor 9 Min' once done — from the row's own
-   timestamps, re-rendered by the store's second tick. */
+   timestamps; useNow below re-renders the panel while a run is live. */
 function stepMeta(step: AgentStepRow): string {
   if (step.status === AgentStepStatus.RUN && step.started_at) return 'seit ' + elapsed(step.started_at);
   if (step.finished_at) return ago(step.finished_at);
@@ -278,9 +279,10 @@ function StepRow({
 
 /* Kepler's live progress on a card, inside the animated running border. */
 export function AgentRunPanel({ view }: { view: AgentRunView }) {
-  // The store's tick re-renders this once a second, keeping the timers moving.
   const { st, retryAgentStep, stopAgent } = useApp();
   const { run, steps } = view;
+  /* Keeps the 'seit 1:14' step timers counting; idle once nothing is running. */
+  useNow(run.status === AgentRunStatus.RUNNING || run.status === AgentRunStatus.QUEUED);
   const postingUrl = st.applications[run.application_id]?.posting_url ?? null;
   const failed = run.status === AgentRunStatus.FAILED;
   const doneCount = steps.filter((s) => s.status === AgentStepStatus.DONE).length;

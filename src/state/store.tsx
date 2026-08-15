@@ -3,12 +3,12 @@
    in-memory view in sync and owns all transient UI state. */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { URL_FIELDS, COLUMNS, SortDir, SortKey, STAGE_IDS } from '../data/config';
+import { STAGE_IDS, URL_FIELDS } from '../data/config';
 import { isHttpUrl } from '../lib/url';
 import { Assignee, Author, DocumentKind, FactKind, Interest, LinkKind, RoundState } from '../shared/enums';
 import type { ActivityRow, FollowupRow, PersonWithCompany } from '../shared/db-types';
 import { indexSnapshot, roundInput, personView } from './db-view';
-import type { PersonView, RoundView } from './db-view';
+import type { PersonView } from './db-view';
 import {
   keplerHoldReason,
   keplerStartBlocked,
@@ -23,11 +23,16 @@ import { dateToISO } from '../lib/date';
 import { isInFocusedField } from '../lib/dom';
 import { initials } from '../lib/text';
 import { parsePosting } from '../features/create/parse-posting';
-import { CLOSED_PROFILE, Ctx } from './store-context';
+import { CLOSED_PROFILE, Ctx, StateCtx } from './store-context';
+import { CLOSED_EDITORS, EMPTY_DRAFT, EMPTY_FILTER, emptyRound, initialState } from './initial-state';
+import { db, useResync } from './store-deps';
+
+/* The board filter bar reaches for this through the store, which is where it
+   lived before the initial state moved out. */
+export { EMPTY_FILTER };
 import type {
+  AppActions,
   AppState,
-  AppStore,
-  BoardFilter,
   ContactEntry,
   Patch,
   PersonEntry,
@@ -44,102 +49,6 @@ const agentCall = (p?: Promise<AgentStartResult>) =>
       if (!r.ok) console.warn('[agent]', r.error);
     })
     .catch((err) => console.error('[agent]', err));
-
-/* An untouched board: every card, in the order the stages hold them. */
-export const EMPTY_FILTER: BoardFilter = {
-  sort: SortKey.NONE,
-  dir: SortDir.ASC,
-  interests: [],
-};
-
-/* The create dialog's inputs. Kept as one object so "Erstelle mehrere" can
-   reset the whole form after each card without listing the fields twice. */
-const EMPTY_DRAFT = {
-  jobUrl: '',
-  jobChannel: '',
-  jobHasUrl: true,
-  jobText: '',
-  /* The channel dropdown lives in AppState.dropdown like every other select. */
-  dropdown: null,
-} satisfies Partial<AppState>;
-
-const initialState = (): AppState => ({
-  dark: false,
-
-  loaded: false,
-  loadError: null,
-  applications: {},
-  companies: {},
-  factsByApp: {},
-  people: {},
-  linksByApp: {},
-  commentsByApp: {},
-  attachmentsByComment: {},
-  roundsState: {},
-  followupsByApp: {},
-  documentsByApp: {},
-  activitiesByApp: {},
-  profileFacts: [],
-  locations: [],
-  roles: [],
-  agentRuns: {},
-  board: STAGE_IDS.map(() => []),
-  boardFilter: EMPTY_FILTER,
-
-  colOpen: COLUMNS.map((c) => c.open),
-  secOpen: {},
-  commentMenu: null,
-  commentEditing: null,
-  commentEditDraft: '',
-  commentDraft: '',
-  commentAttachments: [],
-  openCardId: null,
-  cardMenu: null,
-  cardContact: null,
-  modalOpen: false,
-  multiple: false,
-  ...EMPTY_DRAFT,
-  tick: 0,
-  dropdown: null,
-  editing: null,
-  editDraft: '',
-  roundEdit: null,
-  roundDraft: null,
-  roundPop: null,
-  roundTimeStep: 'start',
-  roundTimeStart: null,
-  cardTimeStep: 'start',
-  cardTimeStart: null,
-  personEdit: null,
-  personDraft: null,
-  personField: null,
-  personFieldDraft: '',
-  roundExpanded: {},
-  roundSel: {},
-  contactEdit: null,
-  contactDraft: '',
-  dragId: null,
-  overCol: null,
-  emailLoading: false,
-  emailExpanded: false,
-  followupSel: 0,
-  searchOpen: false,
-  searchQ: '',
-  profileOpen: false,
-  profileFactDraft: null,
-  profileDragId: null,
-});
-
-const emptyRound = (title: string): RoundView => ({
-  state: RoundState.OPEN,
-  title,
-  stage: '',
-  date: '',
-  time: '',
-  where: '',
-  people: [],
-  notes: [],
-});
 
 /* Sidebar labels that live on the applications row. */
 const APP_FIELD: Record<string, 'channel' | 'applied_via' | 'applied_at' | 'posting_url'> = {
@@ -159,26 +68,6 @@ const COMPANY_FIELD: Record<string, 'sector' | 'headcount' | 'homepage' | 'email
 const DATE_COLUMNS = new Set(['Beworben am']);
 /* Cleared facts that should default to the select kind. */
 const SELECT_FACTS = new Set(['Gehalt', 'Erfahrung']);
-
-/* Every editor bound to one card. Cleared whenever the open card changes or
-   goes away, so a dialog can never save onto the wrong application. */
-const CLOSED_EDITORS = {
-  dropdown: null,
-  editing: null,
-  editDraft: '',
-  roundEdit: null,
-  roundDraft: null,
-  roundPop: null,
-  personEdit: null,
-  personDraft: null,
-  personField: null,
-  personFieldDraft: '',
-  contactEdit: null,
-  commentMenu: null,
-  commentEditing: null,
-} satisfies Partial<AppState>;
-
-const db = () => window.desktop?.db;
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [st, setSt] = useState<AppState>(initialState);
@@ -203,17 +92,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   /* Database writes are optimistic. On failure the optimistic state is wrong,
      so reload the snapshot and let the view converge back on the truth. */
+  const resync = useResync(set, stRef);
+
   const persist = useCallback(
     (p: Promise<unknown> | undefined) => {
       p?.catch((err) => {
         console.error('[db]', err);
-        db()
-          ?.load()
-          .then((snap) => set(indexSnapshot(snap)))
-          .catch((e) => console.error('[db] resync failed', e));
+        resync();
       });
     },
-    [set],
+    [resync],
   );
 
   /* Boot: one snapshot load, then the board renders. */
@@ -239,26 +127,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const agent = window.desktop?.agent;
     if (!agent) return;
-    let timer: number | undefined;
-    const resync = () => {
-      window.clearTimeout(timer);
-      timer = window.setTimeout(() => {
-        db()
-          ?.load()
-          .then((snap) => {
-            /* The snapshot replaces domain state wholesale. Applying it while
-               a drag or field edit is in flight would visually revert work
-               whose write is still on its way — hold off and pull a fresh
-               snapshot once the interaction has settled. */
-            if (stRef.current.dragId || stRef.current.editing) {
-              resync();
-              return;
-            }
-            set(indexSnapshot(snap));
-          })
-          .catch((err) => console.error('[agent] resync failed', err));
-      }, 150);
-    };
     const unsub = agent.onEvent((e) => {
       // Malformed events must never take down the React tree.
       if (!e?.run) return;
@@ -281,11 +149,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       });
       if (e.refresh) resync();
     });
-    return () => {
-      unsub();
-      window.clearTimeout(timer);
-    };
-  }, [set]);
+    return unsub;
+  }, [set, resync]);
 
   const applyTheme = (dark: boolean) => {
     const el = document.documentElement;
@@ -1393,11 +1258,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [set]);
 
-  useEffect(() => {
-    const t = window.setInterval(() => set((s) => ({ tick: s.tick + 1 })), 1000);
-    return () => window.clearInterval(t);
-  }, [set]);
-
   useEffect(() => () => window.clearTimeout(mailTimerRef.current), []);
 
   useEffect(() => {
@@ -1492,9 +1352,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
   }, [createCard, savePerson, saveRound, set, toggleTheme]);
 
-  const store = useMemo<AppStore>(
+  /* Actions only — `st` is deliberately absent so this object keeps its
+     identity across a state change, and StateCtx carries the state instead. */
+  const actions = useMemo<AppActions>(
     () => ({
-      st,
       set,
       toggleTheme,
       roundsFor,
@@ -1550,7 +1411,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ghostRef,
     }),
     [
-      st,
       set,
       toggleTheme,
       roundsFor,
@@ -1603,5 +1463,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     ],
   );
 
-  return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
+  return (
+    <Ctx.Provider value={actions}>
+      <StateCtx.Provider value={st}>{children}</StateCtx.Provider>
+    </Ctx.Provider>
+  );
 }

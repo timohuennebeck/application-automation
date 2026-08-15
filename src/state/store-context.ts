@@ -150,8 +150,6 @@ export interface AppState {
      listing pasted by hand. */
   jobHasUrl: boolean;
   jobText: string;
-  /* Ticks once a second to drive the running-agent timers. */
-  tick: number;
   /* Key of the single open dropdown, or null. */
   dropdown: string | null;
   /* Key of the single field being inline-edited, or null. */
@@ -286,10 +284,30 @@ export interface AppStore {
   ghostRef: { current: HTMLElement | null };
 }
 
-export const Ctx = createContext<AppStore | null>(null);
+/* State and actions ride separate contexts. The actions bag is memoised on its
+   callbacks alone, so it keeps its identity across a state change — which lets
+   a component that only dispatches subscribe to `Ctx` and never re-render when
+   unrelated state moves. `st` changes on every mutation by definition, so it
+   gets its own context rather than dragging the actions along with it.
+
+   useApp() reads both and hands back the combined shape, so every existing
+   call site is unaffected. */
+export type AppActions = Omit<AppStore, 'st'>;
+
+export const Ctx = createContext<AppActions | null>(null);
+export const StateCtx = createContext<AppState | null>(null);
 
 export function useApp(): AppStore {
-  const v = useContext(Ctx);
-  if (!v) throw new Error('useApp outside provider');
-  return v;
+  const actions = useContext(Ctx);
+  const st = useContext(StateCtx);
+  if (!actions || !st) throw new Error('useApp outside provider');
+  return { ...actions, st };
+}
+
+/* The dispatch half on its own: stable across state changes, so a component
+   that only writes does not re-render when unrelated state moves. */
+export function useActions(): AppActions {
+  const actions = useContext(Ctx);
+  if (!actions) throw new Error('useActions outside provider');
+  return actions;
 }

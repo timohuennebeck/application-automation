@@ -1,6 +1,7 @@
 import type { KeyboardEvent, ReactNode, Ref } from 'react';
 import { formatBytes } from '../lib/bytes';
 import { PaperclipGlyph } from './icons';
+import { SEND_CIRCLE } from './styles';
 
 /* A file staged in the composer, shown as a removable chip until it is sent. */
 export interface PendingAttachment {
@@ -133,19 +134,8 @@ export function Composer({
         )}
         <div
           onClick={onSend}
-          style={{
-            width: 26,
-            height: 26,
-            borderRadius: '50%',
-            background: ready ? 'var(--c-1b1a17)' : 'var(--c-d6d3cb)',
-            color: 'var(--c-fbfaf7)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: 13,
-            flexShrink: 0,
-            cursor: ready ? 'pointer' : 'default',
-          }}
+          className={'send-circle' + (ready ? '' : ' send-circle-off')}
+          style={SEND_CIRCLE}
         >
           ↑
         </div>

@@ -17,11 +17,12 @@ export const DEFAULT_COMMENT = 'Karte angelegt – Bewerbung steht noch aus.';
 
 /* The default follow-up cadence as [days after the anchor, label]. A card
    created today counts from today (repo); a seeded card counts from the seed's
-   frozen anchor — same slots either way. */
+   frozen anchor — same slots either way. Nothing is due on day 0: an
+   application needs a week before a nudge is anything but pushy. */
 export const DEFAULT_FOLLOWUPS: [number, string][] = [
-  [0, 'Follow up zur Bewerbung'],
-  [9, 'Erneutes Follow up'],
-  [25, 'Letztes Follow up'],
+  [7, 'Follow up zur Bewerbung'],
+  [14, 'Erneutes Follow up'],
+  [30, 'Letztes Follow up'],
 ];
 
 /* What a document upload left behind: the stored HTML and the PDF rendered from

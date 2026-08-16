@@ -5,7 +5,7 @@ import { useApp } from '../../state/store-context';
 import { CalendarPopover } from '../../ui/Calendar';
 import { FieldChip } from '../../ui/FieldChip';
 import { PopoverAnchor } from '../../ui/Popover';
-import { Caret, Check, ClipboardGlyph, KeplerAvatar, RegenGlyph } from '../../ui/icons';
+import { Caret, Check, ClipboardGlyph, KeplerAvatar } from '../../ui/icons';
 import { ContactPicker } from '../people/ContactPicker';
 import { draftEmail, dueColor, dueLabel, type FollowUpSlot } from './schedule';
 import { ELLIPSIS } from '../../ui/styles';
@@ -21,45 +21,11 @@ const LABEL = {
   lineHeight: 1.35,
 } as const;
 
-function LoadingSkeleton() {
-  return (
-    <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <KeplerAvatar />
-        <div
-          style={{
-            fontSize: 12.5,
-            fontWeight: 600,
-            color: 'var(--c-1b1a17)',
-            animation: 'om-pulse 1.4s ease-in-out infinite',
-          }}
-        >
-          Kepler erstellt einen Follow up…
-        </div>
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-        {[38, 88, 76, 54].map((w) => (
-          <div
-            key={w}
-            style={{
-              height: 9,
-              width: w + '%',
-              borderRadius: 4,
-              background:
-                'linear-gradient(90deg,var(--c-f1efe9) 25%,var(--c-e4e1da) 50%,var(--c-f1efe9) 75%)',
-              backgroundSize: '200% 100%',
-              animation: 'om-shimmer 1.3s linear infinite',
-            }}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
 /* Kepler's drafted follow-up: due date, addressee, subject and collapsible body.
-   The draft is generated exactly once, stored on the followups row, and read
-   from there on every later open; only the regenerate button replaces it. */
+   An unsent draft is rendered live from the card, so it follows every change
+   of role, company or addressee — however that change was made. Ticking a
+   follow-up off freezes the text on its row: from then on the card shows what
+   actually went out. */
 export function FollowUpEmailCard({
   cardId,
   role,
@@ -81,7 +47,6 @@ export function FollowUpEmailCard({
     setFollowupDue,
     setFollowupCompleted,
     saveEmailDraft,
-    regenerateEmail,
   } = useApp();
 
   const [copied, setCopied] = useState(false);
@@ -104,15 +69,12 @@ export function FollowUpEmailCard({
   const toYM = shiftYM(fromYM, 11);
 
   const contacts = emailContactsFor(cardId);
-  const stored = slot.emailText != null;
-  const { subject, body } = stored
+  /* A follow-up ticked off before drafts were frozen has no text of its own
+     and falls back to the live one. */
+  const frozen = slot.done && slot.emailText != null;
+  const { subject, body } = frozen
     ? { subject: slot.emailSubject || '', body: slot.emailText || '' }
     : draftEmail(slots, sel, role, company, contacts[0]?.name || '');
-
-  // First open of this follow-up: persist the generated draft silently.
-  useEffect(() => {
-    if (!stored) saveEmailDraft(cardId, slot.id, subject, body);
-  }, [stored, cardId, slot.id, subject, body, saveEmailDraft]);
 
   const preview = body.split('\n').filter(Boolean)[1] || body;
   const words = body.trim().split(/\s+/).length + ' Wörter';
@@ -142,170 +104,162 @@ export function FollowUpEmailCard({
         boxShadow: '0 1px 2px var(--s-7)',
       }}
     >
-      {st.emailLoading ? (
-        <LoadingSkeleton />
-      ) : (
-        <div style={{ padding: '13px 14px 14px', display: 'flex', flexDirection: 'column', gap: 11 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <KeplerAvatar />
-            <div style={{ fontSize: 12, color: 'var(--c-8b8880)' }}>Entwurf von Kepler</div>
-          </div>
+      <div style={{ padding: '13px 14px 14px', display: 'flex', flexDirection: 'column', gap: 11 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <KeplerAvatar />
+          <div style={{ fontSize: 12, color: 'var(--c-8b8880)' }}>Entwurf von Kepler</div>
+        </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-            <PopoverAnchor style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-              <div style={LABEL}>Fällig am</div>
-              <FieldChip
-                open={dueOpen}
-                chevron
-                gap={5}
-                onClick={() =>
-                  set((s) => ({ dropdown: s.dropdown === dueKey ? null : dueKey, editing: null }))
-                }
-              >
-                <span style={{ fontSize: 12 }}>{isoToDate(slot.iso)}</span>
-                <span style={{ fontSize: 12, color: dueColor(slot) }}>{'· ' + dueLabel(slot)}</span>
-              </FieldChip>
-              {dueOpen && (
-                <CalendarPopover
-                  /* Lines the calendar up under the chip, past the label column. */
-                  left={97}
-                  selectedISO={slot.iso}
-                  fromYM={fromYM}
-                  toYM={dueYM > toYM ? dueYM : toYM}
-                  isDisabled={outOfRange}
-                  onPick={(iso) => {
-                    if (outOfRange(iso)) return;
-                    setFollowupDue(cardId, slot.id, iso);
-                    set({ dropdown: null });
-                  }}
-                />
-              )}
-            </PopoverAnchor>
-
-            <PopoverAnchor style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-              <div style={LABEL}>Kontaktperson</div>
-              <div style={{ width: 'fit-content', maxWidth: '100%', minWidth: 0 }}>
-                <ContactPicker
-                  popKey={cardId}
-                  cardId={cardId}
-                  company={company}
-                  list={contacts}
-                  onSave={(l) => setEmailContacts(cardId, l)}
-                  store={LinkKind.EMAIL}
-                />
-              </div>
-            </PopoverAnchor>
-
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 9 }}>
-              <div style={LABEL}>Betreff</div>
-              <div
-                style={{
-                  fontSize: 12.5,
-                  fontWeight: 600,
-                  color: 'var(--c-1b1a17)',
-                  lineHeight: 1.4,
-                  ...sent,
-                }}
-              >
-                {subject}
-              </div>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-            <div
-              className="email-collapse"
-              onClick={() => set((s) => ({ emailExpanded: !s.emailExpanded }))}
-              style={{
-                display: 'flex',
-                alignItems: 'flex-start',
-                gap: 8,
-                cursor: 'pointer',
-                padding: '5px 7px',
-                margin: '0 -7px',
-              }}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+          <PopoverAnchor style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+            <div style={LABEL}>Fällig am</div>
+            <FieldChip
+              open={dueOpen}
+              chevron
+              gap={5}
+              onClick={() => set((s) => ({ dropdown: s.dropdown === dueKey ? null : dueKey, editing: null }))}
             >
-              <Caret open={st.emailExpanded} style={{ marginTop: 4 }} />
-              {st.emailExpanded ? (
-                <div
-                  style={{
-                    fontSize: 11.5,
-                    color: 'var(--c-9a978f)',
-                    lineHeight: 1.5,
-                    flex: '1 1 0',
-                    minWidth: 0,
-                  }}
-                >
-                  Textnachricht
-                </div>
-              ) : (
-                <>
-                  <div
-                    style={{
-                      ...ELLIPSIS,
-                      fontSize: 12.5,
-                      color: 'var(--c-77746d)',
-                      lineHeight: 1.5,
-                      flex: '1 1 0',
-                      ...sent,
-                    }}
-                  >
-                    {preview}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: 11,
-                      color: 'var(--c-a5a29a)',
-                      flexShrink: 0,
-                      marginTop: 1,
-                      fontVariantNumeric: 'tabular-nums',
-                    }}
-                  >
-                    {words}
-                  </div>
-                </>
-              )}
-            </div>
-            {st.emailExpanded && (
-              <div
-                style={{
-                  fontSize: 12.5,
-                  color: 'var(--c-3d3a34)',
-                  lineHeight: 1.65,
-                  whiteSpace: 'pre-line',
-                  textWrap: 'pretty',
-                  paddingLeft: 19,
-                  ...sent,
+              <span style={{ fontSize: 12 }}>{isoToDate(slot.iso)}</span>
+              <span style={{ fontSize: 12, color: dueColor(slot) }}>{'· ' + dueLabel(slot)}</span>
+            </FieldChip>
+            {dueOpen && (
+              <CalendarPopover
+                /* Lines the calendar up under the chip, past the label column. */
+                left={97}
+                selectedISO={slot.iso}
+                fromYM={fromYM}
+                toYM={dueYM > toYM ? dueYM : toYM}
+                isDisabled={outOfRange}
+                onPick={(iso) => {
+                  if (outOfRange(iso)) return;
+                  setFollowupDue(cardId, slot.id, iso);
+                  set({ dropdown: null });
                 }}
-              >
-                {body}
-              </div>
+              />
             )}
-          </div>
+          </PopoverAnchor>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            {/* The glyph turns into a tick for a moment — the only sign that a
-                copy to an invisible clipboard actually happened. */}
-            <div className="icon-btn" title="Kopieren" onClick={copy}>
-              {copied ? <Check size={13} /> : <ClipboardGlyph />}
+          <PopoverAnchor style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+            <div style={LABEL}>Kontaktperson</div>
+            <div style={{ width: 'fit-content', maxWidth: '100%', minWidth: 0 }}>
+              <ContactPicker
+                popKey={cardId}
+                cardId={cardId}
+                company={company}
+                list={contacts}
+                onSave={(l) => setEmailContacts(cardId, l)}
+                store={LinkKind.EMAIL}
+              />
             </div>
+          </PopoverAnchor>
+
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 9 }}>
+            <div style={LABEL}>Betreff</div>
             <div
-              className="icon-btn"
-              title="Neu erstellen"
-              onClick={() => {
-                const d = draftEmail(slots, sel, role, company, contacts[0]?.name || '');
-                regenerateEmail(cardId, slot.id, d.subject, d.body);
+              style={{
+                fontSize: 12.5,
+                fontWeight: 600,
+                color: 'var(--c-1b1a17)',
+                lineHeight: 1.4,
+                ...sent,
               }}
             >
-              <RegenGlyph />
-            </div>
-            {/* A switch, not a one-way door: the same button opens it again. */}
-            <div className="icon-btn" onClick={() => setFollowupCompleted(cardId, slot.id, !slot.done)}>
-              <Check size={13} stroke={slot.done ? 'var(--c-1b1a17)' : 'var(--c-77746d)'} />
+              {subject}
             </div>
           </div>
         </div>
-      )}
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+          <div
+            className="email-collapse"
+            onClick={() => set((s) => ({ emailExpanded: !s.emailExpanded }))}
+            style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: 8,
+              cursor: 'pointer',
+              padding: '5px 7px',
+              margin: '0 -7px',
+            }}
+          >
+            <Caret open={st.emailExpanded} style={{ marginTop: 4 }} />
+            {st.emailExpanded ? (
+              <div
+                style={{
+                  fontSize: 11.5,
+                  color: 'var(--c-9a978f)',
+                  lineHeight: 1.5,
+                  flex: '1 1 0',
+                  minWidth: 0,
+                }}
+              >
+                Textnachricht
+              </div>
+            ) : (
+              <>
+                <div
+                  style={{
+                    ...ELLIPSIS,
+                    fontSize: 12.5,
+                    color: 'var(--c-77746d)',
+                    lineHeight: 1.5,
+                    flex: '1 1 0',
+                    ...sent,
+                  }}
+                >
+                  {preview}
+                </div>
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: 'var(--c-a5a29a)',
+                    flexShrink: 0,
+                    marginTop: 1,
+                    fontVariantNumeric: 'tabular-nums',
+                  }}
+                >
+                  {words}
+                </div>
+              </>
+            )}
+          </div>
+          {st.emailExpanded && (
+            <div
+              style={{
+                fontSize: 12.5,
+                color: 'var(--c-3d3a34)',
+                lineHeight: 1.65,
+                whiteSpace: 'pre-line',
+                textWrap: 'pretty',
+                paddingLeft: 19,
+                ...sent,
+              }}
+            >
+              {body}
+            </div>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          {/* The glyph turns into a tick for a moment — the only sign that a
+              copy to an invisible clipboard actually happened. */}
+          <div className="icon-btn" title="Kopieren" onClick={copy}>
+            {copied ? <Check size={13} /> : <ClipboardGlyph />}
+          </div>
+          {/* A switch, not a one-way door: the same button opens it again.
+              Ticking off freezes the text as sent; opening again lets the
+              live draft take over, the frozen text is simply no longer read. */}
+          <div
+            className="icon-btn"
+            onClick={() => {
+              if (!slot.done) saveEmailDraft(cardId, slot.id, subject, body);
+              setFollowupCompleted(cardId, slot.id, !slot.done);
+            }}
+          >
+            <Check size={13} stroke={slot.done ? 'var(--c-1b1a17)' : 'var(--c-77746d)'} />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

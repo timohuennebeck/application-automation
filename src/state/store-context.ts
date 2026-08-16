@@ -183,7 +183,6 @@ export interface AppState {
   contactDraft: string;
   dragId: string | null;
   overCol: number | null;
-  emailLoading: boolean;
   emailExpanded: boolean;
   followupSel: number;
   searchOpen: boolean;
@@ -282,8 +281,6 @@ export interface AppStore {
   setFollowupCompleted: (id: string, followupId: number, done: boolean) => void;
   /* Persist a generated draft silently (first open). */
   saveEmailDraft: (id: string, followupId: number, subject: string, body: string) => void;
-  /* Persist a re-generated draft behind the loading skeleton. */
-  regenerateEmail: (id: string, followupId: number, subject: string, body: string) => void;
   /* The profile's own facts. Every one of these writes optimistically and
      resyncs from the database if the write fails, as the card actions do. */
   addProfileFact: (text: string) => void;

@@ -6,6 +6,10 @@
    survives ATS uploads and mail links without turning into %20s. */
 const APPLICANT_FILE_STEM = 'Timo_Huennebeck';
 
+/* The same person as they sign a mail — the follow-up drafts close with this.
+   Kept next to the stem so the two spellings cannot drift apart. */
+export const APPLICANT_NAME = 'Timo Hünnebeck';
+
 /* The German labels are used regardless of the posting's language — the two
    file names on the profile and on every card stay predictable. */
 export const DOCUMENT_STEMS = {

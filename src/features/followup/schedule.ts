@@ -1,5 +1,7 @@
 import { DotKind } from '../../data/config';
 import { dayDiff, relLabel } from '../../lib/date';
+import { APPLICANT_NAME } from '../../shared/applicant';
+import { UNKNOWN_COMPANY, UNKNOWN_ROLE } from '../../shared/domain';
 import type { AppState } from '../../state/store-context';
 
 export interface FollowUpSlot {
@@ -88,25 +90,40 @@ export function dueColor(slot: FollowUpSlot): string {
   return slot.diff <= 2 ? 'var(--c-9a7218)' : 'var(--c-9a978f)';
 }
 
-/* Chip and menu label: names the role in full. Where it does not fit, the
-   layout truncates it with a real ellipsis — a character budget here would cut
-   mid-word even when there was room to spare. */
+/* A card that does not know its role yet shows the {{…}} gap the drafted email
+   uses, not the app's own "Neue Bewerbung" stand-in — the label is a preview
+   of that email's subject, and the gap says what is still to fill in. */
+function roleOrGap(role: string): string {
+  return !role || role === UNKNOWN_ROLE ? '{{ROLE}}' : role;
+}
+
+/* Chip and menu label — the drafted email's subject line. Names the role in
+   full: where it does not fit, the layout truncates it with a real ellipsis — a
+   character budget here would cut mid-word even when there was room to spare. */
 export function slotLabel(slot: FollowUpSlot, role: string): string {
-  return slot.index === 0 ? 'Follow up zur Bewerbung als ' + role : slot.title + ': ' + role;
+  const named = roleOrGap(role);
+  return slot.index === 0 ? 'Follow up zur Bewerbung als ' + named : slot.title + ': ' + named;
 }
 
 /* Kepler's drafted follow-up. Tone escalates across the sequence, and the last
-   one explicitly offers to close the loop. Drafts are generated once and then
-   stored on the followups row — see saveEmailDraft. */
+   one explicitly offers to close the loop. A deterministic template of the
+   card's role, company and addressee: an unsent follow-up is rendered from it
+   live, so it always says what the card says now; only a sent one is frozen
+   (see FollowUpEmailCard). Whatever the card does not know yet is left as a
+   {{…}} gap — the same shape Kepler's document templates use — rather than
+   a bare greeting or the app's own "Unbekanntes Unternehmen" placeholder,
+   which is not something to send. */
 export function draftEmail(
   slots: FollowUpSlot[],
   sel: number,
-  role: string,
-  company: string,
+  rawRole: string,
+  rawCompany: string,
   contactName: string,
 ) {
   const isLast = sel === slots.length - 1 && sel > 0;
-  const greeting = contactName ? 'Hallo ' + contactName.split(' ')[0] : 'Hallo';
+  const greeting = 'Hallo ' + (contactName ? contactName.split(' ')[0] : '{{CONTACT_PERSON}}');
+  const role = roleOrGap(rawRole);
+  const company = !rawCompany || rawCompany === UNKNOWN_COMPANY ? '{{COMPANY_NAME}}' : rawCompany;
 
   const body =
     sel === 0
@@ -128,7 +145,7 @@ export function draftEmail(
           ' melden. Mein Interesse an der Rolle besteht unverändert — gibt es inzwischen einen neuen Stand?';
 
   return {
-    subject: sel === 0 ? 'Follow up zur Bewerbung als ' + role : slots[sel].title + ': ' + role,
-    body: greeting + ',\n\n' + body + '\n\nViele Grüße\nSarah Thal',
+    subject: slotLabel(slots[sel], role),
+    body: greeting + ',\n\n' + body + '\n\nViele Grüße\n' + APPLICANT_NAME,
   };
 }

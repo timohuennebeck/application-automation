@@ -345,6 +345,35 @@ describe('migrations', () => {
     expect(row.homepage).toBeNull();
   });
 
+  /* The cadence migration (index 20): the defaults moved off day 0 and the
+     drafts stopped signing with a placeholder. Follow-ups still on the old
+     defaults are re-based from the card's creation day; a date the user set by
+     hand, and anything already sent, is left alone. Unsent stored drafts are
+     dropped — they are rendered live from the card from now on. */
+  it('re-bases default follow-ups and drops unsent drafts', () => {
+    const db = dbAtVersion(20);
+    db.exec(`
+      INSERT INTO companies (id, name, created_at, updated_at) VALUES (1, 'Acme', 't', 't');
+      INSERT INTO applications (id, role, company_id, interest, stage_id, stage_position, created_at, updated_at)
+        VALUES ('BEW-1', 'Designer', 1, 'HIGH', 'interessiert', 0, '2026-08-10T12:00:00.000Z', 't');
+      INSERT INTO followups (application_id, label, due_at, position, email_subject, email_text, generated_at, completed_at) VALUES
+        ('BEW-1', 'Follow up zur Bewerbung', '2026-08-10', 0, 'Betreff', 'Hallo,\n\n…\nSarah Thal', 't', NULL),
+        ('BEW-1', 'Erneutes Follow up',      '2026-08-19', 1, NULL, NULL, NULL, NULL),
+        ('BEW-1', 'Letztes Follow up',       '2026-08-20', 2, 'Betreff', 'Text', 't', '2026-08-11T09:00:00.000Z');
+    `);
+
+    migrate(db);
+
+    const rows = db.prepare('SELECT due_at, email_text FROM followups ORDER BY position').all() as {
+      due_at: string;
+      email_text: string | null;
+    }[];
+    /* Slot 0 sat on the old day-0 default → a week out; slot 1 on the old +9
+       → +14; slot 2 was moved by hand (and sent) → untouched, draft and all. */
+    expect(rows.map((r) => r.due_at)).toEqual(['2026-08-17', '2026-08-24', '2026-08-20']);
+    expect(rows.map((r) => r.email_text)).toEqual([null, null, 'Text']);
+  });
+
   /* migrate() applies by array index, so shipped history is append-only: an
      entry that is edited, moved or inserted mid-array silently breaks every
      database that already ran the old order (its user_version then points at

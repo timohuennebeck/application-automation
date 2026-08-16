@@ -28,6 +28,8 @@ describe('repo', () => {
     /* No pre-seeded interviews — rounds only exist once the user adds one. */
     expect(res.rounds).toEqual([]);
     expect(res.followups).toHaveLength(3);
+    /* Nothing is due on the day the card is made: the first nudge waits a week. */
+    expect(res.followups.map((f) => f.due_at)).toEqual(['2026-08-19', '2026-08-26', '2026-09-11']);
     expect(res.documents).toHaveLength(2);
     expect(res.comments).toHaveLength(1);
     expect(res.comments[0].author).toBe(Author.KEPLER);

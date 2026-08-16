@@ -82,7 +82,6 @@ export const initialState = (): AppState => ({
   contactDraft: '',
   dragId: null,
   overCol: null,
-  emailLoading: false,
   emailExpanded: false,
   followupSel: 0,
   searchOpen: false,

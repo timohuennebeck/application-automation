@@ -80,7 +80,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const dragPosRef = useRef<{ col: number; y: number } | null>(null);
   const swapLockRef = useRef<{ col: number; dir: number; y: number } | null>(null);
   const ghostRef = useRef<HTMLElement | null>(null);
-  const mailTimerRef = useRef<number | undefined>(undefined);
   /* Serializes db:rounds.set per card so a second edit never races the first
      response (which carries the db ids of freshly created rounds). */
   const roundsChainRef = useRef<Record<string, Promise<void>>>({});
@@ -426,13 +425,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const openCard = useCallback(
     (id: string) => {
-      window.clearTimeout(mailTimerRef.current);
       set({
         ...CLOSED_EDITORS,
         openCardId: id,
         cardMenu: null,
         cardContact: null,
-        emailLoading: false,
         emailExpanded: false,
         followupSel: 0,
         commentDraft: '',
@@ -892,6 +889,67 @@ export function AppProvider({ children }: { children: ReactNode }) {
     set({ roundEdit: null, roundDraft: null, roundPop: null });
   }, [logAct, mutateRounds, set]);
 
+  const patchFollowup = useCallback(
+    (id: string, row: FollowupRow) => {
+      set((s) => ({
+        followupsByApp: {
+          ...s.followupsByApp,
+          [id]: (s.followupsByApp[id] || []).map((f) => (f.id === row.id ? row : f)),
+        },
+      }));
+    },
+    [set],
+  );
+
+  const setFollowupDue = useCallback(
+    (id: string, followupId: number, dueISO: string) => {
+      set((s) => ({
+        followupsByApp: {
+          ...s.followupsByApp,
+          [id]: (s.followupsByApp[id] || []).map((f) => (f.id === followupId ? { ...f, due_at: dueISO } : f)),
+        },
+      }));
+      persist(db()?.followups.setDue(followupId, dueISO));
+    },
+    [set],
+  );
+
+  /* Ticks a follow-up off as sent, or puts it back on the list. The timestamp
+     is what the chip counts "Erledigt vor 15 Tagen" from. */
+  const setFollowupCompleted = useCallback(
+    (id: string, followupId: number, done: boolean) => {
+      const completedAt = done ? new Date().toISOString() : null;
+      set((s) => ({
+        followupsByApp: {
+          ...s.followupsByApp,
+          [id]: (s.followupsByApp[id] || []).map((f) =>
+            f.id === followupId ? { ...f, completed_at: completedAt } : f,
+          ),
+        },
+      }));
+      persist(db()?.followups.setCompleted(followupId, completedAt));
+    },
+    [set],
+  );
+
+  /* Freezes a follow-up's text on its row. An unsent draft is rendered live
+     from the card and never stored; this is called the moment one is ticked
+     off, so the card can keep showing what actually went out. */
+  const saveEmailDraft = useCallback(
+    (id: string, followupId: number, subject: string, body: string) => {
+      const p = db()?.followups.saveEmail(followupId, subject, body);
+      if (p) persist(p.then((row) => patchFollowup(id, row)));
+      else
+        patchFollowup(id, {
+          ...(stRef.current.followupsByApp[id] || []).find((f) => f.id === followupId)!,
+          email_subject: subject,
+          email_text: body,
+          generated_at: new Date().toISOString(),
+        });
+    },
+    [patchFollowup],
+  );
+
   /* Sidebar field write. Routed labels update their owning row; only the
      free-form POSITION fields become facts rows. */
   const writeField = useCallback(
@@ -1276,76 +1334,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (ids.length) persist(db()?.profileFacts.reorder(ids));
   }, [persist]);
 
-  const patchFollowup = useCallback(
-    (id: string, row: FollowupRow) => {
-      set((s) => ({
-        followupsByApp: {
-          ...s.followupsByApp,
-          [id]: (s.followupsByApp[id] || []).map((f) => (f.id === row.id ? row : f)),
-        },
-      }));
-    },
-    [set],
-  );
-
-  const setFollowupDue = useCallback(
-    (id: string, followupId: number, dueISO: string) => {
-      set((s) => ({
-        followupsByApp: {
-          ...s.followupsByApp,
-          [id]: (s.followupsByApp[id] || []).map((f) => (f.id === followupId ? { ...f, due_at: dueISO } : f)),
-        },
-      }));
-      persist(db()?.followups.setDue(followupId, dueISO));
-    },
-    [set],
-  );
-
-  /* Ticks a follow-up off as sent, or puts it back on the list. The timestamp
-     is what the chip counts "Erledigt vor 15 Tagen" from. */
-  const setFollowupCompleted = useCallback(
-    (id: string, followupId: number, done: boolean) => {
-      const completedAt = done ? new Date().toISOString() : null;
-      set((s) => ({
-        followupsByApp: {
-          ...s.followupsByApp,
-          [id]: (s.followupsByApp[id] || []).map((f) =>
-            f.id === followupId ? { ...f, completed_at: completedAt } : f,
-          ),
-        },
-      }));
-      persist(db()?.followups.setCompleted(followupId, completedAt));
-    },
-    [set],
-  );
-
-  /* Drafts are generated once, stored, and then read from the DB — see the
-     design spec's followups section. */
-  const saveEmailDraft = useCallback(
-    (id: string, followupId: number, subject: string, body: string) => {
-      const p = db()?.followups.saveEmail(followupId, subject, body);
-      if (p) persist(p.then((row) => patchFollowup(id, row)));
-      else
-        patchFollowup(id, {
-          ...(stRef.current.followupsByApp[id] || []).find((f) => f.id === followupId)!,
-          email_subject: subject,
-          email_text: body,
-          generated_at: new Date().toISOString(),
-        });
-    },
-    [patchFollowup],
-  );
-
-  const regenerateEmail = useCallback(
-    (id: string, followupId: number, subject: string, body: string) => {
-      window.clearTimeout(mailTimerRef.current);
-      set({ emailLoading: true });
-      saveEmailDraft(id, followupId, subject, body);
-      mailTimerRef.current = window.setTimeout(() => set({ emailLoading: false }), 2400);
-    },
-    [saveEmailDraft, set],
-  );
-
   // Restore the persisted theme and section collapse state.
   useEffect(() => {
     let saved: string | null = null;
@@ -1364,8 +1352,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       /* ignore */
     }
   }, [set]);
-
-  useEffect(() => () => window.clearTimeout(mailTimerRef.current), []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -1517,7 +1503,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setFollowupDue,
       setFollowupCompleted,
       saveEmailDraft,
-      regenerateEmail,
       addProfileFact,
       updateProfileFact,
       deleteProfileFact,
@@ -1574,7 +1559,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setFollowupDue,
       setFollowupCompleted,
       saveEmailDraft,
-      regenerateEmail,
       addProfileFact,
       updateProfileFact,
       deleteProfileFact,

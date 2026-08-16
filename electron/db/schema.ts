@@ -422,4 +422,24 @@ export const MIGRATIONS: string[] = [
   `
   ALTER TABLE agent_runs ADD COLUMN listing TEXT;
   `,
+
+  /* Migration 23 (index 20): the default cadence moved off day 0 (7/14/30
+     instead of 0/9/25) and the drafts stopped signing with a placeholder name.
+     Existing cards catch up: an unsent follow-up still sitting on the old
+     default offset from its card's creation day (local, as the repo counted
+     it) moves to the new one — a date the user set by hand no longer matches
+     and stays. Unsent stored drafts are dropped; only a sent follow-up keeps
+     its text, the one that actually went out. */
+  `
+  UPDATE followups
+     SET due_at = date((SELECT created_at FROM applications WHERE id = application_id), 'localtime',
+                       CASE position WHEN 0 THEN '+7 days' WHEN 1 THEN '+14 days' ELSE '+30 days' END)
+   WHERE completed_at IS NULL
+     AND position IN (0, 1, 2)
+     AND due_at = date((SELECT created_at FROM applications WHERE id = application_id), 'localtime',
+                       CASE position WHEN 0 THEN '+0 days' WHEN 1 THEN '+9 days' ELSE '+25 days' END);
+  UPDATE followups
+     SET email_subject = NULL, email_text = NULL, generated_at = NULL
+   WHERE completed_at IS NULL AND email_text IS NOT NULL;
+  `,
 ];

@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { DotKind } from '../../../data/config';
 import { shiftISO, todayISO } from '../../../lib/date';
 import type { AppState } from '../../../state/store-context';
-import { followUpSlots } from '../schedule.ts';
+import { APPLICANT_NAME } from '../../../shared/applicant';
+import { UNKNOWN_COMPANY, UNKNOWN_ROLE } from '../../../shared/domain';
+import { draftEmail, followUpSlots, slotLabel } from '../schedule.ts';
 
 /* An ISO date `days` away from today, so the cases below stay readable. */
 const shift = (days: number) => shiftISO(todayISO(), days);
@@ -84,5 +86,42 @@ describe('followUpSlots', () => {
     const slots = followUpSlots(state(-4, 12), 'A');
     expect(slots.map((s) => s.index)).toEqual([0, 1]);
     expect(slots.map((s) => s.kind)).toEqual([DotKind.PIE, DotKind.DASHED]);
+  });
+});
+
+describe('draftEmail', () => {
+  const slots = followUpSlots(state(7, 14, 30), 'A');
+
+  it('greets the contact by first name and signs as the applicant', () => {
+    const { body } = draftEmail(slots, 0, 'Designer', 'Acme', 'Nadine Wolf');
+    expect(body.startsWith('Hallo Nadine,')).toBe(true);
+    expect(body).toContain('bei Acme als Designer');
+    expect(body.endsWith('Viele Grüße\n' + APPLICANT_NAME)).toBe(true);
+  });
+
+  /* What the card does not know yet is left as a visible gap to fill, not
+     papered over with a bare "Hallo" or the app's own placeholder strings. */
+  it('marks a missing contact, role and company as {{…}} placeholders', () => {
+    const { subject, body } = draftEmail(slots, 0, UNKNOWN_ROLE, UNKNOWN_COMPANY, '');
+    expect(body.startsWith('Hallo {{CONTACT_PERSON}},')).toBe(true);
+    expect(body).toContain('bei {{COMPANY_NAME}} als {{ROLE}}');
+    expect(subject).toBe('Follow up zur Bewerbung als {{ROLE}}');
+    expect(draftEmail(slots, 1, '', '', '').body).toContain('als {{ROLE}} bei {{COMPANY_NAME}}');
+  });
+});
+
+describe('slotLabel', () => {
+  const slots = followUpSlots(state(7, 14, 30), 'A');
+
+  it('reads as the subject line, first follow-up phrased differently', () => {
+    expect(slotLabel(slots[0], 'Designer')).toBe('Follow up zur Bewerbung als Designer');
+    expect(slotLabel(slots[1], 'Designer')).toBe('Follow up 2: Designer');
+  });
+
+  /* The label previews the email's subject, so it shows the same gap the
+     email leaves — not the "Neue Bewerbung" stand-in a roleless card carries. */
+  it('shows the {{ROLE}} gap instead of the unknown-role placeholder', () => {
+    expect(slotLabel(slots[0], UNKNOWN_ROLE)).toBe('Follow up zur Bewerbung als {{ROLE}}');
+    expect(slotLabel(slots[2], '')).toBe('Follow up 3: {{ROLE}}');
   });
 });

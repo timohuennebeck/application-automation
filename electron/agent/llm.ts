@@ -4,6 +4,7 @@
    spawned CLI's own login, structured output enforced by JSON Schema, and
    failures translated into German before anyone sees them. */
 import { query } from '@anthropic-ai/claude-agent-sdk';
+import { claudeCliPath } from './cli-path.ts';
 import { KeplerError } from './errors.ts';
 import type { LlmRequest, LlmRunner } from './orchestrator.ts';
 
@@ -99,6 +100,8 @@ export function sdkInvoke(): ModelInvoke {
       const q = (pending = query({
         prompt,
         options: {
+          /* See cli-path.ts — the SDK's own lookup lands inside app.asar. */
+          pathToClaudeCodeExecutable: claudeCliPath(),
           model: MODEL,
           maxTurns,
           /* `tools` is the restriction ([] = no built-in tools at all);

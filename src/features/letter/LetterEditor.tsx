@@ -426,6 +426,16 @@ export function LetterEditor() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key || '').toLowerCase() === 'p') {
+        /* ⌘P belongs to the letter while it is open — everywhere else in the
+           app it opens the Profil, because a board is not something you print.
+           Chromium's own dialog would take the whole app with it, breadcrumb
+           and popover included, so the frame prints itself instead: the same
+           document, through the same @page rules, that printToPDF renders. */
+        e.preventDefault();
+        frameRef.current?.contentWindow?.print();
+        return;
+      }
       if (e.key !== 'Escape') return;
       /* Escape backs out one level: the confirmation, then the popover, and the
          page only once nothing is open and nothing would be lost. The store's
@@ -492,8 +502,13 @@ export function LetterEditor() {
             onLoad={onFrameLoad}
             /* Same origin so the selection and the document are reachable;
                no allow-scripts, so a template's own scripts stay inert while
-               it is being edited. */
-            sandbox="allow-same-origin"
+               it is being edited.
+
+               allow-modals is what lets ⌘P reach this frame at all — without it
+               the sandbox makes print() a silent no-op. It hands the template
+               nothing: with no allow-scripts there is no script in there to
+               call print or alert, so only the editor can open that dialog. */
+            sandbox="allow-same-origin allow-modals"
             style={{
               width: '100%',
               height: '100%',

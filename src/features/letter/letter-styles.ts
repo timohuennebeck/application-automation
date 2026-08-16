@@ -161,6 +161,27 @@ const LETTER_CSS = `
 @media (prefers-reduced-motion: reduce) {
   [${MARK_ATTR}='working'], [${TAG_ATTR}] b { animation: none; }
 }
+
+/* Printing means printing the letter, not the editing of it. Everything
+   serializeLetter takes off on the way to disk has to come off here too:
+   the marks and their pills live in this document, so without these rules ⌘P
+   would put amber highlights and "Kepler erstellt Optionen…" on paper.
+
+   Below the rules above, because [attr='v'] and [attr] carry the same
+   specificity and only their order decides. */
+@media print {
+  [${TAG_ATTR}] { display: none; }
+  [${MARK_ATTR}],
+  [${MARK_ATTR}='working'],
+  [${MARK_ATTR}='done'] {
+    background: none;
+    box-shadow: none;
+    /* The working state paints its text transparent to shimmer under it. */
+    color: inherit;
+    animation: none;
+  }
+  [${MARK_ATTR}='working'] * { color: inherit; }
+}
 `;
 
 /* The letter as the iframe should receive it: with the editor's stylesheet

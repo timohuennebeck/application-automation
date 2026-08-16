@@ -1346,7 +1346,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         e.preventDefault();
         set((s2) => ({ searchOpen: !s2.searchOpen, searchQ: '' }));
       } else if (k === 'p') {
-        // Chromium's own print dialog would otherwise open over the board.
+        /* Chromium's own print dialog would otherwise open over the board,
+           where there is nothing worth printing. The letter is the one place
+           where there is: it claims ⌘P for itself and prints the sheet — see
+           the ⌘P branch in LetterEditor, which also calls preventDefault. */
+        if (s.letterCardId) return;
         e.preventDefault();
         set((s2) => (s2.profileOpen ? CLOSED_PROFILE : { profileOpen: true }));
       } else if (k === 'c') {

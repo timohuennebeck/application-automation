@@ -1,5 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell } from 'electron';
-import { existsSync, rmSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { openDb } from './db/open.ts';
@@ -154,25 +154,59 @@ ipcMain.handle('documents:pick', async (_e, title: string, type: string) => {
   return picked;
 });
 
+/* One render per PDF at a time: two hidden Chromium prints must not race onto
+   the same file — the loser's cleanup would delete what the winner just wrote.
+   Later work queues behind the render already running. */
+const pdfRenders = new Map<string, Promise<void>>();
+
+function queuePdfRender(pdfPath: string, work: () => Promise<void>): Promise<void> {
+  const render = (pdfRenders.get(pdfPath) ?? Promise.resolve())
+    .catch(() => {}) /* the earlier caller already reported its own failure */
+    .then(work);
+  pdfRenders.set(pdfPath, render);
+  return render.finally(() => {
+    if (pdfRenders.get(pdfPath) === render) pdfRenders.delete(pdfPath);
+  });
+}
+
+/* Renders the PDF beside a document's HTML and reports rather than throws: the
+   HTML is already stored, and losing it because Chromium could not print would
+   be the wrong trade. Both write routes come through here, so neither can
+   render a document without the other waiting its turn — the letter editor
+   saves after every accepted replacement, so a second save landing mid-render
+   is ordinary use rather than a double-click. */
+async function exportDocumentPdf(
+  applicationId: string,
+  kind: DocumentKind,
+  filePath: string,
+): Promise<DocumentUpload> {
+  const { htmlAbs, pdfAbs, pdfRel } = documentPaths(root(), applicationId, kind);
+  try {
+    await queuePdfRender(pdfAbs, async () => {
+      try {
+        await renderPdf(htmlAbs, pdfAbs);
+      } catch (err) {
+        /* Whatever was exported before is no longer what the HTML says. The
+           cleanup runs inside the queued slot so it can never reach the file
+           the next save is already writing. */
+        rmSync(pdfAbs, { force: true });
+        throw err;
+      }
+    });
+    return { filePath, pdfPath: pdfRel, pdfError: null };
+  } catch (err) {
+    return { filePath, pdfPath: null, pdfError: String(err) };
+  }
+}
+
 /* Takes in the HTML and renders the PDF beside it in one step, so a row never
-   claims a source without the export that belongs to it. A failed export is
-   reported rather than thrown: the upload itself worked, and losing it because
-   Chromium could not print the file would be the wrong trade. */
+   claims a source without the export that belongs to it. */
 ipcMain.handle(
   'documents:copy',
   async (_e, applicationId: string, kind: DocumentKind, sourcePath: string): Promise<DocumentUpload> => {
     requirePicked(sourcePath);
-    const userData = root();
-    const filePath = copyDocument(userData, applicationId, kind, sourcePath);
-    const { htmlAbs, pdfAbs, pdfRel } = documentPaths(userData, applicationId, kind);
-    try {
-      await renderPdf(htmlAbs, pdfAbs);
-      return { filePath, pdfPath: pdfRel, pdfError: null };
-    } catch (err) {
-      // Whatever was exported from the previous version is no longer this one.
-      rmSync(pdfAbs, { force: true });
-      return { filePath, pdfPath: null, pdfError: String(err) };
-    }
+    const filePath = copyDocument(root(), applicationId, kind, sourcePath);
+    return exportDocumentPdf(applicationId, kind, filePath);
   },
 );
 
@@ -183,6 +217,31 @@ ipcMain.handle('documents:sizes', (_e, filePaths: string[]) => filePaths.map((p)
    string openPath gives on failure ('' means it opened). */
 ipcMain.handle('documents:open', (_e, filePath: string) =>
   shell.openPath(resolveDocumentPath(root(), filePath)),
+);
+
+/* The stored HTML itself, for the in-app letter editor. resolveDocumentPath is
+   what keeps this from being a read-any-file channel — the renderer hands over
+   a stored file_path, and anything that does not land inside the documents
+   folder is refused there. */
+ipcMain.handle('documents:read', (_e, filePath: string) =>
+  readFileSync(resolveDocumentPath(root(), filePath), 'utf8'),
+);
+
+/* Writes an edited document back over its own file and re-renders the PDF, the
+   same trade as documents:copy: a failed export keeps the HTML and reports the
+   reason rather than losing the edit. The database row is updated by the
+   renderer through db.documents.setFile, so both write routes stay one route. */
+ipcMain.handle(
+  'documents:save',
+  async (_e, applicationId: string, kind: DocumentKind, html: string): Promise<DocumentUpload> => {
+    const { htmlAbs, htmlRel } = documentPaths(root(), applicationId, kind);
+    /* No mkdir: a document being edited is one that was written before, so its
+       folder exists. Recreating it would resurrect a folder that was purged
+       with its application, which the orchestrator refuses for the same
+       reason — better to let ENOENT surface. */
+    writeFileSync(htmlAbs, html);
+    return exportDocumentPdf(applicationId, kind, htmlRel);
+  },
 );
 
 /* Comment attachments: any file type, several at once. Unlike documents there
@@ -258,11 +317,6 @@ ipcMain.handle('templates:open', (_e, kind: TemplateKind, label?: string) => {
   return filePath ? shell.openPath(filePath) : 'Noch keine Datei hochgeladen.';
 });
 
-/* One render per PDF at a time: a double-click must not race two hidden
-   Chromium prints onto the same file — the loser's cleanup would delete what
-   the winner just wrote. Later clicks queue behind the running render. */
-const pdfRenders = new Map<string, Promise<void>>();
-
 /* The PDF of one Fassung, rendered beside its HTML on first request and again
    whenever the HTML is newer than the last render — the profile has nothing
    else that would trigger the export. Returns '' on success, else the reason. */
@@ -270,21 +324,15 @@ ipcMain.handle('templates:openPdf', async (_e, kind: TemplateKind, label: string
   const htmlPath = templateVersionPath(root(), kind, label);
   if (!htmlPath) throw new Error('Noch keine Datei hochgeladen.');
   const pdfPath = templatePdfPath(htmlPath);
-  const render = (pdfRenders.get(pdfPath) ?? Promise.resolve())
-    .catch(() => {}) /* the earlier click already reported its own failure */
-    .then(async () => {
+  try {
+    await queuePdfRender(pdfPath, async () => {
       if (!existsSync(pdfPath) || statSync(pdfPath).mtimeMs < statSync(htmlPath).mtimeMs) {
         await renderPdf(htmlPath, pdfPath);
       }
     });
-  pdfRenders.set(pdfPath, render);
-  try {
-    await render;
   } catch (err) {
     rmSync(pdfPath, { force: true });
     throw new Error('Das PDF ließ sich nicht erzeugen: ' + String(err));
-  } finally {
-    if (pdfRenders.get(pdfPath) === render) pdfRenders.delete(pdfPath);
   }
   const openError = await shell.openPath(pdfPath);
   if (openError) throw new Error(openError);

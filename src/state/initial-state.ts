@@ -55,6 +55,7 @@ export const initialState = (): AppState => ({
   commentDraft: '',
   commentAttachments: [],
   openCardId: null,
+  letterCardId: null,
   cardMenu: null,
   cardContact: null,
   modalOpen: false,
@@ -105,6 +106,11 @@ export const emptyRound = (title: string): RoundView => ({
    goes away, so a dialog can never save onto the wrong application. */
 export const CLOSED_EDITORS = {
   dropdown: null,
+  /* The letter is an editor bound to one card like any other: opening a
+     different application while it is up would otherwise leave it on screen —
+     App renders it ahead of the detail view — showing the old card's
+     Anschreiben and saving onto it. */
+  letterCardId: null,
   editing: null,
   editDraft: '',
   roundEdit: null,

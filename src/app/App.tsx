@@ -3,6 +3,7 @@ import { CardContactPicker } from '../features/board/CardContactPicker';
 import { CardMenu } from '../features/board/CardMenu';
 import { NewApplicationModal } from '../features/create/NewApplicationModal';
 import { DetailView } from '../features/detail/DetailView';
+import { LetterEditor } from '../features/letter/LetterEditor';
 import { ProfileModal } from '../features/profile/ProfileModal';
 import { SearchPalette } from '../features/search/SearchPalette';
 import { TopBar } from '../features/shell/TopBar';
@@ -56,7 +57,7 @@ function Shell() {
       }}
     >
       <TopBar />
-      {st.openCardId ? <DetailView /> : <Board />}
+      {st.letterCardId ? <LetterEditor /> : st.openCardId ? <DetailView /> : <Board />}
       <CardMenu />
       <CardContactPicker />
       {st.searchOpen && <SearchPalette />}

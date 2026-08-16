@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { documentCaption } from './document-caption';
 import { useApp } from '../../state/store-context';
+import { DocumentKind } from '../../shared/enums';
 import { DocumentCard } from '../../ui/DocumentCard';
 import { DotsMenu, DownloadItem } from '../../ui/DotsMenu';
 import { MenuItem } from '../../ui/MenuItem';
@@ -53,47 +54,52 @@ export function DocumentsSection({ cardId }: { cardId: string }) {
     <Section sectionKey="docs" title="Bewerbungsunterlagen" count={docs.length} gap={10}>
       {error && <div style={ERROR_TEXT}>{error}</div>}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-        {docs.map((d) => (
-          <DocumentCard
-            key={d.id}
-            /* Red once there is a PDF to hand over, orange for HTML only. */
-            format={d.pdf_path ? DocFormat.PDF : DocFormat.HTML}
-            title={d.title}
-            caption={documentCaption(d)}
-            hint="Öffnen"
-            /* The HTML is what a plain click opens, so the document lands in
-               the browser the way a template does in the profile. The PDF
-               stays one menu entry away, where Vorschau gets it instead. */
-            onClick={() => open(d.file_path ?? d.pdf_path)}
-          >
-            <DotsMenu menuKey={'doc:' + d.id} onOpen={() => setError(null)}>
-              {/* Only the renditions that exist are named. */}
-              {d.file_path && (
-                <DownloadItem
-                  label="HTML herunterladen"
-                  bytes={sizes[d.file_path]}
-                  onClick={() => open(d.file_path)}
-                />
-              )}
-              {d.pdf_path && (
-                <DownloadItem
-                  label="PDF herunterladen"
-                  bytes={sizes[d.pdf_path]}
-                  onClick={() => open(d.pdf_path)}
-                />
-              )}
-              <MenuItem
-                style={{ whiteSpace: 'nowrap' }}
-                onClick={() => {
-                  set({ dropdown: null });
-                  replaceDocument(cardId, d.id, d.kind, d.title).then(setError);
-                }}
-              >
-                Ersetzen mit eigener Datei
-              </MenuItem>
-            </DotsMenu>
-          </DocumentCard>
-        ))}
+        {docs.map((d) => {
+          /* The Anschreiben opens in the app, where passages can be marked and
+             rewritten — but only if the HTML the editor works on is actually
+             there. Everything else lands in the browser the way a template does
+             in the profile; the PDF stays one menu entry away, where Vorschau
+             gets it instead. */
+          const editable = d.kind === DocumentKind.COVER_LETTER && !!d.file_path;
+          return (
+            <DocumentCard
+              key={d.id}
+              /* Red once there is a PDF to hand over, orange for HTML only. */
+              format={d.pdf_path ? DocFormat.PDF : DocFormat.HTML}
+              title={d.title}
+              caption={documentCaption(d)}
+              hint={editable ? 'Überarbeiten' : 'Öffnen'}
+              onClick={() => (editable ? set({ letterCardId: cardId }) : open(d.file_path ?? d.pdf_path))}
+            >
+              <DotsMenu menuKey={'doc:' + d.id} onOpen={() => setError(null)}>
+                {/* Only the renditions that exist are named. */}
+                {d.file_path && (
+                  <DownloadItem
+                    label="HTML herunterladen"
+                    bytes={sizes[d.file_path]}
+                    onClick={() => open(d.file_path)}
+                  />
+                )}
+                {d.pdf_path && (
+                  <DownloadItem
+                    label="PDF herunterladen"
+                    bytes={sizes[d.pdf_path]}
+                    onClick={() => open(d.pdf_path)}
+                  />
+                )}
+                <MenuItem
+                  style={{ whiteSpace: 'nowrap' }}
+                  onClick={() => {
+                    set({ dropdown: null });
+                    replaceDocument(cardId, d.id, d.kind, d.title).then(setError);
+                  }}
+                >
+                  Ersetzen mit eigener Datei
+                </MenuItem>
+              </DotsMenu>
+            </DocumentCard>
+          );
+        })}
       </div>
     </Section>
   );

@@ -357,6 +357,46 @@ export function StopGlyph() {
   );
 }
 
+/* The X that dismisses a floating surface. Same box and stroke as RegenGlyph,
+   which sits beside it in the letter popover's label row — the pair has to read
+   as one set of controls rather than two borrowed ones. */
+export function CloseGlyph() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" style={{ flexShrink: 0 }}>
+      <path
+        d="M4.8 4.8 L11.2 11.2 M11.2 4.8 L4.8 11.2"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+/* Counter-clockwise arrow: the way back for one passage. Drawn at its own
+   weight rather than through Outline — it sits inside a menu row next to type,
+   where the thinner stroke reads as a smudge. */
+export function UndoGlyph() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={12}
+      height={12}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2.2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      style={{ flexShrink: 0 }}
+    >
+      <path d="M3 8h11a5 5 0 0 1 0 10H8" />
+      <path d="m7 4-4 4 4 4" />
+    </svg>
+  );
+}
+
 export function RegenGlyph() {
   return (
     <svg width="14" height="14" viewBox="0 0 16 16" style={{ flexShrink: 0 }}>

@@ -2,11 +2,19 @@
    chip and salary line were pre-rendered strings in the sample data; now they
    are computed from rounds, follow-ups and facts at render time. */
 import { INTEREST, roundColumn, SortDir, SortKey, Urgency } from '../data/config';
-import { AgentRunStatus, Assignee, Interest, LinkKind, RoundState } from '../shared/enums';
+import { AgentRunStatus, Assignee, DocumentKind, Interest, LinkKind, RoundState } from '../shared/enums';
+import type { DocumentRow } from '../shared/db-types';
 import type { AgentRunView } from './db-view';
 import { MON_DE3, DOW_DE, dateToISO, dayDiff, todayISO } from '../lib/date';
 import { parseSalary } from '../lib/salary';
 import type { AppState } from './store-context';
+
+/* The card's Anschreiben — the one document the letter editor can open, and
+   the only one saveLetter may write over. Both sides read it through here so
+   they cannot disagree about which row they mean. */
+export function coverLetterFor(st: AppState, id: string): DocumentRow | undefined {
+  return (st.documentsByApp[id] || []).find((d) => d.kind === DocumentKind.COVER_LETTER);
+}
 
 /* The card's latest Kepler run, whatever state it ended in. */
 export function agentRunFor(st: AppState, id: string): AgentRunView | undefined {

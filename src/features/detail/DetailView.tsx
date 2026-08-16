@@ -6,6 +6,7 @@ import { useApp } from '../../state/store-context';
 import { MenuItem } from '../../ui/MenuItem';
 import { LinkChip } from '../../ui/MentionText';
 import { Popover, PopoverAnchor } from '../../ui/Popover';
+import { CRUMB_ROW } from '../../ui/styles';
 import { Avatar, DotsGlyph } from '../../ui/icons';
 import { FollowUpSection } from '../followup/FollowUpSection';
 import { InterviewEditModal } from '../interviews/InterviewEditModal';
@@ -145,9 +146,7 @@ export function DetailView() {
         background: 'var(--c-fbfaf7)',
       }}
     >
-      <div
-        style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '14px 22px 16px', flexShrink: 0 }}
-      >
+      <div style={CRUMB_ROW}>
         <div className="crumb" onClick={() => set({ openCardId: null })}>
           Bewerbungen
         </div>

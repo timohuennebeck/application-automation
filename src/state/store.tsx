@@ -6,10 +6,11 @@ import type { ReactNode } from 'react';
 import { STAGE_IDS, URL_FIELDS } from '../data/config';
 import { isHttpUrl } from '../lib/url';
 import { Assignee, Author, DocumentKind, FactKind, Interest, LinkKind, RoundState } from '../shared/enums';
-import type { ActivityRow, FollowupRow, PersonWithCompany } from '../shared/db-types';
+import type { ActivityRow, DocumentRow, FollowupRow, PersonWithCompany } from '../shared/db-types';
 import { indexSnapshot, roundInput, personView } from './db-view';
 import type { PersonView } from './db-view';
 import {
+  coverLetterFor,
   keplerHoldReason,
   keplerStartBlocked,
   peopleKeysForCard,
@@ -576,6 +577,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
           cardMenu: null,
           cardContact: null,
           openCardId: s.openCardId === id ? null : s.openCardId,
+          /* Its documents went with it, so the editor would render on a card
+             that no longer has an Anschreiben — a blank screen with no way
+             back but the breadcrumb. */
+          letterCardId: s.letterCardId === id ? null : s.letterCardId,
           dragId: null,
           overCol: null,
         };
@@ -928,6 +933,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [rememberRole, set],
   );
 
+  /* One document row, replaced by whatever the main process just wrote to
+     disk. Both write routes end here, so the in-memory view and the file
+     always describe the same thing. */
+  const putDocumentRow = useCallback(
+    (id: string, row: DocumentRow) =>
+      set((s) => ({
+        documentsByApp: {
+          ...s.documentsByApp,
+          [id]: (s.documentsByApp[id] || []).map((d) => (d.id === row.id ? row : d)),
+        },
+      })),
+    [set],
+  );
+
   /* Replaces a document with a file the user picks. Deliberately not
      optimistic: the row may only claim a file once the bytes are actually in
      userData, or the card would offer a download that cannot open. Returns the
@@ -942,16 +961,42 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const { filePath, pdfPath, pdfError } = await api.documents.copy(id, kind, source);
         /* A hand-picked file did not come from a Fassung. */
         const row = await api.db.documents.setFile(documentId, filePath, pdfPath, null);
-        set((s) => ({
-          documentsByApp: {
-            ...s.documentsByApp,
-            [id]: (s.documentsByApp[id] || []).map((d) => (d.id === documentId ? row : d)),
-          },
-        }));
+        putDocumentRow(id, row);
         logAct(id, 'hat „' + title + '“ ersetzt');
         /* The upload counts as done — the row and the history already say so.
            A failed export is reported on top of that, not instead of it. */
         return pdfError ? 'Die Datei wurde übernommen, das PDF ließ sich nicht erzeugen: ' + pdfError : null;
+      } catch (err) {
+        console.error('[documents]', err);
+        return String(err);
+      }
+    },
+    [logAct, set],
+  );
+
+  /* Saves the letter the editor has been working on. Same trade as an upload:
+     the HTML is what matters, so a PDF that would not render is reported on top
+     of a save that happened rather than instead of it.
+
+     `note` writes the activity entry. The editor saves after every accepted
+     replacement, so it asks for the entry once per session — five replacements
+     are one revision of the letter, not five. */
+  const saveLetter = useCallback(
+    async (id: string, html: string, note: boolean): Promise<string | null> => {
+      const api = window.desktop;
+      if (!api) return 'Ohne Desktop-Umgebung nicht möglich.';
+      const doc = coverLetterFor(stRef.current, id);
+      if (!doc) return 'Kein Anschreiben vorhanden.';
+      try {
+        const { filePath, pdfPath, pdfError } = await api.documents.save(id, DocumentKind.COVER_LETTER, html);
+        /* The Fassung it was generated from still describes where it came
+           from — editing a passage does not change that lineage. */
+        const row = await api.db.documents.setFile(doc.id, filePath, pdfPath, doc.template_label);
+        putDocumentRow(id, row);
+        if (note) logAct(id, 'hat das Anschreiben überarbeitet');
+        return pdfError
+          ? 'Das Anschreiben wurde gespeichert, das PDF ließ sich nicht erzeugen: ' + pdfError
+          : null;
       } catch (err) {
         console.error('[documents]', err);
         return String(err);
@@ -1278,7 +1323,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         else if (s.roundEdit) set({ roundEdit: null, roundDraft: null, roundPop: null });
         /* An open dropdown was already handled above, so only the edit is left. */
         else if (s.editing) set({ editing: null });
-        else set({ modalOpen: false, openCardId: null });
+        /* The letter runs its own Escape — it backs out of a marked passage
+           first and asks before dropping a rewrite still in the air. Falling
+           through here as well would clear the card underneath it, so leaving
+           the letter later would land on the board instead of the detail view
+           it was opened from. */
+        else if (!s.letterCardId) set({ modalOpen: false, openCardId: null });
         return;
       }
       if (!(e.metaKey || e.ctrlKey)) return;
@@ -1386,6 +1436,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       saveRound,
       writeField,
       replaceDocument,
+      saveLetter,
       setInterest,
       setAssignee,
       saveSummary,
@@ -1451,6 +1502,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       openStagedAttachment,
       openAttachment,
       replaceDocument,
+      saveLetter,
       setFollowupDue,
       setFollowupCompleted,
       saveEmailDraft,

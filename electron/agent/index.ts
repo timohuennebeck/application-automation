@@ -7,19 +7,27 @@ import type { BrowserWindow } from 'electron';
 import type { DatabaseSync } from 'node:sqlite';
 import type { Repo } from '../db/repo.ts';
 import { renderPdf } from '../pdf.ts';
-import type { AgentEvent } from '../../src/shared/agent.ts';
+import type { AgentEvent, VariantsRequest, VariantsResult } from '../../src/shared/agent.ts';
 import { createLlmRunner, sdkInvoke } from './llm.ts';
 import { runPipeline } from './orchestrator.ts';
 import { createRunStore } from './run-store.ts';
 import { fetchListingText } from './scrape.ts';
-import { createAgentService, type AgentService } from './service.ts';
+import { createAgentService } from './service.ts';
+import { createVariantsService } from './variants.ts';
+
+/* What the rest of the main process needs from Kepler once the channels are
+   wired: everything to drop when a card goes away. A run and the rewrites of an
+   open letter are separate lifetimes, so both have to be told. */
+export interface AgentTeardown {
+  abandon(applicationId: string): void;
+}
 
 export function registerAgentIpc(
   getWin: () => BrowserWindow | null,
   db: DatabaseSync,
   repo: Repo,
   userDataPath: string,
-): AgentService {
+): AgentTeardown {
   const runs = createRunStore(db);
   /* The app quit mid-run last time: settle those rows before the renderer
      loads its snapshot. */
@@ -54,9 +62,45 @@ export function registerAgentIpc(
       }),
   });
 
+  /* Its own runner: the rewrite is a single call outside the queue, and giving
+     it the pipeline's would tie its retry behaviour to a run it is not part of. */
+  const variants = createVariantsService({
+    repo,
+    runs,
+    userDataPath,
+    llm: createLlmRunner(sdkInvoke()),
+  });
+
   ipcMain.handle('agent:start', (_e, applicationId: string) => service.start(String(applicationId)));
   ipcMain.handle('agent:retry', (_e, applicationId: string) => service.retry(String(applicationId)));
   ipcMain.handle('agent:stop', (_e, applicationId: string) => service.stop(String(applicationId)));
+  ipcMain.handle('agent:variantsStop', (_e, applicationId: string, callId?: string) =>
+    variants.stop(String(applicationId), callId == null ? undefined : String(callId)),
+  );
+  ipcMain.handle('agent:variants', (_e, req: VariantsRequest): Promise<VariantsResult> => {
+    /* A malformed payload is answered, not thrown: the editor shows whatever
+       comes back in the header, and a rejected invoke would surface as the
+       renderer's own exception with nothing said about the passage. */
+    if (!req || typeof req !== 'object') {
+      return Promise.resolve({ ok: false, error: 'Ungültige Anfrage.' });
+    }
+    return variants.suggest({
+      applicationId: String(req.applicationId),
+      /* Names the call so the square beside that passage can stop it. */
+      callId: String(req.callId ?? ''),
+      passage: String(req.passage ?? ''),
+      letter: String(req.letter ?? ''),
+      instruction: req.instruction == null ? null : String(req.instruction),
+    });
+  });
 
-  return service;
+  return {
+    abandon(applicationId: string): void {
+      service.abandon(applicationId);
+      /* The card is gone, so nobody is waiting on its rewrites either — and
+         each one holds a CLI subprocess and one of the three slots until its
+         timeout runs out. */
+      variants.stop(applicationId);
+    },
+  };
 }

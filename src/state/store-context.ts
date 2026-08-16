@@ -137,6 +137,9 @@ export interface AppState {
   /* Files staged for the comment being written, sent with the next addComment. */
   commentAttachments: StagedAttachment[];
   openCardId: string | null;
+  /* The card whose Anschreiben is open in the letter editor, or null. Only the
+     cover letter is editable in place — the CV has no passages to re-roll. */
+  letterCardId: string | null;
   cardMenu: CardPointerState | null;
   /* The card whose contacts are being edited straight from the board. */
   cardContact: CardPointerState | null;
@@ -247,6 +250,9 @@ export interface AppStore {
     kind: DocumentKind,
     title: string,
   ) => Promise<string | null>;
+  /* Writes an edited Anschreiben back over its own file, re-renders the PDF and
+     points the row at both. Resolves to the reason it failed, or null. */
+  saveLetter: (id: string, html: string, note: boolean) => Promise<string | null>;
   setInterest: (id: string, interest: Interest) => void;
   /* Kepler is the only assignee; assigning it starts a run and moves the
      card from Interessiert to In Bearbeitung. */

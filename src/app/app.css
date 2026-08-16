@@ -177,6 +177,34 @@
   background: var(--c-e0ded8);
 }
 
+/* The instruction field in the letter's rewrite popover. The frame is the whole
+   of it: no ground of its own, and it holds still when the field takes focus —
+   the popover opens with the field already focused, so a border that changed on
+   focus would only ever be seen changing back. */
+.composer-field {
+  border: 1px solid var(--c-e6e3dc);
+  border-radius: 7px;
+}
+
+/* The round send button at the foot of a composer — the letter's rewrite
+   popover and the comment thread share it. Ground and hover are the pair
+   .btn-dark already uses, so the app's dark controls all react alike. */
+.send-circle {
+  background: var(--c-1b1a17);
+  cursor: pointer;
+}
+.send-circle:hover {
+  background: var(--c-33302a);
+}
+/* Nothing to send yet. The comment thread greys its button out and it stops
+   reacting; the letter's never takes this state, because an empty instruction
+   there is a valid one that means "try again". */
+.send-circle-off,
+.send-circle-off:hover {
+  background: var(--c-d6d3cb);
+  cursor: default;
+}
+
 /* Small icon buttons */
 .icon-btn {
   display: flex;

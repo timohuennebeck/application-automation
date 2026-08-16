@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { DB_CHANNELS } from './db/channels.ts';
-import type { AgentEvent, AgentStartResult } from '../src/shared/agent.ts';
+import type { AgentEvent, AgentStartResult, VariantsRequest, VariantsResult } from '../src/shared/agent.ts';
 import type { AttachmentInput, DbApi } from '../src/shared/db-types.ts';
 import type { DocumentUpload, ProfileDocumentInfo, TemplateVersion } from '../src/shared/domain.ts';
 import type { DocumentKind, TemplateKind } from '../src/shared/enums.ts';
@@ -40,6 +40,13 @@ const api = {
       ipcRenderer.invoke('documents:sizes', filePaths),
     /* Hands the file to the OS; resolves to '' on success, else the reason. */
     open: (filePath: string): Promise<string> => ipcRenderer.invoke('documents:open', filePath),
+    /* The stored HTML, for the letter editor. Rejects for a path outside the
+       documents folder or a file that is gone. */
+    read: (filePath: string): Promise<string> => ipcRenderer.invoke('documents:read', filePath),
+    /* Writes an edited document back and re-renders the PDF beside it. The
+       caller still has to store the paths through db.documents.setFile. */
+    save: (applicationId: string, kind: DocumentKind, html: string): Promise<DocumentUpload> =>
+      ipcRenderer.invoke('documents:save', applicationId, kind, html),
   },
   /* Files attached to comments. Picking only stages sources in the renderer;
      copy() puts the bytes into userData at send time and resolves to what
@@ -66,6 +73,15 @@ const api = {
     /* Halts the active run at its current step; retry resumes from there. */
     stop: (applicationId: string): Promise<AgentStartResult> =>
       ipcRenderer.invoke('agent:stop', applicationId),
+    /* Other ways to say one marked passage of a finished letter. Outside the
+       run queue — nothing is written, the suggestions just come back. */
+    variants: (req: VariantsRequest): Promise<VariantsResult> => ipcRenderer.invoke('agent:variants', req),
+    /* Without a callId every rewrite the card has in the air goes; with one,
+       just that passage. The editor uses both — the square beside a passage,
+       and the teardown when the letter closes, so nothing keeps running for an
+       answer nobody is waiting for. */
+    variantsStop: (applicationId: string, callId?: string): Promise<void> =>
+      ipcRenderer.invoke('agent:variantsStop', applicationId, callId),
     /* Subscribes to run/step updates; returns the unsubscribe. */
     onEvent: (cb: (e: AgentEvent) => void): (() => void) => {
       const handler = (_e: Electron.IpcRendererEvent, event: AgentEvent) => cb(event);

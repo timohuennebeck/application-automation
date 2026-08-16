@@ -191,6 +191,14 @@ describe('askPrompt', () => {
     expect(p).toContain('- Nachfassen — 20.08.2026');
   });
 
+  /* Kepler's own earlier replies sit in the thread; a stale one that named a
+     posting or a long-gone @tag must not become today's fact. */
+  it('rules the thread out as a source of facts', () => {
+    const p = askPrompt(ASK);
+    expect(p).toContain('keine Faktenquelle');
+    expect(p).toContain('empfiehl sie nicht');
+  });
+
   it('keeps documents and listing out of the call altogether', () => {
     const p = askPrompt(ASK);
     expect(p).not.toContain('<anschreiben>');

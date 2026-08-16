@@ -19,12 +19,14 @@ import {
   FactKind,
   LinkKind,
 } from '../../../src/shared/enums.ts';
-import { CONTACT_SCHEMA, DOCUMENT_SCHEMA, EXTRACTION_SCHEMA, CHECKS_SCHEMA } from '../schemas.ts';
+import { CONTACT_SCHEMA, FILL_SCHEMA, EXTRACTION_SCHEMA, CHECKS_SCHEMA } from '../schemas.ts';
 import type { AgentEvent } from '../../../src/shared/agent.ts';
 
 const NOW = new Date('2026-08-14T09:00:00.000Z');
-const CV_HTML = '<!doctype html><html><body>Lebenslauf für Helios</body></html>';
-const LETTER_HTML = '<!doctype html><html><body>Anschreiben für Helios</body></html>';
+/* Every Fassung carries a slot; what Kepler returns are the values for it. */
+const templateHtml = (slot: string) =>
+  `<!doctype html><html><body>${slot}-Vorlage für {{COMPANY_NAME}}</body></html>`;
+const FILLED = { fields: [{ key: 'COMPANY_NAME', value: 'Helios Energie' }] };
 
 const EXTRACTION = {
   role: 'Senior Designer',
@@ -62,11 +64,11 @@ afterEach(() => {
 });
 
 /* Writes one Fassung per slot and marks it as the one Kepler uses. */
-function uploadTemplates(slots: string[] = ['lebenslauf', 'anschreiben'], label = 'Standard') {
+function uploadTemplates(slots: string[] = ['lebenslauf', 'anschreiben'], label = 'Standard', html?: string) {
   for (const dir of slots) {
     const d = path.join(root, 'templates', dir, label);
     mkdirSync(d, { recursive: true });
-    writeFileSync(path.join(d, dir + '.html'), `<html><body>${dir}-Vorlage</body></html>`);
+    writeFileSync(path.join(d, dir + '.html'), html ?? templateHtml(dir));
     writeFileSync(path.join(root, 'templates', dir, '.selected'), label);
   }
 }
@@ -92,14 +94,12 @@ function createRun(appId: string) {
 /* An llm fake keyed by the request's schema — extraction, contact research,
    the two documents, and the validation pass. */
 function fakeLlm(overrides: Partial<Record<string, (req: LlmRequest<unknown>) => unknown>> = {}) {
-  let docCount = 0;
   const fn = vi.fn(async (req: LlmRequest<unknown>): Promise<unknown> => {
     const pick = () => {
       if (req.schema === EXTRACTION_SCHEMA) return overrides.extraction?.(req) ?? EXTRACTION;
       if (req.schema === CONTACT_SCHEMA) return overrides.contact?.(req) ?? { person: null };
-      if (req.schema === DOCUMENT_SCHEMA) {
-        if (overrides.document) return overrides.document(req);
-        return { html: docCount++ === 0 ? CV_HTML : LETTER_HTML };
+      if (req.schema === FILL_SCHEMA) {
+        return overrides.document?.(req) ?? FILLED;
       }
       if (req.schema === CHECKS_SCHEMA) return overrides.checks?.(req) ?? { issues: [] };
       throw new Error('unbekanntes Schema');
@@ -179,9 +179,13 @@ describe('runPipeline', () => {
     const cv = docs.find((doc) => doc.kind === DocumentKind.LEBENSLAUF)!;
     expect(cv.file_path).toBe(path.join('documents', appId, 'Timo_Huennebeck_Lebenslauf.html'));
     expect(cv.pdf_path).toBe(path.join('documents', appId, 'Timo_Huennebeck_Lebenslauf.pdf'));
-    expect(readFileSync(path.join(root, cv.file_path!), 'utf8')).toBe(CV_HTML);
+    expect(readFileSync(path.join(root, cv.file_path!), 'utf8')).toBe(
+      templateHtml('lebenslauf').replace('{{COMPANY_NAME}}', 'Helios Energie'),
+    );
     const letter = docs.find((doc) => doc.kind === DocumentKind.COVER_LETTER)!;
-    expect(readFileSync(path.join(root, letter.file_path!), 'utf8')).toBe(LETTER_HTML);
+    expect(readFileSync(path.join(root, letter.file_path!), 'utf8')).toBe(
+      templateHtml('anschreiben').replace('{{COMPANY_NAME}}', 'Helios Energie'),
+    );
     expect(cv.template_label).toBe('Standard');
     expect(letter.template_label).toBe('Standard');
 
@@ -194,6 +198,43 @@ describe('runPipeline', () => {
     /* The document steps carry the extracted company name once it is known. */
     const genCv = runs.stepsFor(runId).find((s) => s.key === AgentStepKey.GEN_CV)!;
     expect(genCv.label).toContain('Helios Energie');
+  });
+
+  it('fills the Fassung in code, so everything outside a slot survives byte for byte', async () => {
+    /* The bug this replaces: asked for the whole document back, the model
+       returned the base64 image with its middle silently missing. */
+    const base64 = 'iVBORw0KGgoAAAANSUhEUg' + 'A'.repeat(20_000);
+    const template =
+      `<!doctype html><html><body><img src="data:image/png;base64,${base64}">` +
+      `<h1>{{COMPANY_NAME}}</h1></body></html>`;
+    uploadTemplates(['lebenslauf'], 'Standard', template);
+    uploadTemplates(['anschreiben']);
+    const appId = createApp({ postingText: 'Wir suchen einen Senior Designer …' });
+
+    await runPipeline(appId, createRun(appId), deps());
+
+    const cv = repo
+      .load()
+      .documents.find((d) => d.application_id === appId && d.kind === DocumentKind.LEBENSLAUF)!;
+    const written = readFileSync(path.join(root, cv.file_path!), 'utf8');
+    expect(written).toBe(template.replace('{{COMPANY_NAME}}', 'Helios Energie'));
+    expect(written).toContain(base64);
+  });
+
+  it('fails the document step when a slot is left unanswered', async () => {
+    /* Shipping a PDF with a literal {{…}} in it is worse than a failed step
+       the retry icon offers to resume. */
+    uploadTemplates();
+    const appId = createApp({ postingText: 'Wir suchen einen Senior Designer …' });
+    const runId = createRun(appId);
+    const llm = fakeLlm({ document: () => ({ fields: [] }) });
+
+    await runPipeline(appId, runId, deps({ llm }));
+
+    const step = runs.stepsFor(runId).find((s) => s.key === AgentStepKey.GEN_CV)!;
+    expect(step.status).toBe(AgentStepStatus.ERROR);
+    expect(step.error).toContain('COMPANY_NAME');
+    expect(existsSync(path.join(root, 'documents', appId))).toBe(false);
   });
 
   it('feeds pasted text straight to the extraction when there is no URL', async () => {
@@ -437,7 +478,7 @@ describe('runPipeline', () => {
     const llm = fakeLlm({
       document: () => {
         repo.deleteApplication(appId);
-        return { html: CV_HTML };
+        return FILLED;
       },
     });
 

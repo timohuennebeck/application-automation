@@ -21,11 +21,18 @@ function withTimeout<T>(work: Promise<T>, ms: number, what: string): Promise<T> 
 
 /* Renders `htmlPath` and writes the result to `pdfPath`. The document is the
    user's own file, but it is still loaded as an ordinary web page would be:
-   no node integration, no preload, its own isolated context. */
+   no node integration, no preload, its own isolated context.
+
+   And no script. None of the other three flags stops a page from running its
+   own JavaScript, and this window loads a file:// document with the network
+   still reachable — a generated document carries model-written text at every
+   slot, so an <img onerror> that had talked its way in would run here, with
+   the finished CV in the DOM to send somewhere. Nothing a document needs in
+   order to be printed requires script. */
 export async function renderPdf(htmlPath: string, pdfPath: string): Promise<void> {
   const win = new BrowserWindow({
     show: false,
-    webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true },
+    webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true, javascript: false },
   });
   try {
     await withTimeout(win.loadURL(pathToFileURL(htmlPath).href), LOAD_TIMEOUT_MS, 'Das Laden der Vorlage');

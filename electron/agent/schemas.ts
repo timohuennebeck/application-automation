@@ -4,8 +4,13 @@
    never invents a Branche — the validators are the safety net for the rest,
    nulling anything outside a set rather than storing it. */
 import { FACT_OPTIONS } from '../../src/data/config.ts';
+import { sanitizeInline } from '../../src/lib/inline-html.ts';
 import { normalizeSalaryText } from '../../src/lib/salary.ts';
 import { isHttpUrl } from '../../src/lib/url.ts';
+
+/* How many ways to say a passage the rewrite step asks for. Fixed, because the
+   popover is built for three rows — a fourth would be generated and dropped. */
+export const VARIANT_COUNT = 3;
 
 /* ── Result types ─────────────────────────────────────────────────────── */
 
@@ -97,11 +102,28 @@ export const CONTACT_SCHEMA = {
   required: ['person'],
 } as const;
 
-export const DOCUMENT_SCHEMA = {
+/* The answered placeholder slots. A list of pairs rather than an object,
+   because the slot names come from whichever Fassung the user uploaded — a
+   schema with fixed properties could not describe them. */
+export const FILL_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  properties: { html: { type: 'string' } },
-  required: ['html'],
+  properties: {
+    fields: {
+      type: 'array',
+      /* Every Fassung that reaches this step has at least one slot, so an empty
+         array is never a valid answer — saying so lets the SDK reject it before
+         the validator has to. */
+      minItems: 1,
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: { key: { type: 'string' }, value: { type: 'string' } },
+        required: ['key', 'value'],
+      },
+    },
+  },
+  required: ['fields'],
 } as const;
 
 export const CHECKS_SCHEMA = {
@@ -109,6 +131,20 @@ export const CHECKS_SCHEMA = {
   additionalProperties: false,
   properties: { issues: { type: 'array', items: { type: 'string' } } },
   required: ['issues'],
+} as const;
+
+export const VARIANTS_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    variants: {
+      type: 'array',
+      minItems: VARIANT_COUNT,
+      maxItems: VARIANT_COUNT,
+      items: { type: 'string' },
+    },
+  },
+  required: ['variants'],
 } as const;
 
 /* ── Validators ───────────────────────────────────────────────────────── */
@@ -184,19 +220,47 @@ export function validateContact(x: unknown): ExtractedPerson | null {
   return person(r.person);
 }
 
-/* The generated document must be a whole page — the file becomes the stored
-   HTML source and the PDF is printed straight from it. */
-export function validateDocumentHtml(x: unknown): string {
-  const r = asRecord(x, 'Dokument');
-  const html = typeof r.html === 'string' ? r.html.trim() : '';
-  if (!/^<!doctype html/i.test(html) && !/^<html[\s>]/i.test(html)) {
-    throw new Error('Dokument: kein vollständiges HTML erhalten');
+/* The slots the model answered, as a lookup for fillPlaceholders. An empty
+   value is an answer, not an omission: the letter glossary has optional slots
+   that are meant to vanish, and dropping them here would make them look
+   unanswered — which is what the caller fails the step over.
+
+   Each value is escaped down to the inline tags a document may carry, the same
+   as a rewrite suggestion and for the same reason: it is substituted into the
+   user's own document, which is then loaded by a real browser window to be
+   printed. Unescaped, a value carrying markup — whether the listing talked the
+   model into it or it simply answered "R&D" — would rewrite the template
+   around the slot. This is exactly what the prompt already asks for: OUTPUT_RULES
+   permits a value the emphasis the Fassung uses at that spot, nothing more. */
+export function validateFill(x: unknown): Record<string, string> {
+  const r = asRecord(x, 'Platzhalter');
+  if (!Array.isArray(r.fields)) throw new Error('Platzhalter: keine Werte erhalten');
+  const values: Record<string, string> = {};
+  for (const entry of r.fields) {
+    if (typeof entry !== 'object' || entry === null) continue;
+    const { key, value } = entry as Record<string, unknown>;
+    const name = text(key);
+    if (!name) continue;
+    values[name] = sanitizeInline(typeof value === 'string' ? value : '');
   }
-  return html;
+  return values;
 }
 
 export function validateChecks(x: unknown): string[] {
   const r = asRecord(x, 'Prüfung');
   if (!Array.isArray(r.issues)) return [];
   return r.issues.map(text).filter((s): s is string => s !== null);
+}
+
+/* The rewrite suggestions. Short of the full count the answer is rejected so
+   the runner asks again — a popover with two rows where three were promised is
+   worse than one more call. Each one is escaped down to the inline tags a
+   letter may carry: it is about to be written into the user's own document. */
+export function validateVariants(x: unknown): string[] {
+  const r = asRecord(x, 'Vorschläge');
+  const list = Array.isArray(r.variants) ? r.variants.map(text).filter((s): s is string => s !== null) : [];
+  if (list.length < VARIANT_COUNT) {
+    throw new Error(`Vorschläge: ${VARIANT_COUNT} erwartet, ${list.length} erhalten`);
+  }
+  return list.slice(0, VARIANT_COUNT).map(sanitizeInline);
 }

@@ -6,7 +6,7 @@
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import type { Repo } from '../db/repo.ts';
-import { documentFileName, documentPaths, selectedTemplatePath } from '../files.ts';
+import { documentPaths, readSelectedTemplate } from '../files.ts';
 import type { AgentEvent } from '../../src/shared/agent.ts';
 import type { AgentStepRow, ApplicationRow, CompanyRow } from '../../src/shared/db-types.ts';
 import {
@@ -22,6 +22,7 @@ import {
 } from '../../src/shared/enums.ts';
 import { INTERRUPTED_HEADLINE } from '../../src/shared/agent.ts';
 import { KeplerError, userMessage } from './errors.ts';
+import { fillPlaceholders, findPlaceholders } from './fill.ts';
 import { STOP_ERROR, stepLabel, type LabelCtx } from './labels.ts';
 import {
   checksPrompt,
@@ -35,12 +36,12 @@ import type { RunStore } from './run-store.ts';
 import {
   CHECKS_SCHEMA,
   CONTACT_SCHEMA,
-  DOCUMENT_SCHEMA,
   EXTRACTION_SCHEMA,
+  FILL_SCHEMA,
   validateChecks,
   validateContact,
-  validateDocumentHtml,
   validateExtraction,
+  validateFill,
   type ExtractedPerson,
   type Extraction,
 } from './schemas.ts';
@@ -73,9 +74,11 @@ export interface PipelineDeps {
 
 const SINGLE_CALL_TIMEOUT = 120_000;
 const RESEARCH_TIMEOUT = 300_000;
-/* Rewriting a whole HTML template is the longest call by far — a real CV
-   template runs tens of kilobytes in and out. */
-const DOCUMENT_TIMEOUT = 360_000;
+/* The document steps answer with a Fassung's placeholder values. Both the
+   question and the answer are small now — the Fassung goes in as its text
+   rather than its markup — but the values are the most considered writing
+   Kepler does: the letter's requirement matrix is worked out here. */
+const DOCUMENT_TIMEOUT = 180_000;
 
 /* The application was deleted mid-run: its run rows cascaded away with it, so
    there is nothing left to fail — the pipeline just stops. */
@@ -243,17 +246,24 @@ export async function runPipeline(applicationId: string, runId: number, deps: Pi
     /* ── Generate both documents ──────────────────────────────────────── */
     /* The prompt input plus the label of the Fassung it was read from — the
        label is stamped on the generated document, never shown to the model. */
-    const docInput = (kind: TemplateKind): { input: DocumentInput; label: string } => {
+    const docInput = (kind: TemplateKind): { input: DocumentInput; templateLabel: string } => {
       const { html, label } = readTemplate(deps.userDataPath, kind);
       return {
-        label,
+        templateLabel: label,
         input: {
           template: html,
           listing,
           extraction: needExtraction(),
           profileFacts: repo.load().profileFacts.map((f) => f.text),
           contacts: linkedContacts(repo, applicationId),
-          cv: kind === TemplateKind.ANSCHREIBEN ? cvTemplateText(deps.userDataPath) : null,
+          /* The Lebenslauf Fassung as the letter's source of facts about the
+             applicant. Null when none is uploaded — the letter step then works
+             from the profile alone rather than failing for a slot it does not
+             generate. */
+          cv:
+            kind === TemplateKind.ANSCHREIBEN
+              ? (readSelectedTemplate(deps.userDataPath, TemplateKind.LEBENSLAUF)?.html ?? null)
+              : null,
           company: company.name,
           role: app.role,
         },
@@ -263,22 +273,22 @@ export async function runPipeline(applicationId: string, runId: number, deps: Pi
     let cvHtml: string | null = null;
     if (pending(AgentStepKey.GEN_CV)) {
       start(AgentStepKey.GEN_CV);
-      const { input, label } = docInput(TemplateKind.LEBENSLAUF);
-      cvHtml = await generateDocument(deps, applicationId, DocumentKind.LEBENSLAUF, cvPrompt(input), label);
+      cvHtml = await generateDocument(deps, applicationId, {
+        kind: DocumentKind.LEBENSLAUF,
+        buildPrompt: cvPrompt,
+        ...docInput(TemplateKind.LEBENSLAUF),
+      });
       done(AgentStepKey.GEN_CV, true);
     }
 
     let letterHtml: string | null = null;
     if (pending(AgentStepKey.GEN_LETTER)) {
       start(AgentStepKey.GEN_LETTER);
-      const { input, label } = docInput(TemplateKind.ANSCHREIBEN);
-      letterHtml = await generateDocument(
-        deps,
-        applicationId,
-        DocumentKind.COVER_LETTER,
-        letterPrompt(input),
-        label,
-      );
+      letterHtml = await generateDocument(deps, applicationId, {
+        kind: DocumentKind.COVER_LETTER,
+        buildPrompt: letterPrompt,
+        ...docInput(TemplateKind.ANSCHREIBEN),
+      });
       done(AgentStepKey.GEN_LETTER, true);
     }
 
@@ -390,14 +400,6 @@ function linkedContacts(repo: Repo, applicationId: string): string[] {
     .map((p) => (p.role ? `${p.name} (${p.role})` : p.name));
 }
 
-/* The Lebenslauf Fassung as the letter's source of facts about the applicant.
-   Is null when none is uploaded — the letter step then works from the profile
-   alone rather than failing for a slot it does not generate. */
-function cvTemplateText(userDataPath: string): string | null {
-  const selected = selectedTemplatePath(userDataPath, TemplateKind.LEBENSLAUF);
-  return selected ? readFileSync(selected.path, 'utf8') : null;
-}
-
 /* On resume, everything the extraction wrote is read back from where it
    landed. People links are live rows rather than extraction output, so the
    list stays empty here — the contact step researches when it needs one. */
@@ -436,29 +438,50 @@ function readGeneratedHtml(userDataPath: string, applicationId: string, kind: Do
 /* The selected Fassung of a slot: its markup and the label the generated
    document is stamped with. */
 function readTemplate(userDataPath: string, kind: TemplateKind): { html: string; label: string } {
-  const selected = selectedTemplatePath(userDataPath, kind);
+  const selected = readSelectedTemplate(userDataPath, kind);
   if (!selected) {
     throw new KeplerError(
       `Keine ${TEMPLATE_TITLES[kind]}-Vorlage hochgeladen. Bitte im Profil (⌘P) eine HTML-Vorlage hinterlegen.`,
     );
   }
-  return { html: readFileSync(selected.path, 'utf8'), label: selected.label };
+  return selected;
 }
 
-/* Asks for the document, writes the HTML into the application's folder and
-   renders the PDF beside it. A failed export keeps the HTML — losing the
-   document because Chromium could not print it would be the wrong trade. */
+interface DocumentJob {
+  kind: DocumentKind;
+  /* The prompt is built here rather than handed in, so the Fassung the model is
+     asked about and the one fillPlaceholders writes into cannot drift apart —
+     everything outside a placeholder is copied from `input.template` rather
+     than reproduced by the model, since a template carries tens of kilobytes of
+     base64 and asking for it back returned it truncated. */
+  buildPrompt: (input: DocumentInput) => string;
+  input: DocumentInput;
+  templateLabel: string;
+}
+
+/* Asks for the placeholder values, fills them into the Fassung, writes the
+   HTML into the application's folder and renders the PDF beside it. A failed
+   export keeps the HTML — losing the document because Chromium could not print
+   it would be the wrong trade. */
 async function generateDocument(
   deps: PipelineDeps,
   applicationId: string,
-  kind: DocumentKind,
-  prompt: string,
-  templateLabel: string,
+  { kind, buildPrompt, input, templateLabel }: DocumentJob,
 ): Promise<string> {
-  const html = await deps.llm({
-    prompt,
-    schema: DOCUMENT_SCHEMA as unknown as Record<string, unknown>,
-    validate: validateDocumentHtml,
+  const template = input.template;
+  const values = await deps.llm({
+    prompt: buildPrompt(input),
+    schema: FILL_SCHEMA,
+    /* An answer that skipped half the slots is a bad answer, not a failed
+       step: complaining here rather than after the fill is what puts it in
+       front of the runner, which asks once more with the reason attached. The
+       `missing` check below stays as the backstop for whatever comes back. */
+    validate: (x) => {
+      const values = validateFill(x);
+      const unanswered = findPlaceholders(template).filter((name) => values[name] === undefined);
+      if (unanswered.length) throw new Error(`Platzhalter ohne Wert: ${unanswered.join(', ')}`);
+      return values;
+    },
     timeoutMs: DOCUMENT_TIMEOUT,
     signal: deps.signal,
   });
@@ -467,7 +490,16 @@ async function generateDocument(
      writing now would recreate a folder nothing ever cleans again. */
   if (!deps.repo.getApplicationWithCompany(applicationId)) throw new Deleted();
 
-  const { htmlAbs, pdfAbs, pdfRel } = documentPaths(deps.userDataPath, applicationId, kind);
+  const { html, missing } = fillPlaceholders(template, values);
+  /* A document that still shows {{…}} is worse than a failed step: the run
+     would report success and the user would send it out. */
+  if (missing.length) {
+    throw new KeplerError(
+      `Kepler hat diese Platzhalter der Vorlage nicht gefüllt: ${missing.join(', ')}. Bitte den Schritt erneut starten.`,
+    );
+  }
+
+  const { htmlAbs, htmlRel, pdfAbs, pdfRel } = documentPaths(deps.userDataPath, applicationId, kind);
   mkdirSync(path.dirname(htmlAbs), { recursive: true });
   writeFileSync(htmlAbs, html);
   let storedPdf: string | null = pdfRel;
@@ -487,12 +519,7 @@ async function generateDocument(
     .load()
     .documents.find((doc) => doc.application_id === applicationId && doc.kind === kind);
   if (row) {
-    deps.repo.setDocumentFile(
-      row.id,
-      path.join('documents', applicationId, documentFileName(kind, 'html')),
-      storedPdf,
-      templateLabel,
-    );
+    deps.repo.setDocumentFile(row.id, htmlRel, storedPdf, templateLabel);
   } else {
     /* Both document rows are inserted at application creation, so this is a
        guard rather than a path — but silently orphaning the files it just

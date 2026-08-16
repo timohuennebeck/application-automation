@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { validateContact, validateDocumentHtml, validateExtraction, validateChecks } from '../schemas.ts';
+import {
+  validateContact,
+  validateFill,
+  validateExtraction,
+  validateChecks,
+  validateVariants,
+} from '../schemas.ts';
 
 const FULL = {
   role: 'Senior Designer',
@@ -58,15 +64,72 @@ describe('validateContact', () => {
   });
 });
 
-describe('validateDocumentHtml', () => {
-  it('accepts a full html document', () => {
-    const html = '<!doctype html><html><body>CV</body></html>';
-    expect(validateDocumentHtml({ html })).toBe(html);
+describe('validateFill', () => {
+  it('turns the answered slots into a lookup', () => {
+    expect(
+      validateFill({
+        fields: [
+          { key: 'SALUTATION', value: 'Sehr geehrte Frau Weber' },
+          { key: 'JOB_REFERENCE_OPTIONAL', value: '' },
+        ],
+      }),
+    ).toEqual({ SALUTATION: 'Sehr geehrte Frau Weber', JOB_REFERENCE_OPTIONAL: '' });
   });
 
-  it('rejects fragments that are not a document', () => {
-    expect(() => validateDocumentHtml({ html: 'Hier ist der Lebenslauf: …' })).toThrow();
-    expect(() => validateDocumentHtml({})).toThrow();
+  it('keeps an empty answer distinct from a missing one', () => {
+    /* An optional slot answered with '' is filled and must vanish from the
+       document; dropping it here would make it look unanswered instead. */
+    expect(validateFill({ fields: [{ key: 'A', value: '' }] })).toEqual({ A: '' });
+  });
+
+  /* A value is substituted into the user's own document, which is then loaded
+     by a real browser window to be printed. The listing rides in untrusted, so
+     the answer does too. */
+  it('escapes a value down to the emphasis a Fassung uses', () => {
+    expect(
+      validateFill({
+        fields: [
+          { key: 'HOOK', value: '<img src=x onerror="fetch(\'https://evil\')">' },
+          { key: 'TEAM', value: 'Teams <10 Personen bei R&D' },
+          { key: 'PROOF', value: 'von <strong>neun auf zwei</strong> Tage' },
+        ],
+      }),
+    ).toEqual({
+      HOOK: '&lt;img src=x onerror="fetch(\'https://evil\')"&gt;',
+      TEAM: 'Teams &lt;10 Personen bei R&amp;D',
+      /* What OUTPUT_RULES actually asks a value to carry survives. */
+      PROOF: 'von <strong>neun auf zwei</strong> Tage',
+    });
+  });
+
+  it('lets the last answer win when the model names a slot twice', () => {
+    /* Not a rule worth enforcing — but worth pinning, since it decides what
+       goes into the document. */
+    expect(
+      validateFill({
+        fields: [
+          { key: 'A', value: 'erst' },
+          { key: 'A', value: 'dann' },
+        ],
+      }),
+    ).toEqual({ A: 'dann' });
+  });
+
+  it('drops entries without a usable key', () => {
+    expect(
+      validateFill({
+        fields: [
+          { key: '', value: 'x' },
+          { key: 'A', value: 'eins' },
+        ],
+      }),
+    ).toEqual({
+      A: 'eins',
+    });
+  });
+
+  it('rejects an answer that carries no fields at all', () => {
+    expect(() => validateFill({})).toThrow();
   });
 });
 
@@ -121,5 +184,36 @@ describe('company homepage', () => {
   it('drops a homepage that is not a full web address', () => {
     const ex = validateExtraction({ ...FULL, company: { ...FULL.company, homepage: 'helios.de' } });
     expect(ex.company.homepage).toBeNull();
+  });
+});
+
+describe('rewrite suggestions', () => {
+  it('hands back exactly the three the popover has rows for', () => {
+    const variants = validateVariants({ variants: ['eins', 'zwei', 'drei', 'vier'] });
+    expect(variants).toEqual(['eins', 'zwei', 'drei']);
+  });
+
+  it('rejects a short answer so the runner asks again', () => {
+    /* Two rows where three were promised is worse than one more call. */
+    expect(() => validateVariants({ variants: ['eins', 'zwei'] })).toThrow(/3 erwartet, 2 erhalten/);
+    expect(() => validateVariants({ variants: [] })).toThrow();
+    expect(() => validateVariants({})).toThrow();
+  });
+
+  it('does not count blanks towards the three', () => {
+    expect(() => validateVariants({ variants: ['eins', '   ', 'drei'] })).toThrow();
+  });
+
+  it('keeps the emphasis a letter may carry and escapes the rest', () => {
+    const [emphasis, script, attribute] = validateVariants({
+      variants: [
+        'von <strong>neun auf zwei</strong> Tage',
+        'harmlos <script>alert(1)</script>',
+        '<strong onmouseover="steal()">x</strong>',
+      ],
+    });
+    expect(emphasis).toBe('von <strong>neun auf zwei</strong> Tage');
+    expect(script).not.toMatch(/<script/i);
+    expect(attribute).not.toMatch(/onmouseover="steal\(\)"[^&]*>/);
   });
 });

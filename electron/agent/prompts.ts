@@ -2,6 +2,7 @@
    (<anzeige>, <vorlage>, <profil>, <kontakte>) so listing text can never read as
    instructions; the output shape is enforced separately by the JSON Schemas
    in schemas.ts. */
+import { findPlaceholders } from './fill.ts';
 import type { Extraction } from './schemas.ts';
 
 /* Listings are pages, not books — everything past this is boilerplate, and
@@ -11,11 +12,27 @@ const MAX_LISTING = 30_000;
 /* Embedded content may not close the tag it is wrapped in — a listing that
    contains a literal </anzeige> would otherwise break out of its block. */
 function sealed(text: string): string {
-  return text.replace(/<\/(anzeige|vorlage|profil|kontakte|lebenslauf)>/gi, '');
+  return text.replace(
+    /<\/(anzeige|vorlage|platzhalter|profil|kontakte|lebenslauf|brief|stelle|hinweis)>/gi,
+    '',
+  );
 }
 
 function clipListing(text: string): string {
   return sealed(text.length > MAX_LISTING ? text.slice(0, MAX_LISTING) : text);
+}
+
+/* Every list in these prompts takes the same shape: one bullet per item, or a
+   German stand-in when there is nothing — an empty block reads as an omission
+   the model then tries to fill. */
+function bullets(items: string[], empty: string): string {
+  return sealed(items.length ? items.map((item) => '- ' + item).join('\n') : empty);
+}
+
+/* The applicant's facts as the Fassung states them — its text, never its
+   markup. Both document prompts and the rewrite ask for exactly this. */
+function cvBlock(cv: string | null): string {
+  return cv ? sealed(documentText(cv)) : '(kein Lebenslauf hinterlegt)';
 }
 
 export function extractionPrompt(listing: string): string {
@@ -66,28 +83,53 @@ export interface DocumentInput {
   role: string;
 }
 
+/* What the model may answer, and in what shape. Kepler returns the values;
+   the document itself is assembled by fillPlaceholders, so nothing outside a
+   slot ever passes through a language model. */
+const OUTPUT_RULES = `- Antworte ausschließlich mit den Werten der Platzhalter: je Platzhalter ein Eintrag in fields, key ist sein Name ohne geschweifte Klammern, value der einzusetzende Text. Gib niemals das Dokument oder HTML des Gerüsts zurück.
+- Jeder Platzhalter aus <platzhalter> braucht einen Eintrag. Bleibt für einen optionalen Platzhalter nichts, ist sein value "" — damit verschwindet er aus dem Dokument.
+- In value steht nur der Text für diese eine Stelle, höchstens mit den Auszeichnungen, die die Vorlage dort ohnehin verwendet (z. B. <strong>…</strong>).`;
+
+/* The Fassung goes in as what it SAYS, with its slots in place: the model needs
+   to see where a slot sits and how long the text beside it runs, not the
+   scaffolding. It is also most of the input saved: a real letter shrinks from
+   76 KB to about 1 KB once stylesheet and base64 are gone. */
 const documentContext = (input: DocumentInput) => `<anzeige>
 ${clipListing(input.listing)}
 </anzeige>
 
 <vorlage>
-${sealed(input.template)}
+${sealed(documentText(input.template))}
 </vorlage>
 
+<platzhalter>
+${bullets(findPlaceholders(input.template), '(keine)')}
+</platzhalter>
+
 <profil>
-${sealed(input.profileFacts.length ? input.profileFacts.map((f) => '- ' + f).join('\n') : '(keine Angaben)')}
+${bullets(input.profileFacts, '(keine Angaben)')}
 </profil>`;
 
+/* The CV slots. A Lebenslauf is a record, not a sales document — the tailoring
+   belongs in the letter, which has a whole requirement matrix for it. So the
+   Fassung stays as written and only the line under the name is matched against
+   the advertised role. Reordering a skills list would not pay: an ATS matches
+   on presence, not position, and a human takes the line in at a glance. */
+const CV_GLOSSARY = `- {{CANDIDATE_HEADER_ROLE}}: Unterzeile unter dem Namen (z. B. "Senior Frontend Developer · React, Next.js, Expo"). Die Berufsbezeichnung bleibt die tatsächliche des Bewerbers — gewichtet wird nur, welche seiner Technologien genannt werden und in welcher Reihenfolge, passend zur ausgeschriebenen Rolle. Nur Technologien, die der Lebenslauf ohnehin führt.`;
+
 export function cvPrompt(input: DocumentInput): string {
-  return `Du bist Kepler, der Assistent einer Bewerbungs-App. Erstelle aus der hochgeladenen Lebenslauf-Vorlage einen auf diese Stelle zugeschnittenen Lebenslauf: "${input.role}" bei ${input.company}.
+  return `Du bist Kepler, der Assistent einer Bewerbungs-App. Die hochgeladene Lebenslauf-Vorlage ist ein fertiges Dokument. Schneide sie auf diese Stelle zu, indem du ihre Platzhalter füllst: "${input.role}" bei ${input.company}.
 
 Regeln:
-- Übernimm Layout, Stile und Struktur der Vorlage unverändert; passe nur Inhalte an.
-- Alle Fakten (Stationen, Daten, Abschlüsse, Kontaktdaten) kommen aus der Vorlage — erfinde keine Erfahrung dazu.
-- Schärfe Formulierungen und Reihenfolge auf die Anforderungen der Anzeige; relevante Fähigkeiten nach vorn.
-- Die Profil-Angaben unten dürfen einfließen, wo sie passen.
+${OUTPUT_RULES}
+- Alle Fakten kommen aus der Vorlage; die Profil-Angaben unten dürfen ergänzen, wo sie passen. Erfinde nichts — keine Station, keine Zahl, und vor allem keine Technologie, die nicht im Lebenslauf steht. Fordert die Anzeige etwas, das der Bewerber nicht kann, bleibt es draußen.
+- Zahlen werden wörtlich übernommen, samt ihrer Einschränkungen: aus "über 12.000" wird nicht "12.000", aus "bis zu 280 €" nicht "280 €".
+- Halte jeden Wert etwa so lang wie der Text in der Vorlage (höchstens rund 10 % Abweichung). Das Layout ist auf eine feste Seitenzahl gerechnet; eine längere Zeile bricht um und verschiebt alles.
 - Sprache: die Sprache der Vorlage.
-- html ist das komplette Dokument, beginnend mit <!doctype html>.
+- Platzhalter, die im Verzeichnis fehlen, füllst du sinngemäß nach ihrem Namen.
+
+Verzeichnis der Platzhalter:
+${CV_GLOSSARY}
 
 ${documentContext(input)}`;
 }
@@ -131,14 +173,12 @@ Tonalität: Engineering-to-Engineering auf Augenhöhe — selbstbewusst, lösung
 Verboten sind passive Bewerbungsfloskeln: kein "hiermit bewerbe ich mich", kein "mit großem Interesse", kein "hoffe ich auf eine Chance".
 
 Regeln:
-- Verändere weder CSS noch HTML-Struktur noch Skripte der Vorlage; fülle nur die Platzhalter in doppelten geschweiften Klammern ({{...}}).
-- Fülle jeden Platzhalter nach dem Verzeichnis unten. Bleibt für einen optionalen Platzhalter nichts, entfällt er ersatzlos — samt seiner Zeile, wenn sie sonst leer wäre. Kein Platzhalter bleibt im Ergebnis stehen.
-- Platzhalter, die im Verzeichnis fehlen, füllst du sinngemäß nach ihrem Namen.
+${OUTPUT_RULES}
+- Fülle jeden Platzhalter nach dem Verzeichnis unten. Platzhalter, die im Verzeichnis fehlen, füllst du sinngemäß nach ihrem Namen.
 - Alle Fakten über den Bewerber kommen aus <lebenslauf> (Stationen, Projekte, Stack, Sprachen, Zertifikate) und <profil> (ergänzende Angaben, die der Lebenslauf nicht hat — sie gelten als verbindlich); die Konditionen aus <konditionen>; alles über die Stelle und das Unternehmen aus <anzeige> und <kontakte>. Erfinde nichts — keine Zahlen, keine Adressen, keine Namen.
 - Wähle aus dem Lebenslauf die Belege, die zur Anzeige passen — Ergebnis vor Tätigkeit, konkret vor allgemein.
 - Beziehe dich konkret auf die Stelle und das Unternehmen; kein generischer Text.
 - Perfekte deutsche Grammatik und Interpunktion; Sprache des Briefes ist die Sprache der Vorlage.
-- html ist das komplette Dokument, beginnend mit <!doctype html>.
 
 Verzeichnis der Platzhalter:
 ${PLACEHOLDER_GLOSSARY}
@@ -148,14 +188,83 @@ ${TERMS}
 </konditionen>
 
 <lebenslauf>
-${input.cv ? sealed(documentText(input.cv)) : '(kein Lebenslauf hinterlegt)'}
+${cvBlock(input.cv)}
 </lebenslauf>
 
 <kontakte>
-${sealed(input.contacts.length ? input.contacts.map((c) => '- ' + c).join('\n') : '(keine bekannt)')}
+${bullets(input.contacts, '(keine bekannt)')}
 </kontakte>
 
 ${documentContext(input)}`;
+}
+
+/* One marked passage of a finished letter, and what is needed to say it
+   differently. The letter arrives as text from the renderer rather than being
+   read off disk: what the user marked is what they are looking at, which may
+   already carry replacements they have not saved yet. */
+export interface VariantsInput {
+  /* The whole letter as plain text, so the alternatives fit their surroundings
+     — the passage alone would lose the sentence it sits in. */
+  letter: string;
+  /* The passage as it currently stands, the thing being replaced. */
+  passage: string;
+  /* What the user typed into the composer, or null when they just want another
+     take on it. */
+  instruction: string | null;
+  listing: string;
+  profileFacts: string[];
+  cv: string | null;
+  company: string;
+  role: string;
+  count: number;
+}
+
+/* The letter is long and the passage is short, so the letter is clipped from
+   the front — the marked passage is quoted separately anyway. */
+const MAX_LETTER = 12_000;
+
+export function variantsPrompt(input: VariantsInput): string {
+  return `Du bist Kepler, der Assistent einer Bewerbungs-App. Im fertigen Anschreiben für "${input.role}" bei ${input.company} hat der Bewerber eine Stelle markiert, die ihm nicht gefällt. Schreibe genau ${input.count} Alternativen dafür.
+
+Regeln:
+- Jede Alternative ersetzt den Inhalt von <stelle> eins zu eins. Sie muss sich nahtlos in den Satz einfügen, in dem die Stelle laut <brief> steht: gleiche Zeitform, gleiche Perspektive, passende Groß- oder Kleinschreibung am Anfang. Endet <stelle> ohne Satzzeichen, endet auch deine Alternative ohne eines.
+- Gib nur den Text der Stelle zurück — nicht den umgebenden Satz, keine Nummerierung, keine Anführungszeichen, keine Erklärung.
+- Alle Fakten stammen aus <lebenslauf>, <profil> und <anzeige>. Erfinde nichts: keine Zahlen, keine Namen, keine Ergebnisse, keine Zeiträume.
+- Die ${input.count} Alternativen unterscheiden sich deutlich voneinander — anderer Zugriff, andere Belege oder anderer Satzbau, nicht dreimal derselbe Satz mit getauschten Wörtern.
+- Sprache, Ton und Förmlichkeit wie im übrigen Brief. Keine passiven Bewerbungsfloskeln ("hiermit bewerbe ich mich", "mit großem Interesse").
+- Als Auszeichnung ist nur <strong>…</strong> erlaubt, höchstens einmal je Alternative und nur dort, wo der Brief das auch sonst tut. Sonst kein HTML.${
+    input.instruction
+      ? '\n- Was in <hinweis> steht, ist die Anweisung des Bewerbers. Sie geht allen Stilregeln vor — nur die Faktentreue steht darüber.'
+      : ''
+  }
+
+<stelle>
+${sealed(input.passage)}
+</stelle>
+${
+  input.instruction
+    ? `
+<hinweis>
+${sealed(input.instruction)}
+</hinweis>
+`
+    : ''
+}
+<brief>
+${sealed(input.letter.slice(0, MAX_LETTER))}
+</brief>
+
+<lebenslauf>
+${cvBlock(input.cv)}
+</lebenslauf>
+
+<profil>
+${bullets(input.profileFacts, '(keine Angaben)')}
+</profil>
+
+<anzeige>
+${clipListing(input.listing)}
+</anzeige>`;
 }
 
 /* What a document SAYS, not how it is styled: style/script and tags gone,

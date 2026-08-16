@@ -43,6 +43,12 @@ const BASE_NAMES: Record<DocumentKind, string> = {
 };
 
 export function documentFileName(kind: DocumentKind, ext: 'html' | 'pdf'): string {
+  /* The kind reaches here from the renderer. An unknown one would otherwise
+     name the file "undefined.html" and hand that path back to be stored on the
+     row — junk written quietly rather than a channel refusing a bad argument.
+     hasOwn rather than a truthiness check: 'constructor' and 'toString' are on
+     every object, and both would sail through as a name. */
+  if (!Object.hasOwn(BASE_NAMES, kind)) throw new Error(`unknown document kind: ${kind}`);
   return BASE_NAMES[kind] + '.' + ext;
 }
 
@@ -73,11 +79,13 @@ export function documentPaths(
   userDataPath: string,
   applicationId: string,
   kind: DocumentKind,
-): { htmlAbs: string; pdfAbs: string; pdfRel: string } {
+): { htmlAbs: string; htmlRel: string; pdfAbs: string; pdfRel: string } {
   const dir = applicationDir(userDataPath, applicationId);
+  const htmlName = documentFileName(kind, 'html');
   const pdfName = documentFileName(kind, 'pdf');
   return {
-    htmlAbs: path.join(dir, documentFileName(kind, 'html')),
+    htmlAbs: path.join(dir, htmlName),
+    htmlRel: path.join('documents', applicationId, htmlName),
     pdfAbs: path.join(dir, pdfName),
     pdfRel: path.join('documents', applicationId, pdfName),
   };
@@ -94,11 +102,10 @@ export function copyDocument(
   sourcePath: string,
 ): string {
   if (!isHtml(sourcePath)) throw new Error(`not an HTML file: ${sourcePath}`);
-  const dir = applicationDir(userDataPath, applicationId);
-  mkdirSync(dir, { recursive: true });
-  const name = documentFileName(kind, 'html');
-  copyFileSync(sourcePath, path.join(dir, name));
-  return path.join('documents', applicationId, name);
+  const { htmlAbs, htmlRel } = documentPaths(userDataPath, applicationId, kind);
+  mkdirSync(path.dirname(htmlAbs), { recursive: true });
+  copyFileSync(sourcePath, htmlAbs);
+  return htmlRel;
 }
 
 /* Drops everything belonging to a deleted application. The database cascades
@@ -376,6 +383,16 @@ export function selectedTemplatePath(
   if (!label) return null;
   const file = versionFile(versionDir(userDataPath, kind, label));
   return file ? { label, path: file } : null;
+}
+
+/* The selected Fassung of a slot as it lies on disk: its markup and the label a
+   generated document is stamped with. Null when the slot has no upload. */
+export function readSelectedTemplate(
+  userDataPath: string,
+  kind: TemplateKind,
+): { html: string; label: string } | null {
+  const selected = selectedTemplatePath(userDataPath, kind);
+  return selected ? { html: readFileSync(selected.path, 'utf8'), label: selected.label } : null;
 }
 
 /* The file of one named Fassung, or null when there is no such Fassung. */

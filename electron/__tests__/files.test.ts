@@ -73,6 +73,15 @@ describe('documentFileName', () => {
     expect(documentFileName(DocumentKind.OTHER, 'html')).toBe('other.html');
   });
 
+  it('refuses a kind it has no name for', () => {
+    /* The kind arrives from the renderer. Unnamed it would build
+       "undefined.html" and hand that back to be stored on the row — junk
+       written quietly instead of a channel refusing a bad argument. */
+    expect(() => documentFileName('gibts-nicht' as DocumentKind, 'html')).toThrow(/kind/i);
+    /* Nor may a key every object happens to carry stand in for one. */
+    expect(() => documentFileName('constructor' as DocumentKind, 'html')).toThrow(/kind/i);
+  });
+
   /* Both renditions of a document share the stem, so the PDF is always findable
      from the kind alone. */
   it('gives the two renditions the same stem', () => {
@@ -86,6 +95,7 @@ describe('documentPaths', () => {
     const dir = path.join(root, 'documents', 'BEW-33');
     expect(documentPaths(root, 'BEW-33', DocumentKind.LEBENSLAUF)).toEqual({
       htmlAbs: path.join(dir, 'Timo_Huennebeck_Lebenslauf.html'),
+      htmlRel: path.join('documents', 'BEW-33', 'Timo_Huennebeck_Lebenslauf.html'),
       pdfAbs: path.join(dir, 'Timo_Huennebeck_Lebenslauf.pdf'),
       pdfRel: path.join('documents', 'BEW-33', 'Timo_Huennebeck_Lebenslauf.pdf'),
     });

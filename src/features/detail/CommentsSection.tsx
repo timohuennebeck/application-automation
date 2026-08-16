@@ -77,7 +77,9 @@ export function CommentsSection({ cardId }: { cardId: string }) {
             meta={
               <>
                 <div style={{ fontSize: 11, color: 'var(--c-a5a29a)' }}>{relTime(c.created_at)}</div>
-                {c.author === Author.DU && (
+                {/* Kepler's replies can be cleared away but not reworded —
+                    editing them would put words in Kepler's mouth. */}
+                {(c.author === Author.DU || c.author === Author.KEPLER) && (
                   <PopoverAnchor style={{ marginLeft: 'auto' }}>
                     <div
                       className="cmt-menu-btn"
@@ -89,13 +91,15 @@ export function CommentsSection({ cardId }: { cardId: string }) {
                     </div>
                     {menuOpen && (
                       <Popover top={24} right={0} minWidth={150}>
-                        <MenuItem
-                          onClick={() =>
-                            set({ commentEditing: ck, commentEditDraft: c.text, commentMenu: null })
-                          }
-                        >
-                          Bearbeiten
-                        </MenuItem>
+                        {c.author === Author.DU && (
+                          <MenuItem
+                            onClick={() =>
+                              set({ commentEditing: ck, commentEditDraft: c.text, commentMenu: null })
+                            }
+                          >
+                            Bearbeiten
+                          </MenuItem>
+                        )}
                         <MenuItem danger onClick={() => deleteComment(cardId, c.id)}>
                           Löschen
                         </MenuItem>

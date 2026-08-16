@@ -1,9 +1,19 @@
-/* @-mentions in comments: detecting the query being typed, inserting a pick,
-   and splitting stored text back into plain runs and mention chips. */
+/* @-mentions in comments: whether one addressed Kepler, detecting the query
+   being typed, inserting a pick, and splitting stored text back into plain runs
+   and mention chips. */
 import { Author, AUTHOR_LABEL } from '../shared/enums';
 
 /* The name Kepler is mentioned by — the same one its comments are signed with. */
-export const KEPLER = AUTHOR_LABEL[Author.KEPLER];
+export const KEPLER_NAME = AUTHOR_LABEL[Author.KEPLER];
+
+/* "@Kepler" as a whole word: "@Keplers" and "mail@Kepler.de" are not the
+   assistant. Same boundary rule as splitMentions below, so what renders as a
+   chip is what Kepler answers. */
+const KEPLER_MENTION = new RegExp('(?<![\\p{L}\\d@])@' + KEPLER_NAME + '(?![\\p{L}\\d])', 'u');
+
+export function mentionsKepler(text: string): boolean {
+  return KEPLER_MENTION.test(text);
+}
 
 export interface Mentionable {
   key: string;
@@ -15,8 +25,8 @@ export interface Mentionable {
 
 /* The assistant is mentionable in every thread, alongside the card's people. */
 export const KEPLER_ENTRY: Mentionable = {
-  key: KEPLER,
-  name: KEPLER,
+  key: KEPLER_NAME,
+  name: KEPLER_NAME,
   role: 'KI-Assistent',
   bg: 'var(--c-1b1a17)',
   initials: 'K',
@@ -48,11 +58,12 @@ function escapeRe(s: string): string {
 
 /* Splits comment text into plain runs and @-mention runs, so the renderer can
    style mentions as chips. Only names it knows become chips — a stray "@" or an
-   unknown handle stays plain text. */
+   unknown handle stays plain text, and so does an address like mail@Kepler.de:
+   the same word rule mentionsKepler applies. */
 export function splitMentions(text: string, names: string[]): TextPart[] {
   const known = byLengthDesc(names).filter(Boolean);
   if (!known.length) return [{ t: text, mention: false }];
-  const re = new RegExp('@(?:' + known.map(escapeRe).join('|') + ')(?![\\p{L}\\d])', 'gu');
+  const re = new RegExp('(?<![\\p{L}\\d@])@(?:' + known.map(escapeRe).join('|') + ')(?![\\p{L}\\d])', 'gu');
 
   const parts: TextPart[] = [];
   let last = 0;

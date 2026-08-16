@@ -133,6 +133,14 @@ export const CHECKS_SCHEMA = {
   required: ['issues'],
 } as const;
 
+/* Kepler's answer to a comment that addressed it. */
+export const ASK_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: { antwort: { type: 'string' } },
+  required: ['antwort'],
+} as const;
+
 export const VARIANTS_SCHEMA = {
   type: 'object',
   additionalProperties: false,
@@ -263,4 +271,19 @@ export function validateVariants(x: unknown): string[] {
     throw new Error(`Vorschläge: ${VARIANT_COUNT} erwartet, ${list.length} erhalten`);
   }
   return list.slice(0, VARIANT_COUNT).map(sanitizeInline);
+}
+
+/* The reply comment. Trimmed, never empty — an empty answer would post a blank
+   Kepler comment, and the runner does better asking again. Plain text: the
+   thread renders **fett** and "- " bullets itself, so nothing is escaped here.
+   Tag-like fragments at either end are dropped: the model has been seen to
+   close the answer with the tag it imagined it was writing into
+   ("…Sag Bescheid.</antwort></invoke>"), and that is not part of what it said. */
+const EDGE_TAGS = /^(?:\s*<\/?[a-z_][\w-]*[^>]*>)+|(?:<\/?[a-z_][\w-]*[^>]*>\s*)+$/gi;
+
+export function validateAsk(x: unknown): string {
+  const r = asRecord(x, 'Antwort');
+  const t = text(typeof r.antwort === 'string' ? r.antwort.replace(EDGE_TAGS, '') : r.antwort);
+  if (!t) throw new Error('Antwort: leer');
+  return t;
 }

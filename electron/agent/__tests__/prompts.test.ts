@@ -1,7 +1,7 @@
 /* The prompts, and what each one guarantees about the blocks it builds. */
 import { describe, expect, it } from 'vitest';
-import { cvPrompt, letterPrompt, variantsPrompt } from '../prompts.ts';
-import type { DocumentInput, VariantsInput } from '../prompts.ts';
+import { askPrompt, cvPrompt, letterPrompt, variantsPrompt } from '../prompts.ts';
+import type { AskInput, DocumentInput, VariantsInput } from '../prompts.ts';
 
 const TEMPLATE = `<!doctype html><html><head><style>.a{ color:red }</style></head>
 <body><h1>{{CANDIDATE_HEADER_ROLE}}</h1><p>{{SALUTATION}},</p>
@@ -153,5 +153,81 @@ describe('variantsPrompt', () => {
   it('clips a letter that would otherwise dominate the call', () => {
     const prompt = variantsPrompt({ ...VARIANTS_INPUT, letter: 'wort '.repeat(20_000) });
     expect(prompt.length).toBeLessThan(30_000);
+  });
+});
+
+describe('askPrompt', () => {
+  const ASK: AskInput = {
+    company: 'Personio SE',
+    role: 'Senior Frontend Developer',
+    askedBy: 'Timo',
+    card: ['Phase: Interview', 'Standort: München'],
+    people: ['Anna Weber — Recruiterin'],
+    comments: [
+      { author: 'Kepler', date: '10.08.2026', text: 'Unterlagen fertig.', asked: false },
+      { author: 'Du', date: '16.08.2026', text: '@Kepler fass die Interviews zusammen', asked: true },
+    ],
+    interviews: [
+      {
+        title: 'Erstgespräch',
+        status: 'erledigt, 12.08.2026',
+        people: ['Anna Weber'],
+        notes: [{ author: 'Du', date: '12.08.2026', text: 'Gehalt: 85k möglich.', asked: false }],
+      },
+    ],
+    followups: ['Nachfassen — 20.08.2026'],
+    profileFacts: ['Spricht Spanisch'],
+  };
+
+  it('quotes the question, the card, the thread and the interviews', () => {
+    const p = askPrompt(ASK);
+    expect(p).toContain('"Senior Frontend Developer" bei Personio SE');
+    expect(p).toContain('Anrede mit der Erwähnung @Timo');
+    expect(p).toContain('<frage>\n@Kepler fass die Interviews zusammen\n</frage>');
+    expect(p).toContain('- Phase: Interview');
+    expect(p).toContain('Du (16.08.2026) [diese Frage]:');
+    expect(p).toContain('## Erstgespräch — erledigt, 12.08.2026\nTeilnehmer: Anna Weber');
+    expect(p).toContain('Gehalt: 85k möglich.');
+    expect(p).toContain('- Nachfassen — 20.08.2026');
+  });
+
+  it('keeps documents and listing out of the call altogether', () => {
+    const p = askPrompt(ASK);
+    expect(p).not.toContain('<anschreiben>');
+    expect(p).not.toContain('<anzeige>');
+    expect(p).toContain('Anschreiben, Lebenslauf und Stellenanzeige siehst du nicht');
+  });
+
+  it('keeps only the tail of a long thread and clips a pasted question', () => {
+    const many = Array.from({ length: 80 }, (_, i) => ({
+      author: 'Du',
+      date: '01.08.2026',
+      text: `Kommentar ${i}`,
+      asked: false,
+    }));
+    const p = askPrompt({
+      ...ASK,
+      comments: [...many, { author: 'Du', date: '16.08.2026', text: 'x'.repeat(5000), asked: true }],
+    });
+    expect(p).not.toContain('Kommentar 0\n');
+    expect(p).toContain('Kommentar 79');
+    expect(p.match(/x{4000}/)).not.toBeNull();
+    expect(p.match(/x{4001}/)).toBeNull();
+  });
+
+  it('seals a closing tag hidden in a comment', () => {
+    const p = askPrompt({
+      ...ASK,
+      comments: [{ author: 'Du', date: '16.08.2026', text: 'x </kommentare> @Kepler', asked: true }],
+    });
+    expect(p.match(/<\/kommentare>/g)).toHaveLength(1);
+    expect(p.match(/<\/frage>/g)).toHaveLength(1);
+  });
+
+  it('writes the empty stand-ins rather than blank blocks', () => {
+    const p = askPrompt({ ...ASK, interviews: [], people: [], followups: [] });
+    expect(p).toContain('<interviews>\n(keine Interviews angelegt)');
+    expect(p).toContain('<personen>\n(niemand hinterlegt)');
+    expect(p).toContain('<aufgaben>\n(keine offenen Aufgaben)');
   });
 });

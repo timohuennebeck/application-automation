@@ -1,6 +1,13 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { DB_CHANNELS } from './db/channels.ts';
-import type { AgentEvent, AgentStartResult, VariantsRequest, VariantsResult } from '../src/shared/agent.ts';
+import type {
+  AgentEvent,
+  AgentStartResult,
+  AskRequest,
+  AskResult,
+  VariantsRequest,
+  VariantsResult,
+} from '../src/shared/agent.ts';
 import type { AttachmentInput, DbApi } from '../src/shared/db-types.ts';
 import type { DocumentUpload, ProfileDocumentInfo, TemplateVersion } from '../src/shared/domain.ts';
 import type { DocumentKind, TemplateKind } from '../src/shared/enums.ts';
@@ -82,6 +89,9 @@ const api = {
        answer nobody is waiting for. */
     variantsStop: (applicationId: string, callId?: string): Promise<void> =>
       ipcRenderer.invoke('agent:variantsStop', applicationId, callId),
+    /* Answers a comment that addressed Kepler. The reply is written into the
+       thread on the main side and comes back as that comment row. */
+    ask: (req: AskRequest): Promise<AskResult> => ipcRenderer.invoke('agent:ask', req),
     /* Subscribes to run/step updates; returns the unsubscribe. */
     onEvent: (cb: (e: AgentEvent) => void): (() => void) => {
       const handler = (_e: Electron.IpcRendererEvent, event: AgentEvent) => cb(event);

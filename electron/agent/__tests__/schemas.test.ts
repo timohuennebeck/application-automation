@@ -5,6 +5,7 @@ import {
   validateExtraction,
   validateChecks,
   validateVariants,
+  validateAsk,
 } from '../schemas.ts';
 
 const FULL = {
@@ -215,5 +216,19 @@ describe('rewrite suggestions', () => {
     expect(emphasis).toBe('von <strong>neun auf zwei</strong> Tage');
     expect(script).not.toMatch(/<script/i);
     expect(attribute).not.toMatch(/onmouseover="steal\(\)"[^&]*>/);
+  });
+});
+
+describe('validateAsk', () => {
+  it('returns the trimmed answer and rejects an empty one', () => {
+    expect(validateAsk({ antwort: '  Kurz gesagt: ja.  ' })).toBe('Kurz gesagt: ja.');
+    expect(() => validateAsk({ antwort: '   ' })).toThrow(/leer/);
+    /* The closing tags the model sometimes appends are not the answer. */
+    expect(validateAsk({ antwort: 'Sag Bescheid.</antwort>\n</invoke>' })).toBe('Sag Bescheid.');
+    expect(validateAsk({ antwort: '<antwort>@Timo hallo</antwort>' })).toBe('@Timo hallo');
+    /* Inline markup the thread cannot render is left alone for the prompt to police, not stripped mid-text. */
+    expect(validateAsk({ antwort: 'a <b>x</b> b' })).toBe('a <b>x</b> b');
+    expect(() => validateAsk({})).toThrow();
+    expect(() => validateAsk(null)).toThrow(/kein Objekt/);
   });
 });

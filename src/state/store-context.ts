@@ -96,6 +96,11 @@ export interface StagedAttachment {
   size: number;
 }
 
+export interface KeplerAsk {
+  pending: boolean;
+  error: string | null;
+}
+
 export interface AppState {
   dark: boolean;
 
@@ -123,6 +128,9 @@ export interface AppState {
   roles: string[];
   /* Kepler's latest run per application, kept live by agent:event pushes. */
   agentRuns: Record<string, AgentRunView>;
+  /* Per card, the answer Kepler owes a comment that addressed it: pending
+     while the call is in the air, or the German reason it did not come. */
+  keplerAsk: Record<string, KeplerAsk>;
   /* Card ids per stage column, index-aligned with config COLUMNS/STAGE_IDS. */
   board: string[][];
   boardFilter: BoardFilter;
@@ -229,6 +237,8 @@ export interface AppStore {
   retryAgentStep: (id: string) => void;
   /* Halts the active run at its current step; retry resumes from there. */
   stopAgent: (id: string) => void;
+  /* Asks Kepler to answer the comment; the reply lands in the thread. */
+  askKepler: (id: string, commentId: number) => void;
   deleteCard: (id: string) => void;
   savePerson: () => void;
   deletePerson: (id: string, key: string, isNew: boolean) => void;

@@ -22,6 +22,7 @@ import type { AgentStartResult } from '../shared/agent';
 import { UNKNOWN_COMPANY, UNKNOWN_ROLE } from '../shared/domain';
 import { dateToISO } from '../lib/date';
 import { isInFocusedField } from '../lib/dom';
+import { mentionsKepler } from '../lib/mentions';
 import { initials } from '../lib/text';
 import { parsePosting } from '../features/create/parse-posting';
 import { CLOSED_PROFILE, Ctx, StateCtx } from './store-context';
@@ -465,6 +466,55 @@ export function AppProvider({ children }: { children: ReactNode }) {
   /* Halts Kepler at the current step; the panel then offers the retry. */
   const stopAgent = useCallback((id: string) => agentCall(window.desktop?.agent.stop(id)), []);
 
+  /* Which ask a card is currently waiting on: the main process answers a
+     card's questions in order, so only the newest one's outcome may end the
+     wait — an earlier answer arriving first still lands in the thread, but
+     must not clear the row while a later one is due. */
+  const askSeq = useRef<Record<string, number>>({});
+
+  /* A comment addressed Kepler. The main process reads the thread itself and
+     writes the reply as a Kepler comment; here only the wait and its outcome
+     are tracked, and the reply is appended when it comes back. Not persisted:
+     an answer that was still owed when the app closed is simply owed no more. */
+  const askKepler = useCallback(
+    (id: string, commentId: number) => {
+      const desktop = window.desktop;
+      if (!desktop) return;
+      const seq = (askSeq.current[id] ?? 0) + 1;
+      askSeq.current[id] = seq;
+      const settle = (error: string | null) =>
+        set((s) => {
+          /* The card may be gone by now — deleteCard dropped its entry, and a
+             reply for it has nowhere to go; a stale outcome leaves the newer
+             wait alone. */
+          if (!s.applications[id] || askSeq.current[id] !== seq) return {};
+          return { keplerAsk: { ...s.keplerAsk, [id]: { pending: false, error } } };
+        });
+      set((s) => ({ keplerAsk: { ...s.keplerAsk, [id]: { pending: true, error: null } } }));
+      desktop.agent
+        .ask({ applicationId: id, commentId })
+        .then((res) => {
+          if (res.ok) {
+            set((s) => {
+              if (!s.applications[id]) return {};
+              /* A resync during the wait may already have pulled the reply
+                 from the database — same row, not a second copy. */
+              const others = (s.commentsByApp[id] || []).filter((c) => c.id !== res.comment.id);
+              return { commentsByApp: { ...s.commentsByApp, [id]: [...others, res.comment] } };
+            });
+          }
+          settle(res.ok ? null : res.error);
+        })
+        .catch((err: unknown) => {
+          /* A broken bridge call, not a reason Kepler gave — the thread gets
+             the German line, the console the cause. */
+          console.error('[agent] ask failed', err);
+          settle('Kepler konnte nicht antworten.');
+        });
+    },
+    [set],
+  );
+
   /* A role a card or person is given joins the vocabulary (the repo does the
      same on its side). Defined ahead of its callers so they can list it as a
      dependency — a const cannot be named by a deps array declared above it. */
@@ -572,6 +622,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           documentsByApp: drop(s.documentsByApp),
           activitiesByApp: drop(s.activitiesByApp),
           agentRuns: drop(s.agentRuns),
+          keplerAsk: drop(s.keplerAsk),
           roundExpanded: drop(s.roundExpanded),
           roundSel: drop(s.roundSel),
           cardMenu: null,
@@ -1057,7 +1108,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const body = text.trim();
       const staged = stRef.current.commentAttachments;
       if (!body && staged.length === 0) return;
-      set({ commentDraft: '', commentAttachments: [] });
+      set((s) => ({
+        commentDraft: '',
+        commentAttachments: [],
+        /* A reason Kepler could not answer last time is stale once the user
+           writes on; the wait itself, if there is one, stays. */
+        keplerAsk: s.keplerAsk[id]?.error
+          ? { ...s.keplerAsk, [id]: { pending: false, error: null } }
+          : s.keplerAsk,
+      }));
       const desktop = window.desktop;
       if (!desktop) return;
       persist(
@@ -1075,6 +1134,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
               ? { ...s.attachmentsByComment, [String(res.comment.id)]: res.attachments }
               : s.attachmentsByComment,
           }));
+          /* Only once the comment is a row: Kepler reads the question from
+             the database, not from the draft. */
+          if (mentionsKepler(body)) askKepler(id, res.comment.id);
         })().catch((err) => {
           /* The composer empties on send so it feels sent, but nothing here is
              optimistic — the comment itself only appears once the database
@@ -1085,7 +1147,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }),
       );
     },
-    [set],
+    [askKepler, set],
   );
 
   const pickCommentAttachments = useCallback(() => {
@@ -1430,6 +1492,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       startAgent,
       retryAgentStep,
       stopAgent,
+      askKepler,
       deleteCard,
       savePerson,
       deletePerson,
@@ -1486,6 +1549,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       startAgent,
       retryAgentStep,
       stopAgent,
+      askKepler,
       deleteCard,
       savePerson,
       deletePerson,

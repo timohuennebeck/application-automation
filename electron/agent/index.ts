@@ -7,13 +7,20 @@ import type { BrowserWindow } from 'electron';
 import type { DatabaseSync } from 'node:sqlite';
 import type { Repo } from '../db/repo.ts';
 import { renderPdf } from '../pdf.ts';
-import type { AgentEvent, VariantsRequest, VariantsResult } from '../../src/shared/agent.ts';
+import type {
+  AgentEvent,
+  AskRequest,
+  AskResult,
+  VariantsRequest,
+  VariantsResult,
+} from '../../src/shared/agent.ts';
 import { createLlmRunner, sdkInvoke } from './llm.ts';
 import { runPipeline } from './orchestrator.ts';
 import { createRunStore } from './run-store.ts';
 import { fetchListingText } from './scrape.ts';
 import { createAgentService } from './service.ts';
 import { createVariantsService } from './variants.ts';
+import { createAskService } from './ask.ts';
 
 /* What the rest of the main process needs from Kepler once the channels are
    wired: everything to drop when a card goes away. A run and the rewrites of an
@@ -71,6 +78,9 @@ export function registerAgentIpc(
     llm: createLlmRunner(sdkInvoke()),
   });
 
+  /* Same reasoning: a comment's answer is one call beside the queue. */
+  const asks = createAskService({ repo, runs, llm: createLlmRunner(sdkInvoke()) });
+
   ipcMain.handle('agent:start', (_e, applicationId: string) => service.start(String(applicationId)));
   ipcMain.handle('agent:retry', (_e, applicationId: string) => service.retry(String(applicationId)));
   ipcMain.handle('agent:stop', (_e, applicationId: string) => service.stop(String(applicationId)));
@@ -94,9 +104,17 @@ export function registerAgentIpc(
     });
   });
 
+  ipcMain.handle('agent:ask', (_e, req: AskRequest): Promise<AskResult> => {
+    if (!req || typeof req !== 'object') {
+      return Promise.resolve({ ok: false, error: 'Ungültige Anfrage.' });
+    }
+    return asks.ask({ applicationId: String(req.applicationId), commentId: Number(req.commentId) });
+  });
+
   return {
     abandon(applicationId: string): void {
       service.abandon(applicationId);
+      asks.stop(applicationId);
       /* The card is gone, so nobody is waiting on its rewrites either — and
          each one holds a CLI subprocess and one of the three slots until its
          timeout runs out. */

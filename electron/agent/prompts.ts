@@ -13,7 +13,7 @@ const MAX_LISTING = 30_000;
    contains a literal </anzeige> would otherwise break out of its block. */
 function sealed(text: string): string {
   return text.replace(
-    /<\/(anzeige|vorlage|platzhalter|profil|kontakte|lebenslauf|brief|stelle|hinweis)>/gi,
+    /<\/(anzeige|vorlage|platzhalter|profil|kontakte|lebenslauf|brief|stelle|hinweis|karte|personen|kommentare|interviews|aufgaben|frage)>/gi,
     '',
   );
 }
@@ -322,4 +322,110 @@ ${documentExcerpt(cvHtml)}
 <anschreiben>
 ${documentExcerpt(letterHtml)}
 </anschreiben>`;
+}
+
+/* One entry of the card's comment thread, as Kepler reads it. */
+export interface AskComment {
+  author: string;
+  /* Already formatted for reading (DD.MM.YYYY). */
+  date: string;
+  text: string;
+  /* The comment that addressed Kepler — quoted again as the question. */
+  asked: boolean;
+}
+
+/* One interview round with the notes taken under it. */
+export interface AskInterview {
+  title: string;
+  /* "erledigt" / "als Nächstes" / "offen", plus the appointment when known. */
+  status: string;
+  people: string[];
+  notes: AskComment[];
+}
+
+/* Everything Kepler sees when a comment addresses it: the card itself, never
+   its documents or the listing — it answers questions about the application,
+   it does not review texts. */
+export interface AskInput {
+  company: string;
+  role: string;
+  /* The first name of whoever asked — the reply opens by addressing them. */
+  askedBy: string;
+  /* "Label: Wert" lines — stage, summary, dates, the sidebar facts. */
+  card: string[];
+  people: string[];
+  comments: AskComment[];
+  interviews: AskInterview[];
+  followups: string[];
+  profileFacts: string[];
+}
+
+/* Comment threads are short; this only guards against a pasted mail. */
+const MAX_COMMENT = 4_000;
+/* And a card that has lived long keeps its early history out of the call — the
+   question is about now, and the whole thread would be all the call's cost. */
+const MAX_THREAD = 60;
+
+function threadLines(entries: AskComment[]): string {
+  return entries
+    .slice(-MAX_THREAD)
+    .map((c) => `${c.author} (${c.date})${c.asked ? ' [diese Frage]' : ''}:\n${c.text.slice(0, MAX_COMMENT)}`)
+    .join('\n\n');
+}
+
+function interviewBlock(rounds: AskInterview[]): string {
+  if (!rounds.length) return '(keine Interviews angelegt)';
+  return rounds
+    .map((r) =>
+      [
+        `## ${r.title} — ${r.status}`,
+        r.people.length ? `Teilnehmer: ${r.people.join(', ')}` : null,
+        r.notes.length ? 'Notizen:\n' + threadLines(r.notes) : '(keine Notizen)',
+      ]
+        .filter(Boolean)
+        .join('\n'),
+    )
+    .join('\n\n');
+}
+
+export function askPrompt(input: AskInput): string {
+  const asked = input.comments.find((c) => c.asked);
+  return `Du bist Kepler, der Assistent einer Bewerbungs-App. Der Bewerber hat dich in einem Kommentar zur Bewerbung als "${input.role}" bei ${input.company} angesprochen. Antworte ihm als Kommentar in demselben Thread.
+
+Regeln:
+- Antworte auf Deutsch, per Du, knapp und konkret — ein Kommentar, kein Aufsatz.
+- Form: erste Zeile eine kurze Anrede mit der Erwähnung @${input.askedBy} (z. B. "Hallo @${input.askedBy}!"), dann eine Leerzeile, dann die Antwort in kurzen Absätzen — zwischen Absätzen immer eine Leerzeile —, zum Schluss nach einer Leerzeile ein kurzer Satz, ob noch etwas offen ist oder was du als Nächstes tun kannst. Keine Unterschrift.
+- Alles, was du weißt, steht in den Blöcken unten. Erfinde nichts; sag lieber, dass etwas nicht hinterlegt ist.
+- Als Auszeichnung sind nur **fett** und Aufzählungen mit "- " am Zeilenanfang erlaubt. Keine Überschriften, kein HTML, keine Links im Markdown-Format.
+- Gib nur den Text des Kommentars zurück — keine Tags, kein JSON drumherum.
+- Du liest nur — du änderst keine Dokumente und keine Daten der Karte. Anschreiben, Lebenslauf und Stellenanzeige siehst du nicht; sag das, wenn eine Frage darauf zielt.
+
+<frage>
+${sealed((asked?.text ?? '').slice(0, MAX_COMMENT))}
+</frage>
+
+<karte>
+${bullets(input.card, '(keine Angaben)')}
+</karte>
+
+<personen>
+${bullets(input.people, '(niemand hinterlegt)')}
+</personen>
+
+<kommentare>
+${sealed(threadLines(input.comments))}
+</kommentare>
+
+<interviews>
+${sealed(interviewBlock(input.interviews))}
+</interviews>
+
+<aufgaben>
+${bullets(input.followups, '(keine offenen Aufgaben)')}
+</aufgaben>
+
+<profil>
+${bullets(input.profileFacts, '(keine Angaben)')}
+</profil>
+`;
 }

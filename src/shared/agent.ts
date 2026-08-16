@@ -1,6 +1,6 @@
 /* The main→renderer contract for Kepler runs. Events ride the agent:event
    push channel; agent:start answers with AgentStartResult. */
-import type { AgentRunRow, AgentStepRow } from './db-types.ts';
+import type { AgentRunRow, AgentStepRow, CommentRow } from './db-types.ts';
 
 export interface AgentEvent {
   /* The run as it now stands — always present, every event. */
@@ -49,4 +49,18 @@ export type VariantsResult =
      the renderer can put one straight into the document. */
   | { ok: true; variants: string[] }
   /* German reason — shown as-is. */
+  | { ok: false; error: string };
+
+/* A comment that addressed Kepler. Only the comment's identity travels: the
+   main process reads the thread and the card itself, so the answer is drawn
+   from what is stored, not from what the renderer happened to hold. */
+export interface AskRequest {
+  applicationId: string;
+  commentId: number;
+}
+
+export type AskResult =
+  /* The reply, already written into the thread as a Kepler comment. */
+  | { ok: true; comment: CommentRow }
+  /* German reason — shown in the thread as-is. */
   | { ok: false; error: string };

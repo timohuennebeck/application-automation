@@ -44,6 +44,7 @@ export const initialState = (): AppState => ({
   locations: [],
   roles: [],
   agentRuns: {},
+  keplerAsk: {},
   board: STAGE_IDS.map(() => []),
   boardFilter: EMPTY_FILTER,
 

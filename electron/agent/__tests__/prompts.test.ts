@@ -1,6 +1,13 @@
 /* The prompts, and what each one guarantees about the blocks it builds. */
 import { describe, expect, it } from 'vitest';
-import { askPrompt, cvPrompt, extractionPrompt, letterPrompt, variantsPrompt } from '../prompts.ts';
+import {
+  askPrompt,
+  checksPrompt,
+  cvPrompt,
+  extractionPrompt,
+  letterPrompt,
+  variantsPrompt,
+} from '../prompts.ts';
 import { DocumentLanguage } from '../../../src/shared/enums.ts';
 import type { AskInput, DocumentInput, VariantsInput } from '../prompts.ts';
 
@@ -113,6 +120,29 @@ describe('cvPrompt', () => {
   it('asks for English values for an English Fassung', () => {
     expect(cvPrompt({ ...DOC_INPUT, language: DocumentLanguage.EN })).toContain('British English');
     expect(cvPrompt(DOC_INPUT)).not.toContain('British English');
+  });
+});
+
+describe('checksPrompt', () => {
+  /* The date and salary formats it checks against belong to the document's
+     language — an English CV writes 23 August 2026, not 23.08.2026, and the
+     check must not report that as an error. */
+  it('checks the formats of the language the documents are written in', () => {
+    const de = checksPrompt(
+      { ...DOC_INPUT.extraction, language: DocumentLanguage.DE },
+      '<p>cv</p>',
+      '<p>brief</p>',
+    );
+    expect(de).toContain('DD.MM.YYYY');
+
+    const en = checksPrompt(
+      { ...DOC_INPUT.extraction, language: DocumentLanguage.EN },
+      '<p>cv</p>',
+      '<p>letter</p>',
+    );
+    expect(en).toContain('23 August 2026');
+    /* The German format is named only to rule it out. */
+    expect(en).toContain('nicht DD.MM.YYYY');
   });
 });
 

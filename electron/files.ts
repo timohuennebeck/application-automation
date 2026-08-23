@@ -283,12 +283,16 @@ function versionDir(
   return path.join(sideDir(userDataPath, kind, language), checkLabel(label));
 }
 
-/* The HTML file inside a Fassung directory, or null. */
+/* The HTML file inside a Fassung directory, or null. The entry has to be a
+   regular file, not merely HTML-named: a label may end in ".html" (nothing
+   forbids it), and a Fassung directory called "Lebenslauf.html" would
+   otherwise make the language side holding it look like a Fassung — which
+   migrateSlot would then move away, taking the whole side with it. */
 function versionFile(dir: string): string | null {
   try {
     if (!statSync(dir).isDirectory()) return null;
-    const entry = readdirSync(dir).find(isHtml);
-    return entry ? path.join(dir, entry) : null;
+    const entry = readdirSync(dir, { withFileTypes: true }).find((e) => isHtml(e.name) && e.isFile());
+    return entry ? path.join(dir, entry.name) : null;
   } catch {
     return null;
   }
@@ -313,18 +317,26 @@ function migrateSlot(userDataPath: string, kind: TemplateKind): void {
     /* No slot directory yet — the flat legacy file below may still be there. */
   }
 
-  /* A Fassung is a directory holding the HTML directly; a language side holds
-     only directories. That is what tells the two apart, so even a Fassung
-     that happens to be called "en" is moved rather than read as a side. */
+  /* A Fassung is a directory holding an HTML file directly; a language side
+     holds only directories. That is what tells the two apart, so even a
+     Fassung that happens to be called "en" is moved rather than read as a
+     side. */
+  const staging = path.join(dir, STAGING_DIR);
   const fassungen = entries.filter((e) => !e.startsWith('.') && versionFile(path.join(dir, e)) !== null);
-  if (fassungen.length) {
+  /* Fassungen a previous attempt had already staged when the app was killed.
+     They are inside a dotfile now, so no listing shows them: finishing the
+     move is the only thing that brings them back. */
+  let stranded: string[] = [];
+  try {
+    stranded = readdirSync(staging);
+  } catch {
+    /* nothing was interrupted */
+  }
+  if (fassungen.length || stranded.length) {
     /* Staged through a dotted directory rather than moved one by one: a
        Fassung may be named "de", and renaming that straight into the German
        side would rename a directory into itself (EINVAL) and take the whole
-       profile panel with it. The staging name is a dotfile, so a crash
-       between the two halves leaves nothing that reads as a Fassung. */
-    const staging = path.join(dir, STAGING_DIR);
-    rmSync(staging, { recursive: true, force: true });
+       profile panel with it. */
     mkdirSync(staging, { recursive: true });
     for (const label of fassungen) renameSync(path.join(dir, label), path.join(staging, label));
     const marker = path.join(dir, SELECTED_MARKER);
@@ -332,7 +344,7 @@ function migrateSlot(userDataPath: string, kind: TemplateKind): void {
     rmSync(marker, { force: true });
     if (existsSync(german)) {
       /* A German side already there wins — it is the migrated one. */
-      for (const label of fassungen) {
+      for (const label of readdirSync(staging)) {
         if (!existsSync(path.join(german, label)))
           renameSync(path.join(staging, label), path.join(german, label));
       }
@@ -372,7 +384,11 @@ function migrateSlot(userDataPath: string, kind: TemplateKind): void {
     from,
     path.join(target, DOCUMENT_STEMS[DocumentLanguage.DE][kind] + path.extname(from).toLowerCase()),
   );
-  writeFileSync(markerPath(userDataPath, kind, DocumentLanguage.DE), FIRST_TEMPLATE_LABEL);
+  /* Only when nothing else claimed the selection: a leftover flat file beside
+     migrated Fassungen must not pull the dot off the Fassung that had it. */
+  if (!existsSync(markerPath(userDataPath, kind, DocumentLanguage.DE))) {
+    writeFileSync(markerPath(userDataPath, kind, DocumentLanguage.DE), FIRST_TEMPLATE_LABEL);
+  }
 }
 
 /* The labels present in a side, by name. A Fassung whose file is gone does not

@@ -166,6 +166,9 @@ interface LanguageText {
   proofScope: string;
   stackExamples: string;
   salarySentence: string;
+  /* How a date reads in a document of this language — what the validation
+     pass measures the generated dates against. */
+  dateFormat: string;
 }
 
 const TEXT: Record<DocumentLanguage, LanguageText> = {
@@ -189,6 +192,7 @@ Gehaltsvorstellung (nur wenn die Anzeige sie ausdrücklich verlangt): 75.000 EUR
     proofScope: '"drei Apps in Produktion"',
     stackExamples: '"im React- und Expo-Ökosystem", "in moderner Software-Architektur und KI-Workflows"',
     salarySentence: '" Meine Gehaltserwartung liegt bei <Betrag> EUR brutto p.a."',
+    dateFormat: 'DD.MM.YYYY, also 23.08.2026',
   },
   [DocumentLanguage.EN]: {
     languageRule:
@@ -210,6 +214,7 @@ Gehaltsvorstellung (nur wenn die Anzeige sie ausdrücklich verlangt): 75,000 EUR
     proofScope: '"three apps in production"',
     stackExamples: '"in the React and Expo ecosystem", "in modern software architecture and AI workflows"',
     salarySentence: '" My salary expectation is <Betrag> EUR gross p.a."',
+    dateFormat: 'britisches Langformat, also 23 August 2026 — nicht DD.MM.YYYY',
   },
 };
 
@@ -380,7 +385,7 @@ export function checksPrompt(extraction: Extraction, cvHtml: string, letterHtml:
 
 Prüfe:
 - Passen Rolle und Unternehmen in den Dokumenten zu den erfassten Daten?
-- Datumsformate (DD.MM.YYYY), Gehaltsformat, plausible URLs und E-Mail-Adressen?
+- Datumsformate (${TEXT[extraction.language ?? DocumentLanguage.DE].dateFormat}), Gehaltsformat, plausible URLs und E-Mail-Adressen?
 - Widersprüche zwischen den Angaben?
 
 issues: höchstens die drei wichtigsten echten Probleme, je EIN kurzer Satz (unter 15 Wörter), ohne Herleitung oder Zitate; hebe den Kern jedes Hinweises mit **fett** hervor (z. B. "**E-Mail-Adresse** passt nicht zum Namen."). Leer, wenn alles stimmig ist.

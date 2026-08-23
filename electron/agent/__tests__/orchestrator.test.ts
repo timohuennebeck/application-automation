@@ -242,6 +242,48 @@ describe('runPipeline', () => {
       );
     });
 
+    /* The card can be switched between attempts — the Sprache chip is not
+       locked while a run is failed. The documents on disk still carry the
+       names the finished steps wrote, so the validation has to find them by
+       the row rather than by recomputing the name, or it would check two
+       empty strings and report a card with German documents as sound. */
+    it('validates the documents that were written, not the ones the new language would be called', async () => {
+      uploadBoth();
+      const appId = createApp({ postingUrl: 'https://linkedin.com/jobs/1' });
+      const runId = createRun(appId);
+      const llm = fakeLlm({ checks: () => ({ issues: [] }) });
+      /* Fails at the validation step, after both documents were written. */
+      let failed = false;
+      await runPipeline(
+        appId,
+        runId,
+        deps({
+          llm: fakeLlm({
+            checks: () => {
+              failed = true;
+              throw new Error('Modell nicht erreichbar');
+            },
+          }),
+        }),
+      );
+      expect(failed).toBe(true);
+      expect(existsSync(path.join(root, 'documents', appId, 'Timo_Huennebeck_Lebenslauf.html'))).toBe(true);
+
+      repo.updateApplication(appId, { language: DocumentLanguage.EN });
+      const step = runs.stepsFor(runId).find((s) => s.status === AgentStepStatus.ERROR)!;
+      runs.resetStep(step.id, step.label);
+      runs.requeueRun(runId, 'Kepler wartet in der Warteschlange…');
+      await runPipeline(appId, runId, deps({ llm }));
+
+      const checks = (llm as ReturnType<typeof fakeLlm>).mock.calls
+        .map(([req]) => req)
+        .find((req) => req.schema === CHECKS_SCHEMA)!;
+      expect(checks.prompt).toContain('Helios Energie');
+      expect(checks.prompt).not.toContain('(kein Lebenslauf');
+      /* Both documents reached the prompt — the German files that exist. */
+      expect(checks.prompt.split('lebenslauf-Vorlage').length - 1).toBeGreaterThan(0);
+    });
+
     /* A resumed run must not re-decide: the documents already written carry
        the first decision's names, and the retry writes beside them. */
     it('keeps the language a resumed run was started with', async () => {

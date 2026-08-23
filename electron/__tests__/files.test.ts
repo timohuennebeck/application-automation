@@ -28,6 +28,7 @@ import {
   removeStoredFile,
   resolveDocumentPath,
   listTemplateVersions,
+  readSelectedTemplate,
   removeTemplateVersion,
   renameTemplateVersion,
   replaceTemplateVersion,
@@ -516,6 +517,42 @@ describe('template versions', () => {
     expect(existsSync(path.join(old, 'Standard'))).toBe(false);
     expect(existsSync(path.join(old, '.selected'))).toBe(false);
     expect(listTemplateVersions(root, TemplateKind.LEBENSLAUF, DocumentLanguage.EN)).toEqual([]);
+  });
+
+  /* A label may end in ".html" — nothing forbids it. The directory holding a
+     Fassung's file must therefore be told apart from the file itself by what
+     it is, not by what it is called: a side whose Fassung is named
+     "Lebenslauf.html" must not read as a Fassung and be migrated away. */
+  it('does not mistake a Fassung named like an HTML file for the file itself', () => {
+    addTemplateVersion(root, TemplateKind.LEBENSLAUF, DocumentLanguage.DE, source('a.html', 'eins'));
+    addTemplateVersion(root, TemplateKind.LEBENSLAUF, DocumentLanguage.DE, source('b.html', 'zwei'));
+    addTemplateVersion(root, TemplateKind.LEBENSLAUF, DocumentLanguage.EN, source('c.html', 'english'));
+    renameTemplateVersion(root, TemplateKind.LEBENSLAUF, DocumentLanguage.DE, 'Standard', 'Lebenslauf.html');
+    renameTemplateVersion(root, TemplateKind.LEBENSLAUF, DocumentLanguage.EN, 'Standard', 'CV.html');
+
+    expect(
+      listTemplateVersions(root, TemplateKind.LEBENSLAUF, DocumentLanguage.DE).map((v) => v.label),
+    ).toEqual(['Fassung 2', 'Lebenslauf.html']);
+    expect(
+      listTemplateVersions(root, TemplateKind.LEBENSLAUF, DocumentLanguage.EN).map((v) => v.label),
+    ).toEqual(['CV.html']);
+    expect(readSelectedTemplate(root, TemplateKind.LEBENSLAUF, DocumentLanguage.EN)!.html).toBe('english');
+    expect(existsSync(path.join(slot('lebenslauf'), 'en'))).toBe(false);
+  });
+
+  /* An app killed mid-migration leaves the Fassungen in the staging
+     directory. They are filtered out of every listing as a dotfile, so
+     unless the next read finishes the move they are gone for good. */
+  it('finishes a migration that was interrupted while staging', () => {
+    const staging = path.join(root, 'templates', 'lebenslauf', '.migrating');
+    mkdirSync(path.join(staging, 'Kurz'), { recursive: true });
+    writeFileSync(path.join(staging, 'Kurz', CV), 'kurz');
+
+    expect(listTemplateVersions(root, TemplateKind.LEBENSLAUF, DocumentLanguage.DE)).toMatchObject([
+      { label: 'Kurz', selected: true },
+    ]);
+    expect(readFileSync(path.join(slot('lebenslauf'), 'Kurz', CV), 'utf8')).toBe('kurz');
+    expect(existsSync(staging)).toBe(false);
   });
 
   /* "de" and "en" are valid Fassung names, so an install from before the

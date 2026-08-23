@@ -65,6 +65,11 @@ const FORMS: Record<AgentStepKey, (ctx: LabelCtx) => Forms> = {
     run: `Anschreiben für ${ctx.company} wird erstellt…`,
     done: `Anschreiben für ${ctx.company} erstellt`,
   }),
+  [AgentStepKey.PROOFS]: () => ({
+    wait: 'Belege prüfen',
+    run: 'Belege werden geprüft…',
+    done: 'Belege geprüft',
+  }),
   [AgentStepKey.VALIDATE]: () => ({
     wait: 'Daten und Formate prüfen',
     run: 'Daten und Formate werden geprüft…',
@@ -76,6 +81,12 @@ const FORMS: Record<AgentStepKey, (ctx: LabelCtx) => Forms> = {
     done: 'Kommentar an {m} mit Bewerbungslink hinterlassen',
   }),
 };
+
+/* The running label while the step is not checking but rewriting. A step
+   called "Belege prüfen" that quietly generates a second Anschreiben would be
+   lying about what the run is doing — and this is the one label the panel
+   shows for the two minutes that takes. */
+export const PROOFS_REWRITE_LABEL = 'Anschreiben wird mit belegten Angaben neu geschrieben…';
 
 export function stepLabel(key: AgentStepKey, status: AgentStepStatus, ctx: LabelCtx): string {
   const forms = FORMS[key](ctx);
@@ -99,6 +110,7 @@ export function stepPlan(hasUrl: boolean, ctx: LabelCtx): StepInput[] {
     step(AgentStepKey.READ_LETTER, TemplateKind.ANSCHREIBEN),
     step(AgentStepKey.GEN_CV),
     step(AgentStepKey.GEN_LETTER),
+    step(AgentStepKey.PROOFS),
     step(AgentStepKey.VALIDATE),
     step(AgentStepKey.COMMENT),
   ];

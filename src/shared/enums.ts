@@ -120,6 +120,7 @@ export const AgentStepKey = {
   READ_LETTER: 'READ_LETTER',
   GEN_CV: 'GEN_CV',
   GEN_LETTER: 'GEN_LETTER',
+  PROOFS: 'PROOFS',
   VALIDATE: 'VALIDATE',
   COMMENT: 'COMMENT',
 } as const;

@@ -25,13 +25,14 @@ import {
 import { INTERRUPTED_HEADLINE } from '../../src/shared/agent.ts';
 import { KeplerError, userMessage } from './errors.ts';
 import { fillPlaceholders, modelPlaceholders, systemValues } from './fill.ts';
-import { STOP_ERROR, stepLabel, type LabelCtx } from './labels.ts';
+import { PROOFS_REWRITE_LABEL, STOP_ERROR, stepLabel, type LabelCtx } from './labels.ts';
 import {
   checksPrompt,
   contactPrompt,
   cvPrompt,
   extractionPrompt,
   letterPrompt,
+  proofsPrompt,
   type DocumentInput,
 } from './prompts.ts';
 import type { RunStore } from './run-store.ts';
@@ -41,12 +42,15 @@ import {
   CONTACT_SCHEMA,
   EXTRACTION_SCHEMA,
   FILL_SCHEMA,
+  PROOFS_SCHEMA,
   validateChecks,
   validateContact,
   validateExtraction,
   validateFill,
+  validateProofs,
   type ExtractedPerson,
   type Extraction,
+  type UnsupportedClaim,
 } from './schemas.ts';
 
 export interface LlmRequest<T> {
@@ -317,6 +321,64 @@ export async function runPipeline(applicationId: string, runId: number, deps: Pi
       done(AgentStepKey.GEN_LETTER, true);
     }
 
+    /* ── Are the claims backed by the Lebenslauf? ─────────────────────── */
+    let claims: UnsupportedClaim[] = [];
+    if (pending(AgentStepKey.PROOFS)) {
+      start(AgentStepKey.PROOFS);
+      const cvFassung =
+        readSelectedTemplate(deps.userDataPath, TemplateKind.LEBENSLAUF, language)?.html ?? null;
+      const profileFacts = repo.load().profileFacts.map((f) => f.text);
+      /* On a resumed run the documents are not in memory — they are read back
+         off disk, the same way the validation step reads them. */
+      const readCv = () => cvHtml ?? readGeneratedHtml(deps, applicationId, DocumentKind.LEBENSLAUF);
+      const readLetter = () =>
+        letterHtml ?? readGeneratedHtml(deps, applicationId, DocumentKind.COVER_LETTER);
+
+      const check = () =>
+        deps.llm({
+          prompt: proofsPrompt({
+            cv: readCv(),
+            letter: readLetter(),
+            cvFassung,
+            profileFacts,
+          }),
+          schema: PROOFS_SCHEMA,
+          validate: validateProofs,
+          timeoutMs: SINGLE_CALL_TIMEOUT,
+          signal,
+        });
+
+      claims = await check();
+      /* Only the Anschreiben is rewritten. The Lebenslauf is copied from the
+         Fassung and only its header line is generated, so a claim it makes is
+         the Fassung's to fix, not Kepler's — it is reported instead. */
+      const inLetter = claims.filter((c) => c.document === DocumentKind.COVER_LETTER);
+      if (inLetter.length) {
+        alive();
+        runs.setRunLabel(runId, PROOFS_REWRITE_LABEL);
+        const step = byKey.get(AgentStepKey.PROOFS);
+        if (step) byKey.set(AgentStepKey.PROOFS, runs.relabelStep(step.id, PROOFS_REWRITE_LABEL));
+        push(byKey.get(AgentStepKey.PROOFS));
+
+        const generated = await generateDocument(deps, applicationId, {
+          kind: DocumentKind.COVER_LETTER,
+          buildPrompt: letterPrompt,
+          ...docInput(TemplateKind.ANSCHREIBEN),
+          complaint: proofsComplaint(inLetter),
+          /* Its complaint already says what to change; a budget redo on top
+             would make one unlucky letter three generations. */
+          skipBudgetRedo: true,
+        });
+        letterHtml = generated.html;
+        /* set, not push: this document was just written again, so its earlier
+           findings describe a file that no longer exists. */
+        tooLong.set(DocumentKind.COVER_LETTER, generated.overBudget);
+        /* One rewrite, then whatever the second reading says. */
+        claims = await check();
+      }
+      done(AgentStepKey.PROOFS, true);
+    }
+
     /* ── Validate, then report ────────────────────────────────────────── */
     let issues: string[] = [];
     if (pending(AgentStepKey.VALIDATE)) {
@@ -531,6 +593,17 @@ function budgetComplaint(over: OverBudget[]): string {
     'Diese Werte sind zu lang. Schreibe die ganze Antwort noch einmal, alle Platzhalter, und halte für diese die Wortzahl ein:',
     ...lines,
     'Kürze, indem du weglässt — nicht, indem du Wörter zusammenziehst.',
+  ].join('\n');
+}
+
+/* What the rewrite is told. The claims are quoted in the document's own words
+   so the model can find them, and the reason is quoted with them — "nicht im
+   CV" and "Fassung sagt 12.000" call for different repairs. */
+function proofsComplaint(claims: UnsupportedClaim[]): string {
+  return [
+    '',
+    'Diese Aussagen im bisherigen Anschreiben sind durch <lebenslauf> und <profil> nicht gedeckt. Schreibe die ganze Antwort noch einmal, alle Platzhalter, und stütze dich nur auf Belegtes:',
+    ...claims.map((c) => `- „${c.quote}" — ${c.why}`),
   ].join('\n');
 }
 

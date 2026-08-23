@@ -20,7 +20,7 @@ import {
   FactKind,
   LinkKind,
 } from '../../../src/shared/enums.ts';
-import { CONTACT_SCHEMA, FILL_SCHEMA, EXTRACTION_SCHEMA, CHECKS_SCHEMA } from '../schemas.ts';
+import { CONTACT_SCHEMA, FILL_SCHEMA, EXTRACTION_SCHEMA, CHECKS_SCHEMA, PROOFS_SCHEMA } from '../schemas.ts';
 import type { AgentEvent } from '../../../src/shared/agent.ts';
 import { VALUE_BUDGET } from '../budgets.ts';
 
@@ -112,6 +112,7 @@ function fakeLlm(overrides: Partial<Record<string, (req: LlmRequest<unknown>) =>
         return overrides.document?.(req) ?? FILLED;
       }
       if (req.schema === CHECKS_SCHEMA) return overrides.checks?.(req) ?? { issues: [] };
+      if (req.schema === PROOFS_SCHEMA) return overrides.proofs?.(req) ?? { unsupported: [] };
       throw new Error('unbekanntes Schema');
     };
     return req.validate(pick());
@@ -914,5 +915,152 @@ describe('runPipeline', () => {
     await expect(runPipeline(appId, runId, deps({ llm }))).resolves.toBeUndefined();
     /* The rows cascaded with the application; nothing may have been recreated. */
     expect(repo.load().comments.filter((c) => c.application_id === appId)).toEqual([]);
+  });
+
+  it('rewrites the Anschreiben once when a claim in it is unsupported', async () => {
+    uploadTemplates();
+    const appId = createApp({ postingText: 'Wir suchen einen Senior Designer …' });
+    let checks = 0;
+    let letters = 0;
+    const llm = fakeLlm({
+      document: (req) => {
+        if (req.prompt.includes('anschreiben-Vorlage')) letters++;
+        return FILLED;
+      },
+      proofs: () => {
+        checks++;
+        return checks === 1
+          ? { unsupported: [{ document: 'COVER_LETTER', quote: 'zwei Bereiche', why: 'nicht im CV' }] }
+          : { unsupported: [] };
+      },
+    });
+
+    await runPipeline(appId, createRun(appId), deps({ llm }));
+
+    expect(letters).toBe(2);
+    expect(checks).toBe(2);
+  });
+
+  it('quotes the unsupported claim back when it rewrites', async () => {
+    uploadTemplates();
+    const appId = createApp({ postingText: 'Wir suchen einen Senior Designer …' });
+    const prompts: string[] = [];
+    let checks = 0;
+    const llm = fakeLlm({
+      document: (req) => {
+        prompts.push(req.prompt);
+        return FILLED;
+      },
+      proofs: () => {
+        checks++;
+        return checks === 1
+          ? { unsupported: [{ document: 'COVER_LETTER', quote: 'zwei Bereiche', why: 'nicht im CV' }] }
+          : { unsupported: [] };
+      },
+    });
+
+    await runPipeline(appId, createRun(appId), deps({ llm }));
+
+    expect(prompts.at(-1)).toContain('zwei Bereiche');
+    expect(prompts.at(-1)).toContain('nicht im CV');
+  });
+
+  it('reports a finding in the Lebenslauf without regenerating anything', async () => {
+    /* The CV is copied from the Fassung; only its header line is generated.
+       Rewriting it would not fix a claim the Fassung itself makes. */
+    uploadTemplates();
+    const appId = createApp({ postingText: 'Wir suchen einen Senior Designer …' });
+    let documents = 0;
+    const llm = fakeLlm({
+      document: () => {
+        documents++;
+        return FILLED;
+      },
+      proofs: () => ({
+        unsupported: [{ document: 'LEBENSLAUF', quote: '1 Mio. Nutzer', why: 'Fassung sagt 12.000' }],
+      }),
+    });
+
+    await runPipeline(appId, createRun(appId), deps({ llm }));
+
+    expect(documents).toBe(2);
+    const comment = repo
+      .load()
+      .comments.filter((c) => c.application_id === appId)
+      .at(-1)!;
+    expect(comment.text).toContain('1 Mio. Nutzer');
+  });
+
+  it('gives up after one rewrite and reports what is left', async () => {
+    uploadTemplates();
+    const appId = createApp({ postingText: 'Wir suchen einen Senior Designer …' });
+    const llm = fakeLlm({
+      proofs: () => ({
+        unsupported: [{ document: 'COVER_LETTER', quote: 'zwei Bereiche', why: 'nicht im CV' }],
+      }),
+    });
+
+    const runId = createRun(appId);
+    await runPipeline(appId, runId, deps({ llm }));
+
+    expect(runs.getRun(runId).status).toBe(AgentRunStatus.DONE);
+    const comment = repo
+      .load()
+      .comments.filter((c) => c.application_id === appId)
+      .at(-1)!;
+    expect(comment.text).toContain('zwei Bereiche');
+  });
+
+  it('generates the letter at most three times, whatever both checks say', async () => {
+    /* The ceiling the design promises: one letter, one budget redo, one
+       proofs rewrite — and the rewrite suppresses a second budget redo, so
+       the two do not stack into four. */
+    uploadTemplates(['lebenslauf']);
+    uploadTemplates(
+      ['anschreiben'],
+      'Standard',
+      '<!doctype html><html><body><p>{{COMPANY_HOOK_SENTENCE}}</p></body></html>',
+    );
+    const appId = createApp({ postingText: 'Wir suchen einen Senior Designer …' });
+    const long = Array.from({ length: 40 }, (_, i) => 'wort' + i).join(' ');
+    let letters = 0;
+    const llm = fakeLlm({
+      document: (req) => {
+        /* Braced, not bare: the CV Fassung has no COMPANY_HOOK_SENTENCE slot,
+           but its own budget redo still names the slot in prose once the
+           model answers it anyway (see the mock's fields below) — only the
+           letter's own prompt carries the placeholder itself. */
+        if (req.prompt.includes('{{COMPANY_HOOK_SENTENCE}}')) letters++;
+        return {
+          fields: [
+            { key: 'COMPANY_NAME', value: 'Helios Energie' },
+            { key: 'COMPANY_HOOK_SENTENCE', value: long },
+          ],
+        };
+      },
+      proofs: () => ({
+        unsupported: [{ document: 'COVER_LETTER', quote: 'zwei Bereiche', why: 'nicht im CV' }],
+      }),
+    });
+
+    await runPipeline(appId, createRun(appId), deps({ llm }));
+
+    expect(letters).toBe(3);
+  });
+
+  it('completes a run whose plan predates the step', async () => {
+    /* A run created by an older build has no PROOFS row. pending() returns
+       false for a key the run does not carry, so the step is skipped. */
+    uploadTemplates();
+    const appId = createApp({ postingText: 'Wir suchen einen Senior Designer …' });
+    const app = repo.getApplicationWithCompany(appId)!;
+    const plan = stepPlan(false, { company: app.company.name, source: '' }).filter(
+      (s) => s.key !== AgentStepKey.PROOFS,
+    );
+    const runId = runs.createRun(appId, 'wartet', plan).run.id;
+
+    await runPipeline(appId, runId, deps());
+
+    expect(runs.getRun(runId).status).toBe(AgentRunStatus.DONE);
   });
 });

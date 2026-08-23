@@ -400,7 +400,11 @@ export async function runPipeline(applicationId: string, runId: number, deps: Pi
     if (pending(AgentStepKey.COMMENT)) {
       start(AgentStepKey.COMMENT);
       alive();
-      repo.addComment(applicationId, Author.KEPLER, finalComment(app.posting_url, issues));
+      repo.addComment(
+        applicationId,
+        Author.KEPLER,
+        finalComment(app.posting_url, { claims, tooLong, issues }),
+      );
       repo.addActivity(applicationId, Author.KEPLER, 'hat Firmendetails, Kontakte und Unterlagen ergänzt');
       done(AgentStepKey.COMMENT, true);
     }
@@ -701,13 +705,45 @@ async function generateDocument(
   return { html, overBudget: over };
 }
 
-function finalComment(postingUrl: string | null, issues: string[]): string {
+/* Everything the run has to say about what it produced, in the order it
+   matters. A claim the Lebenslauf does not back is the one thing that can
+   cost an interview; a value a few words too long is a blemish; the format
+   check is the long tail. */
+interface Findings {
+  claims: UnsupportedClaim[];
+  /* Keyed by document, the way the pipeline collects it: the same slot can be
+     over budget in both documents, and a bullet naming only the slot would not
+     say which file to open. */
+  tooLong: Map<DocumentKind, OverBudget[]>;
+  issues: string[];
+}
+
+/* Three bullets. The comment is a note under the card, not a report — a
+   fourth line is one nobody reads, and the ranking above already put the
+   thing worth acting on first. */
+const MAX_BULLETS = 3;
+
+const DOCUMENT_LABEL: Record<DocumentKind, string> = {
+  [DocumentKind.COVER_LETTER]: 'Anschreiben',
+  [DocumentKind.LEBENSLAUF]: 'Lebenslauf',
+  [DocumentKind.OTHER]: 'Dokument',
+};
+
+function finalComment(postingUrl: string | null, findings: Findings): string {
+  const lengths = [...findings.tooLong.entries()].flatMap(([kind, over]) =>
+    over.map(
+      (o) => `**${DOCUMENT_LABEL[kind]}**: ${o.slot} ist mit ${o.words} Wörtern zu lang (${o.budget}).`,
+    ),
+  );
+  const bullets = [
+    ...findings.claims.map(
+      (c) => `**${DOCUMENT_LABEL[c.document]}**: „${c.quote}" ist nicht belegt — ${c.why}`,
+    ),
+    ...lengths,
+    ...findings.issues,
+  ];
   const lines = ['**Fertig** — Firmendetails, Kontakte und Unterlagen sind ergänzt.'];
-  if (issues.length) {
-    /* The prompt asks for at most three; the cap holds even when the model
-       does not. */
-    lines.push('', ...issues.slice(0, 3).map((i) => '• ' + i));
-  }
+  if (bullets.length) lines.push('', ...bullets.slice(0, MAX_BULLETS).map((b) => '• ' + b));
   lines.push('', postingUrl ? `@Timo Hier bewerben: ${postingUrl}` : '@Timo Die Unterlagen sind bereit.');
   return lines.join('\n');
 }

@@ -1048,6 +1048,60 @@ describe('runPipeline', () => {
     expect(letters).toBe(3);
   });
 
+  it('puts unsupported claims before length before format, and stops at three', async () => {
+    uploadTemplates(['lebenslauf']);
+    uploadTemplates(
+      ['anschreiben'],
+      'Standard',
+      '<!doctype html><html><body><p>{{COMPANY_HOOK_SENTENCE}}</p></body></html>',
+    );
+    const appId = createApp({ postingText: 'Wir suchen einen Senior Designer …' });
+    const long = Array.from({ length: 40 }, (_, i) => 'wort' + i).join(' ');
+    const llm = fakeLlm({
+      document: () => ({
+        fields: [
+          { key: 'COMPANY_NAME', value: 'Helios Energie' },
+          { key: 'COMPANY_HOOK_SENTENCE', value: long },
+        ],
+      }),
+      proofs: () => ({
+        unsupported: [
+          { document: 'COVER_LETTER', quote: 'zwei Bereiche', why: 'nicht im CV' },
+          { document: 'LEBENSLAUF', quote: '1 Mio. Nutzer', why: 'Fassung sagt 12.000' },
+        ],
+      }),
+      checks: () => ({ issues: ['**Gehaltsangabe** widerspricht der Anzeige.'] }),
+    });
+
+    await runPipeline(appId, createRun(appId), deps({ llm }));
+
+    const text = repo
+      .load()
+      .comments.filter((c) => c.application_id === appId)
+      .at(-1)!.text;
+    const bullets = text.split('\n').filter((l) => l.startsWith('•'));
+    expect(bullets).toHaveLength(3);
+    expect(bullets[0]).toContain('zwei Bereiche');
+    expect(bullets[1]).toContain('1 Mio. Nutzer');
+    expect(bullets[2]).toContain('COMPANY_HOOK_SENTENCE');
+    /* The format issue was crowded out — three bullets is the cap, and an
+       unbacked claim outranks a salary format. */
+    expect(text).not.toContain('Gehaltsangabe');
+  });
+
+  it('says nothing extra when both documents hold up', async () => {
+    uploadTemplates();
+    const appId = createApp({ postingText: 'Wir suchen einen Senior Designer …' });
+
+    await runPipeline(appId, createRun(appId), deps());
+
+    const text = repo
+      .load()
+      .comments.filter((c) => c.application_id === appId)
+      .at(-1)!.text;
+    expect(text.split('\n').filter((l) => l.startsWith('•'))).toHaveLength(0);
+  });
+
   it('completes a run whose plan predates the step', async () => {
     /* A run created by an older build has no PROOFS row. pending() returns
        false for a key the run does not carry, so the step is skipped. */

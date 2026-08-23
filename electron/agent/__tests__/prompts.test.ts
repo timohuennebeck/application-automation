@@ -11,6 +11,7 @@ import {
 import { DocumentLanguage } from '../../../src/shared/enums.ts';
 import { APPLICANT_EMAIL, APPLICANT_NAME } from '../../../src/shared/applicant.ts';
 import type { AskInput, DocumentInput, VariantsInput } from '../prompts.ts';
+import { VALUE_BUDGET } from '../budgets.ts';
 
 const TEMPLATE = `<!doctype html><html><head><style>.a{ color:red }</style></head>
 <body><h1>{{CANDIDATE_HEADER_ROLE}}</h1><p>{{SALUTATION}},</p>
@@ -114,6 +115,17 @@ describe('letterPrompt', () => {
     expect(en).toContain('British English');
     expect(en).not.toContain('Meine Gehaltserwartung');
     expect(en).not.toContain('Perfekte deutsche Grammatik');
+  });
+
+  it('states each slot’s budget, from the same record the check reads', () => {
+    /* The model was never told how long a value may be — that is why the
+         opening ran to sixty words. Told here, and measured against the same
+         number in budgets.ts, so the two cannot drift. */
+    const prompt = letterPrompt(DOC_INPUT);
+
+    expect(prompt).toContain(`höchstens ${VALUE_BUDGET.COMPANY_HOOK_SENTENCE} Wörter`);
+    expect(prompt).toContain(`höchstens ${VALUE_BUDGET.CANDIDATE_PROOF_POINT_1} Wörter`);
+    expect(prompt).toContain(`höchstens ${VALUE_BUDGET.RELEVANT_TECH_STACK_SUMMARY} Wörter`);
   });
 });
 

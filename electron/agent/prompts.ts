@@ -2,6 +2,7 @@
    (<anzeige>, <vorlage>, <profil>, <kontakte>) so listing text can never read as
    instructions; the output shape is enforced separately by the JSON Schemas
    in schemas.ts. */
+import { VALUE_BUDGET } from './budgets.ts';
 import { modelPlaceholders } from './fill.ts';
 import type { Extraction } from './schemas.ts';
 import { APPLICANT_EMAIL, APPLICANT_NAME } from '../../src/shared/applicant.ts';
@@ -122,7 +123,8 @@ ${bullets(input.profileFacts, '(keine Angaben)')}
    Fassung stays as written and only the line under the name is matched against
    the advertised role. Reordering a skills list would not pay: an ATS matches
    on presence, not position, and a human takes the line in at a glance. */
-const CV_GLOSSARY = `- {{CANDIDATE_HEADER_ROLE}}: Unterzeile unter dem Namen (z. B. "Senior Frontend Developer · React, Next.js, Expo"). Die Berufsbezeichnung bleibt die tatsächliche des Bewerbers — gewichtet wird nur, welche seiner Technologien genannt werden und in welcher Reihenfolge, passend zur ausgeschriebenen Rolle. Nur Technologien, die der Lebenslauf ohnehin führt.`;
+const cvGlossary = () =>
+  `- {{CANDIDATE_HEADER_ROLE}}${budget('CANDIDATE_HEADER_ROLE')}: Unterzeile unter dem Namen (z. B. "Senior Frontend Developer · React, Next.js, Expo"). Die Berufsbezeichnung bleibt die tatsächliche des Bewerbers — gewichtet wird nur, welche seiner Technologien genannt werden und in welcher Reihenfolge, passend zur ausgeschriebenen Rolle. Nur Technologien, die der Lebenslauf ohnehin führt.`;
 
 export function cvPrompt(input: DocumentInput): string {
   return `Du bist Kepler, der Assistent einer Bewerbungs-App. Die hochgeladene Lebenslauf-Vorlage ist ein fertiges Dokument. Schneide sie auf diese Stelle zu, indem du ihre Platzhalter füllst: "${input.role}" bei ${input.company}.
@@ -136,7 +138,7 @@ ${OUTPUT_RULES}
 - Platzhalter, die im Verzeichnis fehlen, füllst du sinngemäß nach ihrem Namen.
 
 Verzeichnis der Platzhalter:
-${CV_GLOSSARY}
+${cvGlossary()}
 
 ${documentContext(input)}`;
 }
@@ -219,10 +221,18 @@ Gehaltsvorstellung (nur wenn die Anzeige sie ausdrücklich verlangt): 75,000 EUR
   },
 };
 
+/* The budget of a slot as the glossary states it, or nothing for a slot that
+   has none. Read from VALUE_BUDGET rather than written into the prose, so the
+   number the model is given and the number the check applies are one number. */
+function budget(slot: string): string {
+  const max = VALUE_BUDGET[slot];
+  return max ? ` (höchstens ${max} Wörter)` : '';
+}
+
 /* The placeholder glossary is written for the T-format Fassung; a Fassung
    with other names still works through the "sinngemäß" rule at the end. */
 const placeholderGlossary = (t: LanguageText) => `Briefkopf und Adressat
-- {{CANDIDATE_HEADER_ROLE}}: Unterzeile unter dem Namen des Bewerbers, auf die Ausrichtung der Stelle zugeschnitten (z. B. "Senior Frontend Developer · React, Next.js, Expo" oder "Software Developer · TypeScript, Cloud & AI Workflows").
+- {{CANDIDATE_HEADER_ROLE}}${budget('CANDIDATE_HEADER_ROLE')}: Unterzeile unter dem Namen des Bewerbers, auf die Ausrichtung der Stelle zugeschnitten (z. B. "Senior Frontend Developer · React, Next.js, Expo" oder "Software Developer · TypeScript, Cloud & AI Workflows").
 - {{COMPANY_NAME}}: offizieller Name des Unternehmens (z. B. "Personio SE", "BMW Group").
 - {{RECIPIENT_NAME}}: Ansprechperson mit Anrede (z. B. ${t.recipientExamples}) — die erste Person aus <kontakte>, sonst die in der Anzeige genannte; gibt es keine: ${t.recipientFallback}.
 - {{COMPANY_STREET}}: Straße und Hausnummer, nur wenn die Anzeige sie nennt; sonst entfällt die ganze Zeile.
@@ -232,16 +242,16 @@ const placeholderGlossary = (t: LanguageText) => `Briefkopf und Adressat
 - {{SALUTATION}}: formale Anrede passend zum Adressaten (${t.salutationExamples}).
 
 Einstieg
-- {{COMPANY_HOOK_SENTENCE}}: ein ganzer Satz über die Firma, aus der Anzeige belegt — was sie baut, für wen, und wenn genannt, wo sie gerade steht (Wachstum, neuer Markt, Relaunch). Nie über Technik, immer über Produkt und Wirkung (z. B. ${t.hookExamples}). ${t.hookOpening} — er ist der erste Satz nach der Anrede. Er enthält mindestens ein Detail, das nur auf diese Firma passt (Produktname, Kundenzahl, Markt, Phase); ist nichts Konkretes belegbar, lieber schlicht formulieren als Allgemeinplätze wie "innovative Lösungen".
-- {{COMPANY_PRODUCT_PURPOSE}}: dieselbe Wirkung ${t.purposeLead} (z. B. ${t.purposeExamples}). Ohne Punkt, ohne Wiederholung des Firmennamens.
-- {{CANDIDATE_PRIMARY_EXPERIENCE}}: die zur Stelle am besten passende Erfahrung des Bewerbers ${t.experienceLead} (z. B. ${t.experienceExamples}).
+- {{COMPANY_HOOK_SENTENCE}}${budget('COMPANY_HOOK_SENTENCE')}: ein ganzer Satz über die Firma, aus der Anzeige belegt — was sie baut, für wen, und wenn genannt, wo sie gerade steht (Wachstum, neuer Markt, Relaunch). Nie über Technik, immer über Produkt und Wirkung (z. B. ${t.hookExamples}). ${t.hookOpening} — er ist der erste Satz nach der Anrede. Er enthält mindestens ein Detail, das nur auf diese Firma passt (Produktname, Kundenzahl, Markt, Phase); ist nichts Konkretes belegbar, lieber schlicht formulieren als Allgemeinplätze wie "innovative Lösungen".
+- {{COMPANY_PRODUCT_PURPOSE}}${budget('COMPANY_PRODUCT_PURPOSE')}: dieselbe Wirkung ${t.purposeLead} (z. B. ${t.purposeExamples}). Ohne Punkt, ohne Wiederholung des Firmennamens.
+- {{CANDIDATE_PRIMARY_EXPERIENCE}}${budget('CANDIDATE_PRIMARY_EXPERIENCE')}: die zur Stelle am besten passende Erfahrung des Bewerbers ${t.experienceLead} (z. B. ${t.experienceExamples}).
 
 Matrix — vier Zeilen Anforderung ↔ Beleg
-- {{JOB_REQUIREMENT_1}} … {{JOB_REQUIREMENT_4}}: die vier wichtigsten Anforderungen der Anzeige, prägnant formuliert — mit den Wörtern der Anzeige, nicht umschrieben ("Ownership" bleibt "Ownership", "React Native" wird nicht "Mobile"). Reihenfolge nach Gewicht in der Anzeige: was zuerst steht oder als Muss markiert ist, kommt in Zeile 1.
-- {{CANDIDATE_PROOF_POINT_1}} … {{CANDIDATE_PROOF_POINT_4}}: der jeweils passende Beleg aus Lebenslauf und Profil-Angaben nach der XYZ-Logik (Ergebnis + Methode/Tool). Jeder Beleg enthält mindestens eine Zahl (Nutzer, Prozent, Dauer, Teamgröße); gibt der Lebenslauf keine her, dann Umfang (${t.proofScope}) statt Adjektiv — keine Zahl erfinden. Hebe in der rechten Spalte insgesamt ein bis zwei Highlights mit <strong>…</strong> hervor (z. B. <strong>phase6</strong>, <strong>Multi-Agenten-KI-Tool</strong>, <strong>Expo EAS</strong>, <strong>100 % TypeScript</strong>).
+- {{JOB_REQUIREMENT_1}} … {{JOB_REQUIREMENT_4}}${budget('JOB_REQUIREMENT_1')}: die vier wichtigsten Anforderungen der Anzeige, prägnant formuliert — mit den Wörtern der Anzeige, nicht umschrieben ("Ownership" bleibt "Ownership", "React Native" wird nicht "Mobile"). Reihenfolge nach Gewicht in der Anzeige: was zuerst steht oder als Muss markiert ist, kommt in Zeile 1.
+- {{CANDIDATE_PROOF_POINT_1}} … {{CANDIDATE_PROOF_POINT_4}}${budget('CANDIDATE_PROOF_POINT_1')}: der jeweils passende Beleg aus Lebenslauf und Profil-Angaben nach der XYZ-Logik (Ergebnis + Methode/Tool). Jeder Beleg enthält mindestens eine Zahl (Nutzer, Prozent, Dauer, Teamgröße); gibt der Lebenslauf keine her, dann Umfang (${t.proofScope}) statt Adjektiv — keine Zahl erfinden. Hebe in der rechten Spalte insgesamt ein bis zwei Highlights mit <strong>…</strong> hervor (z. B. <strong>phase6</strong>, <strong>Multi-Agenten-KI-Tool</strong>, <strong>Expo EAS</strong>, <strong>100 % TypeScript</strong>).
 
 Schluss
-- {{RELEVANT_TECH_STACK_SUMMARY}}: der für die Stelle relevante Stack in einer Wendung (z. B. ${t.stackExamples}).
+- {{RELEVANT_TECH_STACK_SUMMARY}}${budget('RELEVANT_TECH_STACK_SUMMARY')}: der für die Stelle relevante Stack in einer Wendung (z. B. ${t.stackExamples}).
 - {{NOTICE_PERIOD}} und {{EARLIEST_START_DATE}}: aus <konditionen>.
 - {{SALARY_EXPECTATION_SENTENCE}}: NUR wenn die Anzeige ausdrücklich eine Gehaltsvorstellung verlangt: ${t.salarySentence} (mit führendem Leerzeichen), Betrag nach <konditionen>. Fragt die Anzeige nicht danach, ist der Platzhalter vollständig leer — kein Leerzeichen, kein Text.`;
 

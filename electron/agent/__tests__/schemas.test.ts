@@ -6,7 +6,10 @@ import {
   validateChecks,
   validateVariants,
   validateAsk,
+  validateProofs,
+  MAX_UNSUPPORTED,
 } from '../schemas.ts';
+import { DocumentKind } from '../../../src/shared/enums.ts';
 
 const FULL = {
   role: 'Senior Designer',
@@ -148,6 +151,48 @@ describe('validateChecks', () => {
   it('keeps the issue list, dropping blank entries', () => {
     expect(validateChecks({ issues: [' Gehalt ohne Währung ', ''] })).toEqual(['Gehalt ohne Währung']);
     expect(validateChecks({ issues: [] })).toEqual([]);
+  });
+});
+
+describe('validateProofs', () => {
+  it('reads the claims it was handed', () => {
+    const claims = validateProofs({
+      unsupported: [
+        { document: 'COVER_LETTER', quote: 'zwei Produktbereiche von Grund auf gebaut', why: 'nicht im CV' },
+      ],
+    });
+
+    expect(claims).toEqual([
+      {
+        document: DocumentKind.COVER_LETTER,
+        quote: 'zwei Produktbereiche von Grund auf gebaut',
+        why: 'nicht im CV',
+      },
+    ]);
+  });
+
+  it('drops an entry naming a document that does not exist', () => {
+    /* The schema carries the closed set; the validator is the net for the
+       rest, the way every other validator in this file is. */
+    const claims = validateProofs({
+      unsupported: [{ document: 'GLOSSAR', quote: 'x', why: 'y' }],
+    });
+
+    expect(claims).toEqual([]);
+  });
+
+  it('treats a missing list as nothing found', () => {
+    expect(validateProofs({})).toEqual([]);
+  });
+
+  it('caps what it returns, however much comes back', () => {
+    const many = Array.from({ length: 12 }, (_, i) => ({
+      document: 'COVER_LETTER',
+      quote: 'q' + i,
+      why: 'w',
+    }));
+
+    expect(validateProofs({ unsupported: many })).toHaveLength(MAX_UNSUPPORTED);
   });
 });
 

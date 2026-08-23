@@ -7,7 +7,7 @@ import { FACT_OPTIONS } from '../../src/data/config.ts';
 import { sanitizeInline } from '../../src/lib/inline-html.ts';
 import { normalizeSalaryText } from '../../src/lib/salary.ts';
 import { isHttpUrl } from '../../src/lib/url.ts';
-import { DocumentLanguage } from '../../src/shared/enums.ts';
+import { DocumentKind, DocumentLanguage } from '../../src/shared/enums.ts';
 
 /* How many ways to say a passage the rewrite step asks for. Fixed, because the
    popover is built for three rows — a fourth would be generated and dropped. */
@@ -42,6 +42,20 @@ export interface Extraction {
   language: DocumentLanguage | null;
   people: ExtractedPerson[];
 }
+
+/* One claim in a generated document that nothing in the Lebenslauf or the
+   profile backs up. */
+export interface UnsupportedClaim {
+  document: DocumentKind;
+  /* The passage as the document words it — quoted back to the model when the
+     letter is rewritten, and shown to the user in the closing comment. */
+  quote: string;
+  why: string;
+}
+
+/* Five is already more than the comment can show; past that the answer is
+   the model listing everything it is unsure about rather than what is wrong. */
+export const MAX_UNSUPPORTED = 5;
 
 /* ── JSON Schemas for outputFormat ────────────────────────────────────── */
 
@@ -136,6 +150,28 @@ export const CHECKS_SCHEMA = {
   additionalProperties: false,
   properties: { issues: { type: 'array', items: { type: 'string' } } },
   required: ['issues'],
+} as const;
+
+export const PROOFS_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    unsupported: {
+      type: 'array',
+      maxItems: MAX_UNSUPPORTED,
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          document: { type: 'string', enum: [DocumentKind.LEBENSLAUF, DocumentKind.COVER_LETTER] },
+          quote: { type: 'string' },
+          why: { type: 'string' },
+        },
+        required: ['document', 'quote', 'why'],
+      },
+    },
+  },
+  required: ['unsupported'],
 } as const;
 
 /* Kepler's answer to a comment that addressed it. */
@@ -264,6 +300,25 @@ export function validateChecks(x: unknown): string[] {
   const r = asRecord(x, 'Prüfung');
   if (!Array.isArray(r.issues)) return [];
   return r.issues.map(text).filter((s): s is string => s !== null);
+}
+
+/* Never throws: an empty answer means the documents hold up, which is the
+   common case and must not fail the step. Entries that name a document the
+   app does not have are dropped rather than stored. */
+export function validateProofs(x: unknown): UnsupportedClaim[] {
+  const r = asRecord(x, 'Belege');
+  if (!Array.isArray(r.unsupported)) return [];
+  const claims: UnsupportedClaim[] = [];
+  for (const entry of r.unsupported) {
+    if (typeof entry !== 'object' || entry === null) continue;
+    const { document, quote, why } = entry as Record<string, unknown>;
+    const kind = text(document);
+    const passage = text(quote);
+    if (!passage) continue;
+    if (kind !== DocumentKind.LEBENSLAUF && kind !== DocumentKind.COVER_LETTER) continue;
+    claims.push({ document: kind, quote: passage, why: text(why) ?? '' });
+  }
+  return claims.slice(0, MAX_UNSUPPORTED);
 }
 
 /* The rewrite suggestions. Short of the full count the answer is rejected so

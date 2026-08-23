@@ -6,6 +6,7 @@ import {
   cvPrompt,
   extractionPrompt,
   letterPrompt,
+  proofsPrompt,
   variantsPrompt,
 } from '../prompts.ts';
 import { DocumentLanguage } from '../../../src/shared/enums.ts';
@@ -243,6 +244,39 @@ describe('variantsPrompt', () => {
   it('clips a letter that would otherwise dominate the call', () => {
     const prompt = variantsPrompt({ ...VARIANTS_INPUT, letter: 'wort '.repeat(20_000) });
     expect(prompt.length).toBeLessThan(30_000);
+  });
+});
+
+describe('proofsPrompt', () => {
+  const INPUT = {
+    cv: '<p>Timo Hünnebeck · 3,5 Jahre React</p>',
+    letter: '<p>Zwei Produktbereiche von Grund auf gebaut.</p>',
+    cvFassung: '<p>Senior Frontend Developer bei Horizon Alpha seit 2023</p>',
+    profileFacts: ['Kündigungsfrist 3 Monate'],
+  };
+
+  it('hands over both documents, the Fassung and the profile', () => {
+    const prompt = proofsPrompt(INPUT);
+
+    expect(prompt).toContain('Zwei Produktbereiche von Grund auf gebaut.');
+    expect(prompt).toContain('Horizon Alpha');
+    expect(prompt).toContain('Kündigungsfrist 3 Monate');
+  });
+
+  it('asks about facts, not about style', () => {
+    /* The letter prompt owns the voice. A second opinion on tone here would
+       rewrite a well-grounded letter for no reason. */
+    const prompt = proofsPrompt(INPUT);
+
+    expect(prompt).toContain('Zahl');
+    expect(prompt).not.toContain('Floskel');
+  });
+
+  it('says what to do when nothing backs a claim and when the CV is missing', () => {
+    const prompt = proofsPrompt({ ...INPUT, cvFassung: null, profileFacts: [] });
+
+    expect(prompt).toContain('(kein Lebenslauf hinterlegt)');
+    expect(prompt).toContain('(keine Angaben)');
   });
 });
 

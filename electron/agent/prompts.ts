@@ -16,7 +16,7 @@ const MAX_LISTING = 30_000;
    contains a literal </anzeige> would otherwise break out of its block. */
 function sealed(text: string): string {
   return text.replace(
-    /<\/(anzeige|vorlage|platzhalter|profil|kontakte|lebenslauf|brief|stelle|hinweis|karte|personen|kommentare|interviews|aufgaben|frage)>/gi,
+    /<\/(anzeige|vorlage|platzhalter|profil|kontakte|lebenslauf-dokument|lebenslauf|anschreiben|brief|stelle|hinweis|karte|personen|kommentare|interviews|aufgaben|frage)>/gi,
     '',
   );
 }
@@ -419,6 +419,46 @@ ${documentExcerpt(cvHtml)}
 <anschreiben>
 ${documentExcerpt(letterHtml)}
 </anschreiben>`;
+}
+
+/* What the proofs step reads. The documents arrive as the HTML that was just
+   written — documentExcerpt turns each into what it says — while the Fassung
+   and the profile are the two places a fact may legitimately come from. */
+export interface ProofsInput {
+  cv: string;
+  letter: string;
+  /* The selected Lebenslauf Fassung, or null when none is uploaded — then the
+     letter had nothing but the profile to work from and the check says so. */
+  cvFassung: string | null;
+  profileFacts: string[];
+}
+
+export function proofsPrompt(input: ProofsInput): string {
+  return `Du bist Kepler, der Assistent einer Bewerbungs-App. Prüfe, ob die Aussagen in den zwei erzeugten Dokumenten durch die Quellen gedeckt sind.
+
+Quellen sind ausschließlich <lebenslauf> und <profil>. Alles andere zählt nicht — auch nicht, was plausibel klingt.
+
+Prüfe jede sachliche Aussage: Zahl, Zeitraum, Arbeitgeber, Rolle, Technologie, Umfang. Für jede gilt: Steht sie so in einer Quelle, ist sie gedeckt. Steht dort weniger ("mitgebaut" statt "von Grund auf gebaut"), eine andere Zahl oder gar nichts, ist sie nicht gedeckt.
+
+Nicht deine Aufgabe sind Stil, Ton, Länge und Formulierung. Dazu sagst du nichts.
+
+unsupported: die ungedeckten Aussagen, höchstens fünf. document ist "LEBENSLAUF" oder "COVER_LETTER", quote die Aussage im Wortlaut des Dokuments, why in unter 12 Wörtern, was die Quelle stattdessen hergibt. Leer, wenn alles gedeckt ist.
+
+<anschreiben>
+${documentExcerpt(input.letter)}
+</anschreiben>
+
+<lebenslauf-dokument>
+${documentExcerpt(input.cv)}
+</lebenslauf-dokument>
+
+<lebenslauf>
+${cvBlock(input.cvFassung)}
+</lebenslauf>
+
+<profil>
+${bullets(input.profileFacts, '(keine Angaben)')}
+</profil>`;
 }
 
 /* One entry of the card's comment thread, as Kepler reads it. */

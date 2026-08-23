@@ -8,7 +8,7 @@ import { seedIfEmpty } from '../../db/seed.ts';
 import { createRepo, type Repo } from '../../db/repo.ts';
 import { createRunStore, type RunStore } from '../run-store.ts';
 import { runPipeline, type LlmRequest, type PipelineDeps } from '../orchestrator.ts';
-import { STOP_ERROR, stepPlan } from '../labels.ts';
+import { PROOFS_REWRITE_LABEL, STOP_ERROR, stepPlan } from '../labels.ts';
 import { KeplerError } from '../errors.ts';
 import {
   AgentRunStatus,
@@ -486,16 +486,22 @@ describe('runPipeline', () => {
     const long = Array.from({ length: 40 }, (_, i) => 'wort' + i).join(' ');
     let asked = 0;
     const llm = fakeLlm({
-      document: () => {
+      document: (req) => {
         asked++;
         /* Both templates' slots in one answer: the CV Fassung wants
              COMPANY_NAME, and a value for a slot a template does not have is
-             ignored by fillPlaceholders. Answering only the hook would fail the
-             CV step for an unanswered placeholder. */
+             ignored by fillPlaceholders (and, since the budget check, ignored
+             by the redo decision too — the CV never sees this value as its
+             own). Short only once told to shorten, so the redo this test
+             checks for is unmistakably the letter's, not an accident of call
+             order. */
         return {
           fields: [
             { key: 'COMPANY_NAME', value: 'Helios Energie' },
-            { key: 'COMPANY_HOOK_SENTENCE', value: asked === 1 ? long : 'Kurz und knapp.' },
+            {
+              key: 'COMPANY_HOOK_SENTENCE',
+              value: req.prompt.includes('Diese Werte sind zu lang') ? 'Kurz und knapp.' : long,
+            },
           ],
         };
       },
@@ -503,7 +509,8 @@ describe('runPipeline', () => {
 
     await runPipeline(appId, createRun(appId), deps({ llm }));
 
-    /* Two document calls for the letter, one for the CV. */
+    /* One document call for the CV (its own budget is never at issue), two
+       for the letter — its own over-budget answer, then the redo. */
     expect(asked).toBe(3);
     const letter = repo
       .load()
@@ -1116,5 +1123,53 @@ describe('runPipeline', () => {
     await runPipeline(appId, runId, deps());
 
     expect(runs.getRun(runId).status).toBe(AgentRunStatus.DONE);
+  });
+
+  it('reads the letter back off disk when resumed at PROOFS alone', async () => {
+    /* cvHtml/letterHtml are only set inside the GEN_CV/GEN_LETTER blocks —
+       both are DONE on this second run, so PROOFS falls through to
+       readGeneratedHtml exactly as VALIDATE does. A regression here would
+       hand the model '' and report no claims on an unchecked letter. */
+    uploadTemplates();
+    const appId = createApp({ postingText: 'Wir suchen einen Senior Designer …' });
+    const runId = createRun(appId);
+    await runPipeline(appId, runId, deps());
+    expect(runs.getRun(runId).status).toBe(AgentRunStatus.DONE);
+
+    const proofsStep = runs.stepsFor(runId).find((s) => s.key === AgentStepKey.PROOFS)!;
+    runs.resetStep(proofsStep.id, proofsStep.label);
+    runs.requeueRun(runId, 'Kepler wartet in der Warteschlange…');
+
+    const prompts: string[] = [];
+    const llm = fakeLlm({
+      proofs: (req) => {
+        prompts.push(req.prompt);
+        return { unsupported: [] };
+      },
+    });
+    await runPipeline(appId, runId, deps({ llm }));
+
+    expect(runs.getRun(runId).status).toBe(AgentRunStatus.DONE);
+    expect(prompts.at(-1)).toContain('anschreiben-Vorlage für Helios Energie');
+  });
+
+  it('flips the step label to the rewrite wording while it rewrites', async () => {
+    uploadTemplates();
+    const appId = createApp({ postingText: 'Wir suchen einen Senior Designer …' });
+    let checks = 0;
+    const llm = fakeLlm({
+      proofs: () => {
+        checks++;
+        return checks === 1
+          ? { unsupported: [{ document: 'COVER_LETTER', quote: 'zwei Bereiche', why: 'nicht im CV' }] }
+          : { unsupported: [] };
+      },
+    });
+
+    await runPipeline(appId, createRun(appId), deps({ llm }));
+
+    expect(
+      events.some((e) => e.step?.key === AgentStepKey.PROOFS && e.step.label === PROOFS_REWRITE_LABEL),
+    ).toBe(true);
   });
 });

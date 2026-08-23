@@ -292,7 +292,13 @@ export async function runPipeline(applicationId: string, runId: number, deps: Pi
     /* Values still over budget after the redo, per document. They do not stop
        the run — they become a bullet in the closing comment. Keyed so a
        regenerated document overwrites its own earlier findings instead of
-       reporting the same slot twice. */
+       reporting the same slot twice.
+
+       Pipeline-scoped, not persisted: a run resumed at COMMENT has GEN_CV and
+       GEN_LETTER already DONE, so this stays empty and the closing comment
+       silently drops whatever the first attempt found. Pre-existing for this
+       and `issues` below; PROOFS's `claims` joins the same pattern — not a
+       bug to fix here, just not one to mistake for new breakage either. */
     const tooLong = new Map<DocumentKind, OverBudget[]>();
 
     let cvHtml: string | null = null;
@@ -322,6 +328,8 @@ export async function runPipeline(applicationId: string, runId: number, deps: Pi
     }
 
     /* ── Are the claims backed by the Lebenslauf? ─────────────────────── */
+    /* Pipeline-scoped like `tooLong` above — empty, not a bug, on a run
+       resumed at COMMENT. */
     let claims: UnsupportedClaim[] = [];
     if (pending(AgentStepKey.PROOFS)) {
       start(AgentStepKey.PROOFS);
@@ -357,8 +365,10 @@ export async function runPipeline(applicationId: string, runId: number, deps: Pi
         alive();
         runs.setRunLabel(runId, PROOFS_REWRITE_LABEL);
         const step = byKey.get(AgentStepKey.PROOFS);
-        if (step) byKey.set(AgentStepKey.PROOFS, runs.relabelStep(step.id, PROOFS_REWRITE_LABEL));
-        push(byKey.get(AgentStepKey.PROOFS));
+        if (step) {
+          byKey.set(AgentStepKey.PROOFS, runs.relabelStep(step.id, PROOFS_REWRITE_LABEL));
+          push(byKey.get(AgentStepKey.PROOFS));
+        }
 
         const generated = await generateDocument(deps, applicationId, {
           kind: DocumentKind.COVER_LETTER,
@@ -380,6 +390,8 @@ export async function runPipeline(applicationId: string, runId: number, deps: Pi
     }
 
     /* ── Validate, then report ────────────────────────────────────────── */
+    /* Pipeline-scoped like `tooLong` above — empty, not a bug, on a run
+       resumed at COMMENT. */
     let issues: string[] = [];
     if (pending(AgentStepKey.VALIDATE)) {
       start(AgentStepKey.VALIDATE);
@@ -607,7 +619,7 @@ function proofsComplaint(claims: UnsupportedClaim[]): string {
   return [
     '',
     'Diese Aussagen im bisherigen Anschreiben sind durch <lebenslauf> und <profil> nicht gedeckt. Schreibe die ganze Antwort noch einmal, alle Platzhalter, und stütze dich nur auf Belegtes:',
-    ...claims.map((c) => `- „${c.quote}" — ${c.why}`),
+    ...claims.map((c) => `- „${c.quote}“ — ${c.why}`),
   ].join('\n');
 }
 
@@ -639,8 +651,17 @@ async function generateDocument(
       signal: deps.signal,
     });
 
+  /* Scoped to this Fassung's own slots: a value for a placeholder the
+     template does not carry is discarded by fillPlaceholders below and never
+     reaches the document, so measuring it against a budget is measuring
+     nothing — and redoing a 180 s generation over it would cost real time for
+     no change anyone would see. */
+  const slots = modelPlaceholders(template);
+  const overForThisTemplate = (v: Record<string, string>) =>
+    overBudget(v).filter((o) => slots.includes(o.slot));
+
   let values = await ask(basePrompt);
-  let over = overBudget(values);
+  let over = overForThisTemplate(values);
   /* One redo, and then whatever it says. This is deliberately not routed
      through validate(): a validator that throws gets one retry from
      createLlmRunner and fails the step after it, which is right for a
@@ -648,7 +669,7 @@ async function generateDocument(
      having, and the user is told about it in the closing comment instead. */
   if (over.length && !skipBudgetRedo) {
     values = await ask(basePrompt + budgetComplaint(over));
-    over = overBudget(values);
+    over = overForThisTemplate(values);
   }
 
   /* Deleted during the call: its files were already purged with it, and
@@ -737,7 +758,7 @@ function finalComment(postingUrl: string | null, findings: Findings): string {
   );
   const bullets = [
     ...findings.claims.map(
-      (c) => `**${DOCUMENT_LABEL[c.document]}**: „${c.quote}" ist nicht belegt — ${c.why}`,
+      (c) => `**${DOCUMENT_LABEL[c.document]}**: „${c.quote}“ ist nicht belegt — ${c.why}`,
     ),
     ...lengths,
     ...findings.issues,

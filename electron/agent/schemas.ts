@@ -302,9 +302,11 @@ export function validateChecks(x: unknown): string[] {
   return r.issues.map(text).filter((s): s is string => s !== null);
 }
 
-/* Never throws: an empty answer means the documents hold up, which is the
-   common case and must not fail the step. Entries that name a document the
-   app does not have are dropped rather than stored. */
+/* Never throws for the structured-output shape the SDK guarantees — only a
+   malformed top-level answer still raises, through asRecord. An empty answer
+   means the documents hold up, which is the common case and must not fail the
+   step. Entries that name a document the app does not have are dropped rather
+   than stored. */
 export function validateProofs(x: unknown): UnsupportedClaim[] {
   const r = asRecord(x, 'Belege');
   if (!Array.isArray(r.unsupported)) return [];

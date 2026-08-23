@@ -1018,6 +1018,30 @@ describe('runPipeline', () => {
     expect(comment.text).toContain('zwei Bereiche');
   });
 
+  it('does not fail the run when the proofs call itself rejects', async () => {
+    /* PROOFS is advisory, like the budget check the design (§3) already
+       exempts from failing a step: both documents are already on disk and
+       correct, so a broken proofs call must not turn a finished run into a
+       FAILED one with no closing comment. */
+    uploadTemplates();
+    const appId = createApp({ postingText: 'Wir suchen einen Senior Designer …' });
+    const llm = fakeLlm({
+      proofs: () => {
+        throw new Error('Belege-Prüfung nicht erreichbar');
+      },
+    });
+
+    const runId = createRun(appId);
+    await runPipeline(appId, runId, deps({ llm }));
+
+    expect(runs.getRun(runId).status).toBe(AgentRunStatus.DONE);
+    const comment = repo
+      .load()
+      .comments.filter((c) => c.application_id === appId)
+      .at(-1)!;
+    expect(comment.text).toContain('Fertig');
+  });
+
   it('generates the letter at most three times, whatever both checks say', async () => {
     /* The ceiling the design promises: one letter, one budget redo, one
        proofs rewrite — and the rewrite suppresses a second budget redo, so
@@ -1033,10 +1057,12 @@ describe('runPipeline', () => {
     let letters = 0;
     const llm = fakeLlm({
       document: (req) => {
-        /* Braced, not bare: the CV Fassung has no COMPANY_HOOK_SENTENCE slot,
-           but its own budget redo still names the slot in prose once the
-           model answers it anyway (see the mock's fields below) — only the
-           letter's own prompt carries the placeholder itself. */
+        /* Braced, not bare: the mock answers COMPANY_HOOK_SENTENCE for every
+           document call, CV included, but overForThisTemplate scopes the
+           budget check to a template's own slots — the CV has no such
+           placeholder, so that answer never earns it a redo of its own. Only
+           letterPrompt's glossary spells the name in braces, so matching
+           {{…}} is what counts letter generations and not CV ones. */
         if (req.prompt.includes('{{COMPANY_HOOK_SENTENCE}}')) letters++;
         return {
           fields: [

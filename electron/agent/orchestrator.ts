@@ -333,58 +333,83 @@ export async function runPipeline(applicationId: string, runId: number, deps: Pi
     let claims: UnsupportedClaim[] = [];
     if (pending(AgentStepKey.PROOFS)) {
       start(AgentStepKey.PROOFS);
-      const cvFassung =
-        readSelectedTemplate(deps.userDataPath, TemplateKind.LEBENSLAUF, language)?.html ?? null;
-      const profileFacts = repo.load().profileFacts.map((f) => f.text);
-      /* On a resumed run the documents are not in memory — they are read back
-         off disk, the same way the validation step reads them. */
-      const readCv = () => cvHtml ?? readGeneratedHtml(deps, applicationId, DocumentKind.LEBENSLAUF);
-      const readLetter = () =>
-        letterHtml ?? readGeneratedHtml(deps, applicationId, DocumentKind.COVER_LETTER);
+      try {
+        const cvFassung =
+          readSelectedTemplate(deps.userDataPath, TemplateKind.LEBENSLAUF, language)?.html ?? null;
+        const profileFacts = repo.load().profileFacts.map((f) => f.text);
+        /* On a resumed run the documents are not in memory — they are read back
+           off disk, the same way the validation step reads them. */
+        const readCv = () => cvHtml ?? readGeneratedHtml(deps, applicationId, DocumentKind.LEBENSLAUF);
+        const readLetter = () =>
+          letterHtml ?? readGeneratedHtml(deps, applicationId, DocumentKind.COVER_LETTER);
 
-      const check = () =>
-        deps.llm({
-          prompt: proofsPrompt({
-            cv: readCv(),
-            letter: readLetter(),
-            cvFassung,
-            profileFacts,
-          }),
-          schema: PROOFS_SCHEMA,
-          validate: validateProofs,
-          timeoutMs: SINGLE_CALL_TIMEOUT,
-          signal,
-        });
+        const check = () =>
+          deps.llm({
+            prompt: proofsPrompt({
+              cv: readCv(),
+              letter: readLetter(),
+              cvFassung,
+              profileFacts,
+            }),
+            schema: PROOFS_SCHEMA,
+            validate: validateProofs,
+            timeoutMs: SINGLE_CALL_TIMEOUT,
+            signal,
+          });
 
-      claims = await check();
-      /* Only the Anschreiben is rewritten. The Lebenslauf is copied from the
-         Fassung and only its header line is generated, so a claim it makes is
-         the Fassung's to fix, not Kepler's — it is reported instead. */
-      const inLetter = claims.filter((c) => c.document === DocumentKind.COVER_LETTER);
-      if (inLetter.length) {
-        alive();
-        runs.setRunLabel(runId, PROOFS_REWRITE_LABEL);
-        const step = byKey.get(AgentStepKey.PROOFS);
-        if (step) {
-          byKey.set(AgentStepKey.PROOFS, runs.relabelStep(step.id, PROOFS_REWRITE_LABEL));
-          push(byKey.get(AgentStepKey.PROOFS));
-        }
-
-        const generated = await generateDocument(deps, applicationId, {
-          kind: DocumentKind.COVER_LETTER,
-          buildPrompt: letterPrompt,
-          ...docInput(TemplateKind.ANSCHREIBEN),
-          complaint: proofsComplaint(inLetter),
-          /* Its complaint already says what to change; a budget redo on top
-             would make one unlucky letter three generations. */
-          skipBudgetRedo: true,
-        });
-        letterHtml = generated.html;
-        /* set, not push: this document was just written again, so its earlier
-           findings describe a file that no longer exists. */
-        tooLong.set(DocumentKind.COVER_LETTER, generated.overBudget);
-        /* One rewrite, then whatever the second reading says. */
         claims = await check();
+        /* Only the Anschreiben is rewritten. The Lebenslauf is copied from the
+           Fassung and only its header line is generated, so a claim it makes is
+           the Fassung's to fix, not Kepler's — it is reported instead. */
+        const inLetter = claims.filter((c) => c.document === DocumentKind.COVER_LETTER);
+        if (inLetter.length) {
+          alive();
+          runs.setRunLabel(runId, PROOFS_REWRITE_LABEL);
+          const rewriteStep = byKey.get(AgentStepKey.PROOFS);
+          if (rewriteStep) {
+            byKey.set(AgentStepKey.PROOFS, runs.relabelStep(rewriteStep.id, PROOFS_REWRITE_LABEL));
+            push(byKey.get(AgentStepKey.PROOFS));
+          }
+
+          const generated = await generateDocument(deps, applicationId, {
+            kind: DocumentKind.COVER_LETTER,
+            buildPrompt: letterPrompt,
+            ...docInput(TemplateKind.ANSCHREIBEN),
+            complaint: proofsComplaint(inLetter),
+            /* Its complaint already says what to change; a budget redo on top
+               would make one unlucky letter three generations. */
+            skipBudgetRedo: true,
+          });
+          letterHtml = generated.html;
+          /* set, not push: this document was just written again, so its earlier
+             findings describe a file that no longer exists. */
+          tooLong.set(DocumentKind.COVER_LETTER, generated.overBudget);
+
+          /* Back to the checking wording before the second check() — the label
+             exists so the step does not lie about what it is doing, and would
+             otherwise still claim to be rewriting while only reading the
+             result back. */
+          const checkingLabel = stepLabel(AgentStepKey.PROOFS, AgentStepStatus.RUN, labelCtx());
+          runs.setRunLabel(runId, checkingLabel);
+          const checkingStep = byKey.get(AgentStepKey.PROOFS);
+          if (checkingStep) {
+            byKey.set(AgentStepKey.PROOFS, runs.relabelStep(checkingStep.id, checkingLabel));
+            push(byKey.get(AgentStepKey.PROOFS));
+          }
+
+          /* One rewrite, then whatever the second reading says. */
+          claims = await check();
+        }
+      } catch (err) {
+        /* PROOFS is advisory, exactly like the budget check the design (§3)
+           already exempts from failing a step: both documents are on disk and
+           correct no matter what this call answers, so a broken proofs call
+           must not sink an otherwise finished run. Deleted and Stopped are the
+           pipeline's own control flow rather than a proofs failure — they
+           still have to reach the run's outer catch, not be swallowed here. */
+        if (err instanceof Deleted || err instanceof Stopped || signal?.aborted) throw err;
+        console.error('[agent] Belege-Prüfung fehlgeschlagen', err);
+        claims = [];
       }
       done(AgentStepKey.PROOFS, true);
     }

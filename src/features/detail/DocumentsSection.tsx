@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { documentCaption } from './document-caption';
 import { useApp } from '../../state/store-context';
+import { agentLocked } from '../../state/selectors';
 import { DocumentCard } from '../../ui/DocumentCard';
 import { DotsMenu, DownloadItem } from '../../ui/DotsMenu';
 import { MenuItem } from '../../ui/MenuItem';
@@ -10,6 +11,11 @@ import { ERROR_TEXT } from '../../ui/styles';
 
 export function DocumentsSection({ cardId }: { cardId: string }) {
   const { st, set, replaceDocument } = useApp();
+  /* PROOFS can still rewrite the Anschreiben while the run is in flight — the
+     editor opening it would race that rewrite's write-back and the two PDF
+     renders. Gate on the same lock the card's own fields already respect
+     instead of teaching the editor to re-read a file out from under itself. */
+  const locked = agentLocked(st, cardId);
   const [error, setError] = useState<string | null>(null);
   /* Sizes by stored path, read from disk rather than stored — a row that lost
      its file would otherwise keep quoting a size that is no longer true. */
@@ -59,7 +65,7 @@ export function DocumentsSection({ cardId }: { cardId: string }) {
              replaced by a PDF of the user's own has none, so it lands in the
              browser the way a template does in the profile; the PDF stays one
              menu entry away, where Vorschau gets it instead. */
-          const editable = !!d.file_path;
+          const editable = !!d.file_path && !locked;
           return (
             <DocumentCard
               key={d.id}

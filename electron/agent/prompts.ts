@@ -433,14 +433,21 @@ export interface ProofsInput {
   profileFacts: string[];
 }
 
+/* Scoped to the applicant's own facts on purpose: letterPrompt legitimately
+   sources the company hook, the product purpose and the requirement matrix
+   from <anzeige>, and the notice period / start date / salary sentence from
+   <konditionen> — none of which this check ever sees. Handing the posting
+   over as a source here would let a fabricated company detail launder
+   through as "checked"; the narrower question is what actually protects
+   against a fabricated claim without also flagging every legitimate one. */
 export function proofsPrompt(input: ProofsInput): string {
   return `Du bist Kepler, der Assistent einer Bewerbungs-App. Prüfe, ob die Aussagen in den zwei erzeugten Dokumenten durch die Quellen gedeckt sind.
 
-Quellen sind ausschließlich <lebenslauf> und <profil>. Alles andere zählt nicht — auch nicht, was plausibel klingt.
+Prüfe ausschließlich die Aussagen über den Bewerber: seine Stationen, Zeiträume, Arbeitgeber, Rollen, Technologien, Zahlen und den Umfang seiner Arbeit. Quellen dafür sind allein <lebenslauf> und <profil> — alles andere zählt nicht, auch nicht, was plausibel klingt. Steht dort weniger ("mitgebaut" statt "von Grund auf gebaut"), eine andere Zahl oder gar nichts, ist die Aussage nicht gedeckt.
 
-Prüfe jede sachliche Aussage: Zahl, Zeitraum, Arbeitgeber, Rolle, Technologie, Umfang. Für jede gilt: Steht sie so in einer Quelle, ist sie gedeckt. Steht dort weniger ("mitgebaut" statt "von Grund auf gebaut"), eine andere Zahl oder gar nichts, ist sie nicht gedeckt.
+Nicht deine Aufgabe sind Aussagen über das Unternehmen und die Stelle — die stammen aus der Stellenanzeige, die du hier nicht siehst — und ebenso wenig die Konditionen des Wechsels (Kündigungsfrist, Eintrittstermin, Gehaltsvorstellung). Dazu sagst du nichts, auch wenn sie Zahlen enthalten.
 
-Nicht deine Aufgabe sind Stil, Ton, Länge und Formulierung. Dazu sagst du nichts.
+Nicht deine Aufgabe sind außerdem Stil, Ton, Länge und Formulierung.
 
 unsupported: die ungedeckten Aussagen, höchstens fünf. document ist "LEBENSLAUF" oder "COVER_LETTER", quote die Aussage im Wortlaut des Dokuments, why in unter 12 Wörtern, was die Quelle stattdessen hergibt. Leer, wenn alles gedeckt ist.
 

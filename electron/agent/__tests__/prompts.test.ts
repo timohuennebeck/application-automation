@@ -278,6 +278,19 @@ describe('proofsPrompt', () => {
     expect(prompt).toContain('(kein Lebenslauf hinterlegt)');
     expect(prompt).toContain('(keine Angaben)');
   });
+
+  it('keeps company statements and the terms of the move out of scope', () => {
+    /* letterPrompt legitimately sources the hook, the requirement matrix and
+       the notice period / start date / salary sentence from the posting and
+       <konditionen> — neither of which this check ever sees. A model told to
+       verify those against <lebenslauf> and <profil> would flag them as
+       unsupported on every ordinary run. */
+    const prompt = proofsPrompt(INPUT);
+
+    expect(prompt).toContain('Nicht deine Aufgabe sind Aussagen über das Unternehmen und die Stelle');
+    expect(prompt).toContain('Kündigungsfrist');
+    expect(prompt).toContain('Eintrittstermin');
+  });
 });
 
 describe('askPrompt', () => {

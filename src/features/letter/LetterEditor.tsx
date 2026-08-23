@@ -558,7 +558,7 @@ export function LetterEditor() {
               animation: 'om-pulse 1.4s ease-in-out infinite',
             }}
           >
-            Anschreiben wird geladen…
+            {doc.title} wird geladen…
           </div>
         ) : (
           <iframe

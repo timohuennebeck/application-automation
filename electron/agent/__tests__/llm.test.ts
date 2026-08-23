@@ -18,6 +18,27 @@ describe('createLlmRunner', () => {
     expect(invoke).toHaveBeenCalledTimes(1);
   });
 
+  it('gives a plain completion two turns, so the structured answer fits', async () => {
+    /* One turn is not enough: the model answers in one and the CLI emits the
+       structured output in another, so every real prompt came back
+       error_max_turns. Every Kepler run failed at its first step. */
+    const invoke = vi.fn<(call: { maxTurns: number }) => Promise<unknown>>().mockResolvedValue({});
+
+    await createLlmRunner(invoke)({ prompt: 'p', schema: SCHEMA, validate: (x) => x });
+
+    expect(invoke.mock.lastCall?.[0].maxTurns).toBe(2);
+  });
+
+  it('lets a step ask for more turns than the floor', async () => {
+    /* The contact step actually loops — it searches the web — so the floor
+       is a floor, not a budget. */
+    const invoke = vi.fn<(call: { maxTurns: number }) => Promise<unknown>>().mockResolvedValue({});
+
+    await createLlmRunner(invoke)({ prompt: 'p', schema: SCHEMA, validate: (x) => x, maxTurns: 8 });
+
+    expect(invoke.mock.lastCall?.[0].maxTurns).toBe(8);
+  });
+
   it('retries once with the complaint appended, then succeeds', async () => {
     const invoke = vi
       .fn<(call: { prompt: string }) => Promise<unknown>>()

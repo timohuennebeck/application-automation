@@ -31,7 +31,14 @@ export function createLlmRunner(invoke: ModelInvoke): LlmRunner {
       prompt: req.prompt,
       schema: req.schema,
       tools: req.tools ?? [],
-      maxTurns: req.maxTurns ?? 1,
+      /* Two, not one. A single structured completion still takes the model an
+         assistant turn to answer and the CLI another to emit the structured
+         output, so `maxTurns: 1` fails with error_max_turns on every prompt
+         long enough to matter — which is all of them. Verified against the
+         real extraction prompt: 1 fails, 2 answers. This is a floor for a
+         non-agentic call, not a budget; the one step that actually loops
+         (contact research) asks for 8. */
+      maxTurns: req.maxTurns ?? 2,
       timeoutMs: req.timeoutMs ?? DEFAULT_TIMEOUT,
       signal: req.signal,
     };

@@ -87,8 +87,11 @@ partial application produces exactly that, and hides it in a grey line the
 reader may not read.
 
 **A match must be exact and unique.** `find` is searched in the document's HTML
-after entity normalisation. Zero matches or more than one, and the whole set is
-refused. Kepler writes without asking, so the placement rule has to be strict —
+verbatim — no normalisation. Zero matches or more than one, and the whole set
+is refused. Normalising entities would mean mapping indices from a normalised
+view back onto the real bytes, and that mapping is exactly where a
+write-without-asking feature should not be clever: a passage carrying `&amp;`
+simply does not match, and is refused like any other miss. Kepler writes without asking, so the placement rule has to be strict —
 the wrong paragraph rewritten silently is the failure that matters.
 
 **A passage carrying markup cannot be matched.** Kepler reads the document

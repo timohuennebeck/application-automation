@@ -57,7 +57,7 @@ function Shell() {
       }}
     >
       <TopBar />
-      {st.letterCardId ? <LetterEditor /> : st.openCardId ? <DetailView /> : <Board />}
+      {st.editorCardId ? <LetterEditor /> : st.openCardId ? <DetailView /> : <Board />}
       <CardMenu />
       <CardContactPicker />
       {st.searchOpen && <SearchPalette />}

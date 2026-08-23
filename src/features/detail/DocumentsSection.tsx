@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { documentCaption } from './document-caption';
 import { useApp } from '../../state/store-context';
-import { DocumentKind } from '../../shared/enums';
 import { DocumentCard } from '../../ui/DocumentCard';
 import { DotsMenu, DownloadItem } from '../../ui/DotsMenu';
 import { MenuItem } from '../../ui/MenuItem';
@@ -55,12 +54,12 @@ export function DocumentsSection({ cardId }: { cardId: string }) {
       {error && <div style={ERROR_TEXT}>{error}</div>}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
         {docs.map((d) => {
-          /* The Anschreiben opens in the app, where passages can be marked and
-             rewritten — but only if the HTML the editor works on is actually
-             there. Everything else lands in the browser the way a template does
-             in the profile; the PDF stays one menu entry away, where Vorschau
-             gets it instead. */
-          const editable = d.kind === DocumentKind.COVER_LETTER && !!d.file_path;
+          /* Both generated documents open in the app and can be typed in — but
+             only if the HTML the editor works on is actually there. A document
+             replaced by a PDF of the user's own has none, so it lands in the
+             browser the way a template does in the profile; the PDF stays one
+             menu entry away, where Vorschau gets it instead. */
+          const editable = !!d.file_path;
           return (
             <DocumentCard
               key={d.id}
@@ -69,7 +68,9 @@ export function DocumentsSection({ cardId }: { cardId: string }) {
               title={d.title}
               caption={documentCaption(d)}
               hint={editable ? 'Überarbeiten' : 'Öffnen'}
-              onClick={() => (editable ? set({ letterCardId: cardId }) : open(d.file_path ?? d.pdf_path))}
+              onClick={() =>
+                editable ? set({ editorCardId: cardId, editorKind: d.kind }) : open(d.file_path ?? d.pdf_path)
+              }
             >
               <DotsMenu menuKey={'doc:' + d.id} onOpen={() => setError(null)}>
                 {/* Only the renditions that exist are named. */}

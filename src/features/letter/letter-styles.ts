@@ -72,6 +72,24 @@ const LETTER_CSS = `
   100% { background-position: -100% 0; }
 }
 
+/* The Fassungen carry a toolbar of their own — "Bearbeiten", "HTML speichern",
+   "Als PDF drucken" — which works in a browser and is dead here: the frame runs
+   without allow-scripts, so none of those buttons does anything. Worse, the
+   save button promised exactly what the editor now delivers and delivered a
+   download instead. The editor does all three itself, so the row comes off.
+
+   This is the one rule that names classes the editor does not own. It is a
+   courtesy to the templates that carry them: a Fassung without a toolbar is
+   unaffected, and the alternative — editing every Fassung to drop the row —
+   would have to be repeated for every new one. */
+.toolbar, .edit-hint { display: none !important; }
+
+/* The letter is typed in directly, and has to say so — quietly, and the same
+   way whichever Fassung is open. Chromium's own focus ring would frame the
+   whole sheet like a form field, so it goes; what is left is the caret, in the
+   letter's ink rather than the browser's blue. */
+[contenteditable] { outline: none; caret-color: ${INK}; }
+
 /* The tag that rides beside a passage while Kepler rewrites it. It sits in the
    letter's flow, so it takes a system sans of its own — it is a piece of the
    app that happens to stand on the page, not a piece of the letter. */

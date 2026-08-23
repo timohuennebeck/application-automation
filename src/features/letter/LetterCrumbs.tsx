@@ -29,7 +29,7 @@ export interface LeaveLetter {
    a question, and the breadcrumb and Escape have to answer it the same way. */
 export function useLeaveLetter(working: number): LeaveLetter {
   const { st, set } = useApp();
-  const close = useCallback(() => set({ letterCardId: null, dropdown: null }), [set]);
+  const close = useCallback(() => set({ editorCardId: null, dropdown: null }), [set]);
   const dropdown = st.dropdown;
   const askOrClose = useCallback(() => {
     if (working) set({ dropdown: dropdown === CLOSE_KEY ? null : CLOSE_KEY });
@@ -83,7 +83,7 @@ export function LetterCrumbs({ cardId, title, working, leave, saveState, error, 
 
   return (
     <div style={CRUMB_ROW}>
-      {crumb('Bewerbungen', () => set({ openCardId: null, letterCardId: null, dropdown: null }))}
+      {crumb('Bewerbungen', () => set({ openCardId: null, editorCardId: null, dropdown: null }))}
       <div style={CRUMB_MUTED}>›</div>
       {/* The question hangs off the crumb because the crumb is what raises
           it — there is no longer a close button for it to belong to. */}

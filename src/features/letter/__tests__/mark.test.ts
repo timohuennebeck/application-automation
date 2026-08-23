@@ -187,6 +187,23 @@ describe('serializeLetter', () => {
     expect(html).not.toContain('--kepler-ground');
   });
 
+  it('takes the editing off the document on the way to disk', () => {
+    /* The editor makes the letter typeable by turning the whole body
+       contenteditable. That is the editor being open, not something the letter
+       says — saved into the file it would ride into the PDF and reopen the
+       next document already editable for the wrong reason. */
+    const doc = letter('<p contenteditable="true">Text</p><script>el.contentEditable</script>');
+    doc.body.setAttribute('contenteditable', 'true');
+
+    const saved = new DOMParser().parseFromString(serializeLetter(doc), 'text/html');
+
+    expect(saved.querySelectorAll('[contenteditable]')).toHaveLength(0);
+    expect(saved.querySelector('p')?.outerHTML).toBe('<p>Text</p>');
+    /* The attribute, not the word: a Fassung's own script talks about
+       contentEditable, and that is the document's text — it stays. */
+    expect(saved.querySelector('script')?.textContent).toContain('contentEditable');
+  });
+
   it('leaves the live document untouched', () => {
     const doc = letter('<p>Ich schreibe Ihnen wegen der Stelle.</p>');
     const text = textIn(doc.querySelector('p')!);

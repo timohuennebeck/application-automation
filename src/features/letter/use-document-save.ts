@@ -1,4 +1,4 @@
-/* The letter writing itself down.
+/* The document writing itself down.
 
    Everything that takes part in that — what is waiting to be written, the
    clock, and the one save allowed to be in flight — lives here rather than
@@ -7,31 +7,34 @@
    next. */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useApp } from '../../state/store-context';
+import type { DocumentKind } from '../../shared/enums';
 import type { SaveState } from './LetterCrumbs';
 
-/* How long the letter waits after a change before it writes itself down.
-   Accepting several suggestions in a row is one save rather than five, and
-   since every save also re-renders the PDF, that matters. */
+/* How long the document waits after a change before it writes itself down.
+   Typing a sentence is one save rather than one per keystroke, and accepting
+   several suggestions in a row is one save rather than five — since every save
+   also re-renders the PDF, that matters. */
 const SAVE_DELAY = 700;
 
-/* `serialize` rather than the document itself: the letter is taken down at the
+/* `serialize` rather than the document itself: the document is taken down at the
    moment of the change, not when the timer fires, because the page may be gone
-   by then and the letter with it. `onProblem` is handed whatever the save had
+   by then and the document with it. `onProblem` is handed whatever the save had
    to report, so the header can say it — null when it went through. */
-export function useLetterSave(
+export function useDocumentSave(
   cardId: string | null,
+  kind: DocumentKind,
   serialize: () => string | null,
   onProblem: (problem: string | null) => void,
 ): { saveState: SaveState; schedule: () => void } {
-  const { saveLetter } = useApp();
+  const { saveDocument } = useApp();
   const [saveState, setSaveState] = useState<SaveState>('clean');
   const pendingHtml = useRef<string | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  /* Five replacements are one revision of the letter, so the card gets one
-     activity entry for the session, not one per click. */
+  /* An afternoon of typing is one revision of the document, so the card gets
+     one activity entry for the session, not one per pause. */
   const savedOnce = useRef(false);
   /* The save in progress, so the next one queues behind it instead of racing
-     it. Never rejects — saveLetter reports its problem rather than throwing. */
+     it. Never rejects — saveDocument reports its problem rather than throwing. */
   const saving = useRef<Promise<void>>(Promise.resolve());
   /* False once the page is gone, so a save that lands late says nothing to a
      header that is no longer on screen. */
@@ -54,17 +57,17 @@ export function useLetterSave(
          card would get two entries for one revision. */
       const first = !savedOnce.current;
       savedOnce.current = true;
-      const problem = await saveLetter(cardId, html, first);
+      const problem = await saveDocument(cardId, kind, html, first);
       if (!live.current) return;
       onProblemRef.current(problem);
       setSaveState('saved');
     });
     return saving.current;
-  }, [cardId, saveLetter]);
+  }, [cardId, kind, saveDocument]);
   const flushRef = useRef(flush);
   flushRef.current = flush;
 
-  /* Takes down what the letter says right now and starts the clock. */
+  /* Takes down what the document says right now and starts the clock. */
   const schedule = useCallback(() => {
     const html = serialize();
     if (html === null) return;

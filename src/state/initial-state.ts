@@ -2,7 +2,7 @@
    returns to. Split out of store.tsx so the provider reads as wiring rather
    than as one long literal. */
 import { COLUMNS, SortDir, SortKey, STAGE_IDS } from '../data/config';
-import { RoundState } from '../shared/enums';
+import { DocumentKind, RoundState } from '../shared/enums';
 import type { RoundView } from './db-view';
 import type { AppState, BoardFilter } from './store-context';
 
@@ -57,7 +57,8 @@ export const initialState = (): AppState => ({
   commentDraft: '',
   commentAttachments: [],
   openCardId: null,
-  letterCardId: null,
+  editorCardId: null,
+  editorKind: DocumentKind.COVER_LETTER,
   cardMenu: null,
   cardContact: null,
   modalOpen: false,
@@ -107,11 +108,12 @@ export const emptyRound = (title: string): RoundView => ({
    goes away, so a dialog can never save onto the wrong application. */
 export const CLOSED_EDITORS = {
   dropdown: null,
-  /* The letter is an editor bound to one card like any other: opening a
+  /* The document editor is bound to one card like any other editor: opening a
      different application while it is up would otherwise leave it on screen —
-     App renders it ahead of the detail view — showing the old card's
-     Anschreiben and saving onto it. */
-  letterCardId: null,
+     App renders it ahead of the detail view — showing the old card's document
+     and saving onto it. The kind is not reset with it: it is meaningless
+     without a card, and the next open sets it. */
+  editorCardId: null,
   editing: null,
   editDraft: '',
   roundEdit: null,

@@ -20,7 +20,7 @@ import type { ActivityRow, DocumentRow, FollowupRow, PersonWithCompany } from '.
 import { indexSnapshot, roundInput, personView } from './db-view';
 import type { PersonView } from './db-view';
 import {
-  coverLetterFor,
+  documentFor,
   documentLanguageOf,
   keplerHoldReason,
   keplerStartBlocked,
@@ -81,6 +81,29 @@ const COMPANY_FIELD: Record<string, 'sector' | 'headcount' | 'homepage' | 'email
 const DATE_COLUMNS = new Set(['Beworben am']);
 /* Cleared facts that should default to the select kind. */
 const SELECT_FACTS = new Set(['Gehalt', 'Erfahrung']);
+
+/* How each document is spoken about when it is saved. German gives the two a
+   different article, so the sentences are written out rather than assembled
+   from a noun — "hat der Lebenslauf überarbeitet" is what assembling gets you.
+   OTHER never reaches the editor, but the record is total so a new kind cannot
+   be added without deciding what it is called. */
+const DOCUMENT_PHRASES: Record<DocumentKind, { title: string; revised: string; saved: string }> = {
+  [DocumentKind.COVER_LETTER]: {
+    title: 'Anschreiben',
+    revised: 'hat das Anschreiben überarbeitet',
+    saved: 'Das Anschreiben wurde gespeichert',
+  },
+  [DocumentKind.LEBENSLAUF]: {
+    title: 'Lebenslauf',
+    revised: 'hat den Lebenslauf überarbeitet',
+    saved: 'Der Lebenslauf wurde gespeichert',
+  },
+  [DocumentKind.OTHER]: {
+    title: 'Dokument',
+    revised: 'hat das Dokument überarbeitet',
+    saved: 'Das Dokument wurde gespeichert',
+  },
+};
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [st, setSt] = useState<AppState>(initialState);
@@ -640,7 +663,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           /* Its documents went with it, so the editor would render on a card
              that no longer has an Anschreiben — a blank screen with no way
              back but the breadcrumb. */
-          letterCardId: s.letterCardId === id ? null : s.letterCardId,
+          editorCardId: s.editorCardId === id ? null : s.editorCardId,
           dragId: null,
           overCol: null,
         };
@@ -1100,34 +1123,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [logAct, set],
   );
 
-  /* Saves the letter the editor has been working on. Same trade as an upload:
+  /* Saves the document the editor has been working on. Same trade as an upload:
      the HTML is what matters, so a PDF that would not render is reported on top
      of a save that happened rather than instead of it.
 
      `note` writes the activity entry. The editor saves after every accepted
-     replacement, so it asks for the entry once per session — five replacements
-     are one revision of the letter, not five. */
-  const saveLetter = useCallback(
-    async (id: string, html: string, note: boolean): Promise<string | null> => {
+     replacement and on every pause in the typing, so it asks for the entry once
+     per session — an afternoon in the letter is one revision, not forty. */
+  const saveDocument = useCallback(
+    async (id: string, kind: DocumentKind, html: string, note: boolean): Promise<string | null> => {
       const api = window.desktop;
       if (!api) return 'Ohne Desktop-Umgebung nicht möglich.';
-      const doc = coverLetterFor(stRef.current, id);
-      if (!doc) return 'Kein Anschreiben vorhanden.';
+      const phrases = DOCUMENT_PHRASES[kind];
+      const doc = documentFor(stRef.current, id, kind);
+      if (!doc) return `Kein ${phrases.title} vorhanden.`;
       try {
         const { filePath, pdfPath, pdfError } = await api.documents.save(
           id,
-          DocumentKind.COVER_LETTER,
-          documentLanguageOf(stRef.current, id, DocumentKind.COVER_LETTER),
+          kind,
+          documentLanguageOf(stRef.current, id, kind),
           html,
         );
         /* The Fassung it was generated from still describes where it came
-           from — editing a passage does not change that lineage. */
+           from — editing it does not change that lineage. */
         const row = await api.db.documents.setFile(doc.id, filePath, pdfPath, doc.template_label);
         putDocumentRow(id, row);
-        if (note) logAct(id, 'hat das Anschreiben überarbeitet');
-        return pdfError
-          ? 'Das Anschreiben wurde gespeichert, das PDF ließ sich nicht erzeugen: ' + pdfError
-          : null;
+        if (note) logAct(id, phrases.revised);
+        return pdfError ? `${phrases.saved}, das PDF ließ sich nicht erzeugen: ` + pdfError : null;
       } catch (err) {
         console.error('[documents]', err);
         return String(err);
@@ -1413,7 +1435,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
            through here as well would clear the card underneath it, so leaving
            the letter later would land on the board instead of the detail view
            it was opened from. */
-        else if (!s.letterCardId) set({ modalOpen: false, openCardId: null });
+        else if (!s.editorCardId) set({ modalOpen: false, openCardId: null });
         return;
       }
       if (!(e.metaKey || e.ctrlKey)) return;
@@ -1435,7 +1457,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
            where there is nothing worth printing. The letter is the one place
            where there is: it claims ⌘P for itself and prints the sheet — see
            the ⌘P branch in LetterEditor, which also calls preventDefault. */
-        if (s.letterCardId) return;
+        if (s.editorCardId) return;
         e.preventDefault();
         set((s2) => (s2.profileOpen ? CLOSED_PROFILE : { profileOpen: true }));
       } else if (k === 'c') {
@@ -1526,7 +1548,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       saveRound,
       writeField,
       replaceDocument,
-      saveLetter,
+      saveDocument,
       setInterest,
       setLanguage,
       setAssignee,
@@ -1593,7 +1615,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       openStagedAttachment,
       openAttachment,
       replaceDocument,
-      saveLetter,
+      saveDocument,
       setFollowupDue,
       setFollowupCompleted,
       saveEmailDraft,

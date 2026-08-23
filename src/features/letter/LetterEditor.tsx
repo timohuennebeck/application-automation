@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { useApp } from '../../state/store-context';
-import { coverLetterFor } from '../../state/selectors';
+import { documentFor } from '../../state/selectors';
+import { DocumentKind } from '../../shared/enums';
 import { LetterCrumbs, useLeaveLetter } from './LetterCrumbs';
-import { useLetterSave } from './use-letter-save';
+import { useDocumentSave } from './use-document-save';
 import { withEditorStyles } from './letter-styles';
 import {
   GROUND_PROP,
@@ -54,14 +55,24 @@ const STOP_HTML =
   '<svg viewBox="0 0 16 16" aria-hidden="true">' +
   '<rect x="4" y="4" width="8" height="8" rx="1.5" fill="currentColor"/></svg></span>';
 
-/* The letter, full size, with a popover on whatever passage has the focus.
-   The document is rendered as itself in an iframe: the template brings its own
-   CSS, and anything less than its own document would show the user something
-   other than what the PDF will say. */
+/* One of the card's documents, full size and typeable, with a popover on
+   whatever passage has the focus. The document is rendered as itself in an
+   iframe: the template brings its own CSS, and anything less than its own
+   document would show the user something other than what the PDF will say.
+
+   Both documents open here. Kepler's rewrites are the Anschreiben's alone —
+   variantsPrompt is written for a letter, and a Lebenslauf is a record with no
+   passages to re-roll — so in a CV the marking is simply never armed. */
 export function LetterEditor() {
   const { st, set } = useApp();
-  const cardId = st.letterCardId;
-  const doc = cardId ? coverLetterFor(st, cardId) : undefined;
+  const cardId = st.editorCardId;
+  const kind = st.editorKind;
+  const doc = cardId ? documentFor(st, cardId, kind) : undefined;
+  /* Read through a ref as well: the letter's own listeners are installed once,
+     on load, and would otherwise close over the kind of the first open. */
+  const rewritable = kind === DocumentKind.COVER_LETTER;
+  const rewritableRef = useRef(rewritable);
+  rewritableRef.current = rewritable;
 
   const frameRef = useRef<HTMLIFrameElement>(null);
   const marksRef = useRef(new Map<HTMLElement, MarkState>());
@@ -109,7 +120,7 @@ export function LetterEditor() {
     const frameDoc = frameRef.current?.contentDocument;
     return frameDoc ? serializeLetter(frameDoc) : null;
   }, []);
-  const { saveState, schedule } = useLetterSave(cardId, serialize, setError);
+  const { saveState, schedule } = useDocumentSave(cardId, kind, serialize, setError);
 
   /* Leaving the page tears down whatever Kepler still had in the air for this
      card. Every way out lands here — the buttons, the breadcrumb, Escape — so
@@ -156,6 +167,26 @@ export function LetterEditor() {
     const cur = marksRef.current.get(el);
     if (cur) marksRef.current.set(el, { ...cur, ...p });
     bump();
+  }, []);
+
+  /* Typing inside a marked passage changes what it says, and the map does not
+     know. Left alone, walking away from that passage would write `committed`
+     back over the letter and the typing with it. A passage nothing has been
+     decided on yet moves its `original` too — that is where "Zurücksetzen"
+     goes back to, and it must not go back past something the user typed.
+
+     The focused passage is skipped: it is the only one a hovered suggestion is
+     ever written into, and taking that for typing would commit a suggestion
+     nobody picked. */
+  const syncMarks = useCallback(() => {
+    for (const [el, state] of marksRef.current) {
+      if (el === focusedRef.current || el.innerHTML === state.committed) continue;
+      marksRef.current.set(el, {
+        ...state,
+        committed: el.innerHTML,
+        original: state.phase === 'marked' ? el.innerHTML : state.original,
+      });
+    }
   }, []);
 
   /* Positions the popover under a passage. Called on every scroll of the
@@ -230,6 +261,18 @@ export function LetterEditor() {
        the token resolves in the app's document, not this one. */
     frameDoc.documentElement.style.setProperty(GROUND_PROP, groundColour());
 
+    /* The document becomes typeable. contenteditable is not script, so it works
+       in a frame without allow-scripts — a template's own toolbar stays as dead
+       as it was, which is the point: the editing and the saving are the app's
+       now, not the Fassung's.
+
+       Only the attribute. The Fassungen also carry an `editing` class of their
+       own, and setting it would frame the sheet in whatever accent that one
+       template happens to use — a purple dashed outline on this letter, another
+       colour on the next. What the editing looks like is the editor's to say;
+       it is said in LETTER_CSS instead, once for every Fassung. */
+    frameDoc.body.setAttribute('contenteditable', 'true');
+
     const onMouseUp = () => {
       const sel = frameWin.getSelection();
       const text = sel && !sel.isCollapsed ? sel.toString().trim() : '';
@@ -239,6 +282,9 @@ export function LetterEditor() {
         if (focusedRef.current) blur();
         return;
       }
+      /* A Lebenslauf is typed in, not re-rolled: there is no rewrite behind a
+         mark there, so a selection is left as a plain selection. */
+      if (!rewritableRef.current) return;
       /* Selecting inside an existing mark would nest one span in another. The
          click handler reopens that passage instead. */
       const range = sel!.getRangeAt(0);
@@ -291,10 +337,30 @@ export function LetterEditor() {
       focus(el);
     };
 
+    /* Typing is a change like an accepted suggestion, and goes down the same
+       way: the debounce in useDocumentSave turns a paragraph into one save. */
+    const onInput = () => {
+      syncMarks();
+      schedule();
+    };
+
+    /* A paste carries the styling of wherever it came from — a job ad in
+       Helvetica dropped into the letter would keep it, and the PDF with it.
+       Only the words are wanted. execCommand is deprecated and still the only
+       thing that puts text into a contenteditable inside the undo stack. */
+    const onPaste = (e: ClipboardEvent) => {
+      const text = e.clipboardData?.getData('text/plain');
+      if (text === undefined) return;
+      e.preventDefault();
+      frameDoc.execCommand('insertText', false, text);
+    };
+
     frameDoc.addEventListener('mouseup', onMouseUp);
     frameDoc.addEventListener('click', onClick);
+    frameDoc.addEventListener('input', onInput);
+    frameDoc.addEventListener('paste', onPaste);
     frameWin.addEventListener('scroll', () => anchorTo(focusedRef.current));
-  }, [anchorTo, blur, focus]);
+  }, [anchorTo, blur, focus, schedule, syncMarks]);
 
   /* The letter as the model should read it. The pills live in the letter's own
      document, so innerText picks them up: without this, a passage sent off
@@ -440,7 +506,7 @@ export function LetterEditor() {
       /* Escape backs out one level: the confirmation, then the popover, and the
          page only once nothing is open and nothing would be lost. The store's
          own Escape stands aside while the letter is up, so this is the whole
-         chain — see the letterCardId guard in store.tsx. */
+         chain — see the editorCardId guard in store.tsx. */
       if (st.dropdown) set({ dropdown: null });
       else if (focusedRef.current) blur();
       else leave.askOrClose();

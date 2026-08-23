@@ -19,11 +19,11 @@ import { MON_DE3, DOW_DE, dateToISO, dayDiff, todayISO } from '../lib/date';
 import { parseSalary } from '../lib/salary';
 import type { AppState } from './store-context';
 
-/* The card's Anschreiben — the one document the letter editor can open, and
-   the only one saveLetter may write over. Both sides read it through here so
-   they cannot disagree about which row they mean. */
-export function coverLetterFor(st: AppState, id: string): DocumentRow | undefined {
-  return (st.documentsByApp[id] || []).find((d) => d.kind === DocumentKind.COVER_LETTER);
+/* One of a card's two documents — what the editor opens and what saveDocument
+   writes over. Both sides read it through here so they cannot disagree about
+   which row they mean. */
+export function documentFor(st: AppState, id: string, kind: DocumentKind): DocumentRow | undefined {
+  return (st.documentsByApp[id] || []).find((d) => d.kind === kind);
 }
 
 /* The language the card's documents are in: which side of the template slots

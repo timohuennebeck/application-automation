@@ -99,12 +99,16 @@ export function unwrapMark(el: Element): void {
 }
 
 /* The letter as it should be stored: no mark spans, no injected stylesheet,
-   and the doctype the template started with — the document pipeline and the PDF
-   renderer both expect a whole page, not a fragment. */
+   no sign that it was being typed in, and the doctype the template started
+   with — the document pipeline and the PDF renderer both expect a whole page,
+   not a fragment. */
 export function serializeLetter(doc: Document): string {
   const clone = doc.documentElement.cloneNode(true) as HTMLElement;
   clone.querySelectorAll(`[${STYLE_ATTR}], [${TAG_ATTR}]`).forEach((el) => el.remove());
   clone.querySelectorAll(`[${MARK_ATTR}]`).forEach(unwrapMark);
+  /* The editor's own doing. Written out, the file would carry the state of a
+     session that ended — and printToPDF would render it. */
+  clone.querySelectorAll('[contenteditable]').forEach((el) => el.removeAttribute('contenteditable'));
   clone.style.removeProperty(GROUND_PROP);
   /* An empty style attribute is not what the template started with. */
   if (!clone.style.length) clone.removeAttribute('style');

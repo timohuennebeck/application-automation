@@ -145,9 +145,12 @@ export interface AppState {
   /* Files staged for the comment being written, sent with the next addComment. */
   commentAttachments: StagedAttachment[];
   openCardId: string | null;
-  /* The card whose Anschreiben is open in the letter editor, or null. Only the
-     cover letter is editable in place — the CV has no passages to re-roll. */
-  letterCardId: string | null;
+  /* The card whose document is open in the editor, or null, and which of its
+     two documents that is. Both are editable in place; only the Anschreiben
+     also offers Kepler's rewrites, since variantsPrompt is written for a
+     letter and a CV has no passages to re-roll. */
+  editorCardId: string | null;
+  editorKind: DocumentKind;
   cardMenu: CardPointerState | null;
   /* The card whose contacts are being edited straight from the board. */
   cardContact: CardPointerState | null;
@@ -262,9 +265,10 @@ export interface AppStore {
     kind: DocumentKind,
     title: string,
   ) => Promise<string | null>;
-  /* Writes an edited Anschreiben back over its own file, re-renders the PDF and
-     points the row at both. Resolves to the reason it failed, or null. */
-  saveLetter: (id: string, html: string, note: boolean) => Promise<string | null>;
+  /* Writes an edited document back over its own file, re-renders the PDF and
+     updates the row. Resolves to what went wrong, or null when it went
+     through — the editor has nowhere to catch a rejection. */
+  saveDocument: (id: string, kind: DocumentKind, html: string, note: boolean) => Promise<string | null>;
   setInterest: (id: string, interest: Interest) => void;
   /* Which side of the templates Kepler reads for the card and what its files
      are called. Null hands the decision back to the posting on the next run. */

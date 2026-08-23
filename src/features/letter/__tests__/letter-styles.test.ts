@@ -39,6 +39,18 @@ describe('withEditorStyles', () => {
     expect(html.indexOf(STYLE_ATTR)).toBeGreaterThan(html.indexOf('body{max-width:none}'));
   });
 
+  it('takes the template’s own toolbar off the screen', () => {
+    /* The Fassungen carry a toolbar of their own — "Bearbeiten", "HTML
+       speichern", "Als PDF drucken". In a browser those work; in the editor's
+       iframe there is no allow-scripts, so every one of them is dead, and the
+       save button in particular offered a download that had nothing to do with
+       the file attached to the application. The editor does all three itself. */
+    const sheet = withEditorStyles(DOC);
+
+    expect(sheet).toContain('.toolbar');
+    expect(sheet).toContain('.edit-hint');
+  });
+
   it('marks the stylesheet so it is stripped again on save', () => {
     /* The round trip the editor actually makes: the sheet rides in with the
        source, and serializeLetter has to take it back out — otherwise every

@@ -31,40 +31,61 @@ export function createLlmRunner(invoke: ModelInvoke): LlmRunner {
       prompt: req.prompt,
       schema: req.schema,
       tools: req.tools ?? [],
-      /* Two, not one. A single structured completion still takes the model an
-         assistant turn to answer and the CLI another to emit the structured
-         output, so `maxTurns: 1` fails with error_max_turns on every prompt
-         long enough to matter — which is all of them. Verified against the
-         real extraction prompt: 1 fails, 2 answers. This is a floor for a
-         non-agentic call, not a budget; the one step that actually loops
-         (contact research) asks for 8. */
-      maxTurns: req.maxTurns ?? 2,
+      /* The structured answer arrives as an end-turn tool call, and that call
+         is the turn — so a budget of 1 leaves the model no room to say
+         anything before answering, and a single line of preamble ends the
+         step in error_max_turns. The happy path still finishes in one turn;
+         the spare two are only ever spent finding the way back to it.
+
+         Measured, not reasoned: run against the real extraction prompt and a
+         real posting, a budget of 1 fails and 2 answers. Every Kepler run was
+         dying at its first step. */
+      maxTurns: req.maxTurns ?? 3,
       timeoutMs: req.timeoutMs ?? DEFAULT_TIMEOUT,
       signal: req.signal,
     };
-    let complaint: string;
+    /* What to complain about in the second ask, or null when the step never
+       got far enough to produce an answer worth complaining about. */
+    let complaint: string | null;
     try {
       return req.validate(await invoke(call));
     } catch (err) {
       /* Infrastructure failures (auth, timeout) won't get better on a second
-         try; only an answer the validator rejected earns one. */
-      if (err instanceof KeplerError || call.signal?.aborted) throw err;
-      complaint = err instanceof Error ? err.message : String(err);
+         try; an answer the validator rejected earns one, and so does a call
+         that ran out of turns before it answered at all. */
+      if (call.signal?.aborted) throw err;
+      if (err instanceof KeplerError) {
+        if (!err.retryable) throw err;
+        complaint = null;
+      } else {
+        complaint = err instanceof Error ? err.message : String(err);
+      }
     }
-    const retry = {
-      ...call,
-      prompt:
-        call.prompt +
-        `\n\nDie vorige Antwort war ungültig (${complaint}). Antworte erneut und halte dich exakt an das Schema.`,
-    };
+    const retry: ModelCall =
+      complaint === null
+        ? call
+        : {
+            ...call,
+            prompt:
+              call.prompt +
+              `\n\nDie vorige Antwort war ungültig (${complaint}). Antworte erneut und halte dich exakt an das Schema.`,
+          };
     return req.validate(await invoke(retry));
   };
 }
 
+/* Result subtypes that say the model spent the call without landing a valid
+   structured answer — a preamble that ate the turn budget, or retry after
+   retry against the schema. Nothing is wrong with the machinery, so the
+   runner asks once more rather than failing the step. */
+const RETRYABLE_FAILURE = /error_max_turns|error_max_structured_output_retries/;
+
 /* Maps whatever the SDK/CLI failed with onto a message the panel can show.
    `timedOut` is our own clock — the SDK's abort surfaces in shapes that vary
-   by version, so whether the deadline fired is not read off the error. */
-function classify(err: unknown, timedOut: boolean): KeplerError {
+   by version, so whether the deadline fired is not read off the error.
+   Exported for the tests: which failures come back retryable is the whole
+   difference between a run that recovers and one that stops on the card. */
+export function classify(err: unknown, timedOut: boolean): KeplerError {
   if (timedOut) return new KeplerError('Zeitüberschreitung bei der Anfrage an Claude.');
   /* Aborted by the user's stop — the orchestrator writes the real message. */
   if (err instanceof Error && err.name === 'AbortError') return new KeplerError('Abgebrochen.');
@@ -75,7 +96,7 @@ function classify(err: unknown, timedOut: boolean): KeplerError {
       'Claude Code ist nicht angemeldet. Bitte im Terminal einmal `claude` starten und anmelden.',
     );
   }
-  return new KeplerError('Anfrage an Claude fehlgeschlagen: ' + raw);
+  return new KeplerError('Anfrage an Claude fehlgeschlagen: ' + raw, RETRYABLE_FAILURE.test(lower));
 }
 
 export function sdkInvoke(): ModelInvoke {

@@ -423,6 +423,7 @@ export async function runPipeline(applicationId: string, runId: number, deps: Pi
       issues = await deps.llm({
         prompt: checksPrompt(
           needExtraction(),
+          linkedContacts(repo, applicationId),
           cvHtml ?? readGeneratedHtml(deps, applicationId, DocumentKind.LEBENSLAUF),
           letterHtml ?? readGeneratedHtml(deps, applicationId, DocumentKind.COVER_LETTER),
         ),

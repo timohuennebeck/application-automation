@@ -4,6 +4,7 @@ import {
   askPrompt,
   checksPrompt,
   cvPrompt,
+  documentExcerpt,
   extractionPrompt,
   letterPrompt,
   proofsPrompt,
@@ -145,7 +146,7 @@ describe('checksPrompt', () => {
     /* Kepler kept reporting the address as not matching the name — its own
        worked example said so. It is the applicant's real address; the check is
        for the documents, not for who the applicant is. */
-    const prompt = checksPrompt(DOC_INPUT.extraction, '<p>cv</p>', '<p>brief</p>');
+    const prompt = checksPrompt(DOC_INPUT.extraction, [], '<p>cv</p>', '<p>brief</p>');
 
     expect(prompt).toContain(APPLICANT_EMAIL);
     expect(prompt).toContain(APPLICANT_NAME);
@@ -155,6 +156,7 @@ describe('checksPrompt', () => {
   it('checks the formats of the language the documents are written in', () => {
     const de = checksPrompt(
       { ...DOC_INPUT.extraction, language: DocumentLanguage.DE },
+      [],
       '<p>cv</p>',
       '<p>brief</p>',
     );
@@ -162,12 +164,74 @@ describe('checksPrompt', () => {
 
     const en = checksPrompt(
       { ...DOC_INPUT.extraction, language: DocumentLanguage.EN },
+      [],
       '<p>cv</p>',
       '<p>letter</p>',
     );
     expect(en).toContain('23 August 2026');
     /* The German format is named only to rule it out. */
     expect(en).toContain('nicht DD.MM.YYYY');
+  });
+
+  it('names a contact linked to the card even when the extraction has none', () => {
+    /* CONTACTS researches and links a person when the posting names nobody —
+       the extraction that ships with the run still carries people: [], and on
+       a resumed run it is rebuilt from the database with the same empty
+       list. The check has to see the linked contact from its own block, not
+       from <daten>. */
+    const prompt = checksPrompt(
+      { ...DOC_INPUT.extraction, people: [] },
+      ['Maria Haushofer (Recruiterin)'],
+      '<p>cv</p>',
+      '<p>brief</p>',
+    );
+
+    expect(prompt).toContain('<kontakte>\n- Maria Haushofer (Recruiterin)\n</kontakte>');
+  });
+
+  it('tells the model a documented person matching a linked contact is not a finding', () => {
+    /* Without this rule the model reasoned: the letter addresses "Maria
+       Haushofer", <daten>.people is empty, therefore the person is missing —
+       which is wrong whenever CONTACTS supplied her instead of the listing. */
+    const prompt = checksPrompt(
+      DOC_INPUT.extraction,
+      ['Maria Haushofer (Recruiterin)'],
+      '<p>cv</p>',
+      '<p>brief</p>',
+    );
+
+    expect(prompt).toContain('ist das korrekt und kein Widerspruch');
+  });
+
+  it('names the block empty when the card has no linked contact', () => {
+    const prompt = checksPrompt(DOC_INPUT.extraction, [], '<p>cv</p>', '<p>brief</p>');
+    expect(prompt).toContain('<kontakte>\n(keine bekannt)\n</kontakte>');
+  });
+});
+
+describe('documentExcerpt', () => {
+  it('drops the Fassung editor’s own toolbar and edit hint, keeping the real text', () => {
+    const html = `<!doctype html><html><body>
+<div class="toolbar">
+  <button class="tool-btn" id="edit-btn" onclick="toggleEdit()">Bearbeiten</button>
+  <button class="tool-btn" onclick="document.body.classList.toggle('plain')">Farbe an/aus</button>
+  <button class="tool-btn" onclick="saveHtml()">HTML speichern</button>
+  <button class="tool-btn tool-btn--primary" onclick="window.print()">Als PDF drucken</button>
+</div>
+<p>Mit freundlichen Grüßen</p>
+<p>Anlage: Lebenslauf</p>
+<p class="edit-hint">Bearbeitungsmodus: Klicke in einen Text und tippe los</p>
+</body></html>`;
+
+    const excerpt = documentExcerpt(html);
+
+    expect(excerpt).not.toContain('Bearbeiten');
+    expect(excerpt).not.toContain('Farbe an/aus');
+    expect(excerpt).not.toContain('HTML speichern');
+    expect(excerpt).not.toContain('Als PDF drucken');
+    expect(excerpt).not.toContain('Bearbeitungsmodus');
+    expect(excerpt).toContain('Mit freundlichen Grüßen');
+    expect(excerpt).toContain('Anlage: Lebenslauf');
   });
 });
 

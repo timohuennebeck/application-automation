@@ -372,15 +372,32 @@ const ENTITIES: Record<string, string> = {
 };
 
 function documentText(html: string): string {
-  return html
-    .replace(/<!--[\s\S]*?-->/g, ' ')
-    .replace(/<(style|script)[\s\S]*?<\/\1>/gi, ' ')
-    .replace(/<\/(p|div|li|h[1-6]|tr|section|article|header|footer)>|<br\s*\/?>/gi, '\n')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&[a-z]+;/gi, (e) => ENTITIES[e.toLowerCase()] ?? ' ')
-    .replace(/[ \t]+/g, ' ')
-    .replace(/\s*\n\s*/g, '\n')
-    .trim();
+  return (
+    html
+      .replace(/<!--[\s\S]*?-->/g, ' ')
+      .replace(/<(style|script)[\s\S]*?<\/\1>/gi, ' ')
+      /* A printed application document has no buttons — this rule needs no
+       knowledge of any particular template, a <button> is app chrome by
+       definition. */
+      .replace(/<button\b[\s\S]*?<\/button>/gi, ' ')
+      /* class="toolbar" and class="edit-hint" are not this module's classes —
+       they name the Fassung editor's own on-screen controls (see the same
+       two classes in src/features/letter/letter-styles.ts, which hides them
+       the same way for the same reason: dead weight in a frame that never
+       prints, here dead weight in front of a model reading what the
+       document says). Dropped by name because, unlike a <button>, nothing
+       about the tag itself says "chrome". */
+      .replace(
+        /<([a-z][a-z0-9]*)\b[^>]*\bclass="[^"]*\b(?:toolbar|edit-hint)\b[^"]*"[^>]*>[\s\S]*?<\/\1>/gi,
+        ' ',
+      )
+      .replace(/<\/(p|div|li|h[1-6]|tr|section|article|header|footer)>|<br\s*\/?>/gi, '\n')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&[a-z]+;/gi, (e) => ENTITIES[e.toLowerCase()] ?? ' ')
+      .replace(/[ \t]+/g, ' ')
+      .replace(/\s*\n\s*/g, '\n')
+      .trim()
+  );
 }
 
 /* The checks read only the front of the visible text — a raw head window
@@ -391,7 +408,12 @@ export function documentExcerpt(html: string): string {
   return documentText(html).replace(/\s+/g, ' ').slice(0, EXCERPT);
 }
 
-export function checksPrompt(extraction: Extraction, cvHtml: string, letterHtml: string): string {
+export function checksPrompt(
+  extraction: Extraction,
+  contacts: string[],
+  cvHtml: string,
+  letterHtml: string,
+): string {
   return `Du bist Kepler, der Assistent einer Bewerbungs-App. Prüfe die erfassten Daten und die Textauszüge der zwei generierten Dokumente auf offensichtliche Fehler.
 
 Prüfe:
@@ -400,6 +422,8 @@ Prüfe:
 - Widersprüche zwischen den Angaben?
 
 Die Kontaktdaten des Bewerbers stehen in <bewerber> und sind richtig, so wie sie dort stehen. Sie sind nie ein Hinweis — auch dann nicht, wenn die Adresse anders aussieht, als der Name vermuten ließe.
+
+<kontakte> sind die der Karte hinterlegten Ansprechpersonen — auch wenn <daten> selbst keine Personen führt (etwa weil eine Person erst nach der Extraktion recherchiert und verknüpft wurde). Nennt ein Dokument dort eine Person, die in <kontakte> steht, ist das korrekt und kein Widerspruch.
 
 issues: höchstens die drei wichtigsten echten Probleme, je EIN kurzer Satz (unter 15 Wörter), ohne Herleitung oder Zitate; hebe den Kern jedes Hinweises mit **fett** hervor (z. B. "**Gehaltsangabe** widerspricht der Anzeige."). Leer, wenn alles stimmig ist.
 
@@ -411,6 +435,10 @@ E-Mail: ${APPLICANT_EMAIL}
 <daten>
 ${JSON.stringify(extraction, null, 1)}
 </daten>
+
+<kontakte>
+${bullets(contacts, '(keine bekannt)')}
+</kontakte>
 
 <lebenslauf>
 ${documentExcerpt(cvHtml)}

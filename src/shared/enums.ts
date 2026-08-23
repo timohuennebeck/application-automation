@@ -54,6 +54,17 @@ export const DocumentKind = {
 } as const;
 export type DocumentKind = (typeof DocumentKind)[keyof typeof DocumentKind];
 
+/* What one of Kepler's document changes does. A replacement carries both
+   halves; a deletion has no replacement and an insertion no passage to find,
+   which is why the comment thread gives those two a leading sign and a
+   replacement none. */
+export const EditKind = {
+  REPLACE: 'replace',
+  DELETE: 'delete',
+  INSERT: 'insert',
+} as const;
+export type EditKind = (typeof EditKind)[keyof typeof EditKind];
+
 /* The two documents kept once for the whole profile, not per application: the
    CV and the cover letter the agent fills in for each new posting. There are
    exactly two, so this is deliberately not DocumentKind — an OTHER template

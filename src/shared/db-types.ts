@@ -12,6 +12,7 @@ import type {
   Author,
   DocumentKind,
   DocumentLanguage,
+  EditKind,
   FactKind,
   Interest,
   LinkKind,
@@ -196,6 +197,23 @@ export interface DocumentRow {
   template_label: string | null;
   created_at: string;
   updated_at: string;
+}
+
+/* One change Kepler wants to make to a generated document. Not a stored row —
+   carried on a comment and placed or reversed by electron/agent/edits.ts,
+   which is the only reader of the shape. Declared here rather than there so
+   the database layer (electron/db/repo.ts) can consume it without importing
+   from the agent. */
+export interface DocumentEdit {
+  document: DocumentKind;
+  kind: EditKind;
+  /* The passage as the document words it today. Empty for an insertion. */
+  find: string;
+  /* What takes its place. Empty for a deletion. */
+  replace: string;
+  /* Where an insertion goes: the passage it follows. Also filled on a
+     deletion, so the reversal knows where to put the text back. */
+  after: string | null;
 }
 
 export interface ActivityRow {

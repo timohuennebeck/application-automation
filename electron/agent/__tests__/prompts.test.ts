@@ -233,6 +233,33 @@ describe('documentExcerpt', () => {
     expect(excerpt).toContain('Mit freundlichen Grüßen');
     expect(excerpt).toContain('Anlage: Lebenslauf');
   });
+
+  it('drops a toolbar written with single-quoted or unquoted class attributes', () => {
+    const single = `<div class='toolbar'><button>Bearbeiten</button></div><p>Mit freundlichen Grüßen</p>`;
+    const bare = `<div class=toolbar><button>Bearbeiten</button></div><p>Mit freundlichen Grüßen</p>`;
+
+    expect(documentExcerpt(single)).not.toContain('Bearbeiten');
+    expect(documentExcerpt(single)).toContain('Mit freundlichen Grüßen');
+    expect(documentExcerpt(bare)).not.toContain('Bearbeiten');
+    expect(documentExcerpt(bare)).toContain('Mit freundlichen Grüßen');
+  });
+
+  it('drops a toolbar class that is only one token among several', () => {
+    const html = `<div class="sheet toolbar"><button>Bearbeiten</button></div><p>Mit freundlichen Grüßen</p>`;
+
+    expect(documentExcerpt(html)).not.toContain('Bearbeiten');
+    expect(documentExcerpt(html)).toContain('Mit freundlichen Grüßen');
+  });
+
+  it('does not drop template content whose class merely contains "toolbar" or "edit-hint" as a substring', () => {
+    const noteHtml = `<p class="toolbar-note">Bitte reichen Sie die Unterlagen bis Freitag ein.</p>`;
+    const subHtml = `<p class="sub-toolbar">Wir freuen uns auf Ihre Bewerbung.</p>`;
+    const hintHtml = `<p class="edit-hint-2">Vielen Dank für Ihr Interesse an der Position.</p>`;
+
+    expect(documentExcerpt(noteHtml)).toContain('Bitte reichen Sie die Unterlagen bis Freitag ein.');
+    expect(documentExcerpt(subHtml)).toContain('Wir freuen uns auf Ihre Bewerbung.');
+    expect(documentExcerpt(hintHtml)).toContain('Vielen Dank für Ihr Interesse an der Position.');
+  });
 });
 
 describe('extractionPrompt', () => {

@@ -9,6 +9,7 @@ import {
   variantsPrompt,
 } from '../prompts.ts';
 import { DocumentLanguage } from '../../../src/shared/enums.ts';
+import { APPLICANT_EMAIL, APPLICANT_NAME } from '../../../src/shared/applicant.ts';
 import type { AskInput, DocumentInput, VariantsInput } from '../prompts.ts';
 
 const TEMPLATE = `<!doctype html><html><head><style>.a{ color:red }</style></head>
@@ -127,6 +128,17 @@ describe('checksPrompt', () => {
   /* The date and salary formats it checks against belong to the document's
      language — an English CV writes 23 August 2026, not 23.08.2026, and the
      check must not report that as an error. */
+  it('names the applicant’s own contact details as correct', () => {
+    /* Kepler kept reporting the address as not matching the name — its own
+       worked example said so. It is the applicant's real address; the check is
+       for the documents, not for who the applicant is. */
+    const prompt = checksPrompt(DOC_INPUT.extraction, '<p>cv</p>', '<p>brief</p>');
+
+    expect(prompt).toContain(APPLICANT_EMAIL);
+    expect(prompt).toContain(APPLICANT_NAME);
+    expect(prompt).not.toContain('passt nicht zum Namen');
+  });
+
   it('checks the formats of the language the documents are written in', () => {
     const de = checksPrompt(
       { ...DOC_INPUT.extraction, language: DocumentLanguage.DE },

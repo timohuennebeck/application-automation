@@ -452,4 +452,27 @@ export const MIGRATIONS: string[] = [
   `
   ALTER TABLE applications ADD COLUMN language TEXT;
   `,
+
+  /* Migration 25 (index 22): the changes Kepler made to a document, kept
+     beside the comment that reported them. The retry icon on that comment
+     applies them backwards, so this table is the whole of undo — there is no
+     document versioning behind it and none is needed: a pair reversed is the
+     way back. find_text/replace_text rather than find/replace because
+     `replace` is a SQLite function name and a column of that name would need
+     quoting at every use. undone_at turns the icon back into "try again" and
+     keeps a reversed set from being reversed twice. */
+  `
+  CREATE TABLE comment_edits (
+    id            INTEGER PRIMARY KEY,
+    comment_id    INTEGER NOT NULL REFERENCES comments(id) ON DELETE CASCADE,
+    document      TEXT NOT NULL,
+    kind          TEXT NOT NULL,
+    find_text     TEXT NOT NULL,
+    replace_text  TEXT NOT NULL,
+    after_text    TEXT,
+    position      INTEGER NOT NULL,
+    undone_at     TEXT
+  );
+  CREATE INDEX idx_comment_edits_comment ON comment_edits(comment_id);
+  `,
 ];

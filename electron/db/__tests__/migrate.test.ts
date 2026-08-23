@@ -46,6 +46,7 @@ const TABLES = [
   'comment_attachments',
   'locations',
   'roles',
+  'comment_edits',
 ];
 
 describe('migrations', () => {
@@ -558,6 +559,31 @@ describe('migration 24', () => {
     expect(db.prepare('SELECT language FROM applications').get()).toEqual({ language: null });
     db.prepare("UPDATE applications SET language = 'en'").run();
     expect(db.prepare('SELECT language FROM applications').get()).toEqual({ language: 'en' });
+  });
+});
+
+describe('migration 25', () => {
+  it('creates comment_edits and cascades it with its comment', () => {
+    const db = dbAtVersion(MIGRATIONS.length - 1);
+    seedApp(db);
+    db.exec(
+      'INSERT INTO comments (id, application_id, author, text, created_at) ' +
+        "VALUES (9, 'BEW-1', 'KEPLER', 'Text', 't')",
+    );
+
+    db.exec(MIGRATIONS[MIGRATIONS.length - 1]);
+
+    db.exec(
+      'INSERT INTO comment_edits (comment_id, document, kind, find_text, replace_text, position) ' +
+        "VALUES (9, 'COVER_LETTER', 'replace', 'alt', 'neu', 0)",
+    );
+    expect(db.prepare('SELECT count(*) c FROM comment_edits').get()).toMatchObject({ c: 1 });
+
+    db.exec('DELETE FROM comments WHERE id = 9');
+
+    /* The edits describe a comment; without it they are unreachable rows that
+       nothing ever cleans. */
+    expect(db.prepare('SELECT count(*) c FROM comment_edits').get()).toMatchObject({ c: 0 });
   });
 });
 

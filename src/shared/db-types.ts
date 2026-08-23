@@ -139,6 +139,23 @@ export interface AttachmentInput {
   size: number;
 }
 
+/* One change Kepler made to a document, kept beside the comment that reported
+   it. find_text/replace_text rather than find/replace: `replace` is a SQLite
+   function name, and a column of that name would need quoting at every use.
+   undone_at turns the comment's retry icon back into "try again" once its set
+   has been applied backwards, and keeps it from being reversed twice. */
+export interface CommentEditRow {
+  id: number;
+  comment_id: number;
+  document: DocumentKind;
+  kind: EditKind;
+  find_text: string;
+  replace_text: string;
+  after_text: string | null;
+  position: number;
+  undone_at: string | null;
+}
+
 export interface RoundRow {
   id: number;
   application_id: string;
@@ -436,6 +453,7 @@ export interface DbSnapshot {
   applicationPeople: ApplicationPersonRow[];
   comments: CommentRow[];
   commentAttachments: CommentAttachmentRow[];
+  commentEdits: CommentEditRow[];
   rounds: RoundRow[];
   roundPeople: RoundPersonRow[];
   roundNotes: RoundNoteRow[];

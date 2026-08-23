@@ -6,7 +6,9 @@ import { createRepo, type Repo } from '../repo.ts';
 import {
   Assignee,
   Author,
+  DocumentKind,
   DocumentLanguage,
+  EditKind,
   FactKind,
   LinkKind,
   RoundState,
@@ -249,6 +251,48 @@ describe('repo', () => {
     const saved = repo.saveFollowupEmail(slot.id, 'Betreff', 'Text');
     expect(saved.email_subject).toBe('Betreff');
     expect(saved.generated_at).toBe(NOW.toISOString());
+  });
+
+  describe('comment edits', () => {
+    it('stores a set in order and reads it back', () => {
+      const appId = repo.createApplication({ role: 'Designer', company: 'Acme GmbH', channel: null })
+        .application.id;
+      const comment = repo.addComment(appId, Author.KEPLER, 'geändert').comment;
+
+      repo.addCommentEdits(comment.id, [
+        { document: DocumentKind.COVER_LETTER, kind: EditKind.REPLACE, find: 'a', replace: 'b', after: null },
+        { document: DocumentKind.COVER_LETTER, kind: EditKind.DELETE, find: 'c', replace: '', after: 'd' },
+      ]);
+
+      const rows = repo.commentEdits(comment.id);
+      expect(rows.map((r) => r.position)).toEqual([0, 1]);
+      expect(rows[0]).toMatchObject({ kind: EditKind.REPLACE, find_text: 'a', replace_text: 'b' });
+      expect(rows[1]).toMatchObject({ kind: EditKind.DELETE, after_text: 'd', undone_at: null });
+    });
+
+    it('marks a set undone so the icon can change its meaning', () => {
+      const appId = repo.createApplication({ role: 'Designer', company: 'Acme GmbH', channel: null })
+        .application.id;
+      const comment = repo.addComment(appId, Author.KEPLER, 'geändert').comment;
+      repo.addCommentEdits(comment.id, [
+        { document: DocumentKind.COVER_LETTER, kind: EditKind.REPLACE, find: 'a', replace: 'b', after: null },
+      ]);
+
+      repo.markEditsUndone(comment.id);
+
+      expect(repo.commentEdits(comment.id).every((r) => r.undone_at !== null)).toBe(true);
+    });
+
+    it('carries the edits in the snapshot the renderer loads', () => {
+      const appId = repo.createApplication({ role: 'Designer', company: 'Acme GmbH', channel: null })
+        .application.id;
+      const comment = repo.addComment(appId, Author.KEPLER, 'geändert').comment;
+      repo.addCommentEdits(comment.id, [
+        { document: DocumentKind.COVER_LETTER, kind: EditKind.REPLACE, find: 'a', replace: 'b', after: null },
+      ]);
+
+      expect(repo.load().commentEdits).toHaveLength(1);
+    });
   });
 
   describe('comment attachments', () => {

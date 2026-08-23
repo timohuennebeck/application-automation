@@ -12,11 +12,13 @@ import type {
   ApplicationRow,
   AttachmentInput,
   CommentAttachmentRow,
+  CommentEditRow,
   CommentRow,
   CompanyPatch,
   CompanyRow,
   CreateApplicationResult,
   DbSnapshot,
+  DocumentEdit,
   DocumentRow,
   FactRow,
   FollowupRow,
@@ -138,6 +140,10 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
     return { person, company: person.company_id === null ? null : getCompany(person.company_id) };
   };
   const getFollowup = (id: number) => one<FollowupRow>('SELECT * FROM followups WHERE id = ?', id);
+  /* Module-level rather than `this.commentEdits` inside addCommentEdits — the
+     returned object is a plain literal, and `this` does not resolve inside it. */
+  const getCommentEdits = (commentId: number) =>
+    all<CommentEditRow>('SELECT * FROM comment_edits WHERE comment_id = ? ORDER BY position', commentId);
 
   const getProfileFact = (id: number) => one<ProfileFactRow>('SELECT * FROM profile_facts WHERE id = ?', id);
   /* Ties broken by id so a fresh database, where every position is still 0,
@@ -248,6 +254,7 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
         commentAttachments: all<CommentAttachmentRow>(
           'SELECT * FROM comment_attachments ORDER BY comment_id, id',
         ),
+        commentEdits: all<CommentEditRow>('SELECT * FROM comment_edits ORDER BY comment_id, position'),
         rounds: all<RoundRow>('SELECT * FROM rounds ORDER BY application_id, position'),
         roundPeople: all<RoundPersonRow>('SELECT * FROM round_people ORDER BY round_id, position'),
         roundNotes: all<RoundNoteRow>('SELECT * FROM round_notes ORDER BY round_id, id'),
@@ -501,6 +508,36 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
         db.prepare('DELETE FROM comments WHERE id = ?').run(commentId);
         return paths.map((p) => p.file_path);
       });
+    },
+
+    /* One row per edit, in the order the model returned them — the order is
+       load-bearing, because each edit was applied against what the one before
+       it left. */
+    addCommentEdits(commentId: number, edits: DocumentEdit[]): CommentEditRow[] {
+      return tx(() => {
+        const ins = db.prepare(
+          'INSERT INTO comment_edits (comment_id, document, kind, find_text, replace_text, after_text, position) ' +
+            'VALUES (?,?,?,?,?,?,?)',
+        );
+        edits.forEach((e, i) =>
+          ins.run(commentId, e.document, e.kind, e.find, e.replace, e.after ?? null, i),
+        );
+        return getCommentEdits(commentId);
+      });
+    },
+
+    commentEdits(commentId: number): CommentEditRow[] {
+      return getCommentEdits(commentId);
+    },
+
+    /* A reversed set stays on the comment rather than being deleted: the
+       thread still shows what was changed, and the row is what stops it from
+       being reversed a second time. */
+    markEditsUndone(commentId: number): void {
+      db.prepare('UPDATE comment_edits SET undone_at = ? WHERE comment_id = ? AND undone_at IS NULL').run(
+        nowISO(),
+        commentId,
+      );
     },
 
     /* Full-list replace — the direct mapping of the renderer's mutateRounds.

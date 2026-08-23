@@ -22,6 +22,7 @@ import {
 } from '../../../src/shared/enums.ts';
 import { CONTACT_SCHEMA, FILL_SCHEMA, EXTRACTION_SCHEMA, CHECKS_SCHEMA } from '../schemas.ts';
 import type { AgentEvent } from '../../../src/shared/agent.ts';
+import { VALUE_BUDGET } from '../budgets.ts';
 
 const NOW = new Date('2026-08-14T09:00:00.000Z');
 /* Every Fassung carries a slot; what Kepler returns are the values for it. */
@@ -471,6 +472,101 @@ describe('runPipeline', () => {
     expect(step.status).toBe(AgentStepStatus.ERROR);
     expect(step.error).toContain('COMPANY_NAME');
     expect(existsSync(path.join(root, 'documents', appId))).toBe(false);
+  });
+
+  it('asks again when a value came back over its budget', async () => {
+    uploadTemplates(['lebenslauf']);
+    uploadTemplates(
+      ['anschreiben'],
+      'Standard',
+      '<!doctype html><html><body><p>{{COMPANY_HOOK_SENTENCE}}</p></body></html>',
+    );
+    const appId = createApp({ postingText: 'Wir suchen einen Senior Designer …' });
+    const long = Array.from({ length: 40 }, (_, i) => 'wort' + i).join(' ');
+    let asked = 0;
+    const llm = fakeLlm({
+      document: () => {
+        asked++;
+        /* Both templates' slots in one answer: the CV Fassung wants
+             COMPANY_NAME, and a value for a slot a template does not have is
+             ignored by fillPlaceholders. Answering only the hook would fail the
+             CV step for an unanswered placeholder. */
+        return {
+          fields: [
+            { key: 'COMPANY_NAME', value: 'Helios Energie' },
+            { key: 'COMPANY_HOOK_SENTENCE', value: asked === 1 ? long : 'Kurz und knapp.' },
+          ],
+        };
+      },
+    });
+
+    await runPipeline(appId, createRun(appId), deps({ llm }));
+
+    /* Two document calls for the letter, one for the CV. */
+    expect(asked).toBe(3);
+    const letter = repo
+      .load()
+      .documents.find((d) => d.application_id === appId && d.kind === DocumentKind.COVER_LETTER)!;
+    expect(readFileSync(path.join(root, letter.file_path!), 'utf8')).toContain('Kurz und knapp.');
+  });
+
+  it('names the offending slot and its budget in the second ask', async () => {
+    uploadTemplates(['lebenslauf']);
+    uploadTemplates(
+      ['anschreiben'],
+      'Standard',
+      '<!doctype html><html><body><p>{{COMPANY_HOOK_SENTENCE}}</p></body></html>',
+    );
+    const appId = createApp({ postingText: 'Wir suchen einen Senior Designer …' });
+    const long = Array.from({ length: 40 }, (_, i) => 'wort' + i).join(' ');
+    const prompts: string[] = [];
+    const llm = fakeLlm({
+      document: (req) => {
+        prompts.push(req.prompt);
+        return {
+          fields: [
+            { key: 'COMPANY_NAME', value: 'Helios Energie' },
+            { key: 'COMPANY_HOOK_SENTENCE', value: long },
+          ],
+        };
+      },
+    });
+
+    await runPipeline(appId, createRun(appId), deps({ llm }));
+
+    const redo = prompts.at(-1)!;
+    expect(redo).toContain('COMPANY_HOOK_SENTENCE');
+    expect(redo).toContain(String(VALUE_BUDGET.COMPANY_HOOK_SENTENCE));
+    expect(redo).toContain('40');
+  });
+
+  it('keeps a second answer that is still too long rather than failing the step', async () => {
+    /* A letter three words too long is worth having; a failed step is not. */
+    uploadTemplates(['lebenslauf']);
+    uploadTemplates(
+      ['anschreiben'],
+      'Standard',
+      '<!doctype html><html><body><p>{{COMPANY_HOOK_SENTENCE}}</p></body></html>',
+    );
+    const appId = createApp({ postingText: 'Wir suchen einen Senior Designer …' });
+    const long = Array.from({ length: 40 }, (_, i) => 'wort' + i).join(' ');
+    const llm = fakeLlm({
+      document: () => ({
+        fields: [
+          { key: 'COMPANY_NAME', value: 'Helios Energie' },
+          { key: 'COMPANY_HOOK_SENTENCE', value: long },
+        ],
+      }),
+    });
+
+    const runId = createRun(appId);
+    await runPipeline(appId, runId, deps({ llm }));
+
+    expect(runs.getRun(runId).status).toBe(AgentRunStatus.DONE);
+    const letter = repo
+      .load()
+      .documents.find((d) => d.application_id === appId && d.kind === DocumentKind.COVER_LETTER)!;
+    expect(letter.file_path).toBeTruthy();
   });
 
   it('feeds pasted text straight to the extraction when there is no URL', async () => {

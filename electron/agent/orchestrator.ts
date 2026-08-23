@@ -35,6 +35,7 @@ import {
   type DocumentInput,
 } from './prompts.ts';
 import type { RunStore } from './run-store.ts';
+import { overBudget, type OverBudget } from './budgets.ts';
 import {
   CHECKS_SCHEMA,
   CONTACT_SCHEMA,
@@ -284,25 +285,35 @@ export async function runPipeline(applicationId: string, runId: number, deps: Pi
       };
     };
 
+    /* Values still over budget after the redo, per document. They do not stop
+       the run — they become a bullet in the closing comment. Keyed so a
+       regenerated document overwrites its own earlier findings instead of
+       reporting the same slot twice. */
+    const tooLong = new Map<DocumentKind, OverBudget[]>();
+
     let cvHtml: string | null = null;
     if (pending(AgentStepKey.GEN_CV)) {
       start(AgentStepKey.GEN_CV);
-      cvHtml = await generateDocument(deps, applicationId, {
+      const generated = await generateDocument(deps, applicationId, {
         kind: DocumentKind.LEBENSLAUF,
         buildPrompt: cvPrompt,
         ...docInput(TemplateKind.LEBENSLAUF),
       });
+      cvHtml = generated.html;
+      tooLong.set(DocumentKind.LEBENSLAUF, generated.overBudget);
       done(AgentStepKey.GEN_CV, true);
     }
 
     let letterHtml: string | null = null;
     if (pending(AgentStepKey.GEN_LETTER)) {
       start(AgentStepKey.GEN_LETTER);
-      letterHtml = await generateDocument(deps, applicationId, {
+      const generated = await generateDocument(deps, applicationId, {
         kind: DocumentKind.COVER_LETTER,
         buildPrompt: letterPrompt,
         ...docInput(TemplateKind.ANSCHREIBEN),
       });
+      letterHtml = generated.html;
+      tooLong.set(DocumentKind.COVER_LETTER, generated.overBudget);
       done(AgentStepKey.GEN_LETTER, true);
     }
 
@@ -501,6 +512,26 @@ interface DocumentJob {
   buildPrompt: (input: DocumentInput) => string;
   input: DocumentInput;
   templateLabel: string;
+  /* Appended to the prompt as the reason this document is being written
+     again. The proofs step passes the claims it could not find support for. */
+  complaint?: string;
+  /* The proofs rewrite sets this: its complaint already says what to change,
+     and letting the budget ask a third time would triple the cost of one
+     unlucky letter for a rule the redo cannot see the answer to anyway. */
+  skipBudgetRedo?: boolean;
+}
+
+/* What the second ask says. It quotes the distance rather than only the rule:
+   told "höchstens 25" against an answer of 40, the model cuts; told only that
+   it was too long, it shortens by a word. */
+function budgetComplaint(over: OverBudget[]): string {
+  const lines = over.map((o) => `- ${o.slot}: höchstens ${o.budget} Wörter, erhalten ${o.words}`);
+  return [
+    '',
+    'Diese Werte sind zu lang. Schreibe die ganze Antwort noch einmal, alle Platzhalter, und halte für diese die Wortzahl ein:',
+    ...lines,
+    'Kürze, indem du weglässt — nicht, indem du Wörter zusammenziehst.',
+  ].join('\n');
 }
 
 /* Asks for the placeholder values, fills them into the Fassung, writes the
@@ -510,25 +541,38 @@ interface DocumentJob {
 async function generateDocument(
   deps: PipelineDeps,
   applicationId: string,
-  { kind, buildPrompt, input, templateLabel }: DocumentJob,
-): Promise<string> {
+  { kind, buildPrompt, input, templateLabel, complaint, skipBudgetRedo }: DocumentJob,
+): Promise<{ html: string; overBudget: OverBudget[] }> {
   const template = input.template;
-  const values = await deps.llm({
-    prompt: buildPrompt(input),
-    schema: FILL_SCHEMA,
-    /* An answer that skipped half the slots is a bad answer, not a failed
-       step: complaining here rather than after the fill is what puts it in
-       front of the runner, which asks once more with the reason attached. The
-       `missing` check below stays as the backstop for whatever comes back. */
-    validate: (x) => {
-      const values = validateFill(x);
-      const unanswered = modelPlaceholders(template).filter((name) => values[name] === undefined);
-      if (unanswered.length) throw new Error(`Platzhalter ohne Wert: ${unanswered.join(', ')}`);
-      return values;
-    },
-    timeoutMs: DOCUMENT_TIMEOUT,
-    signal: deps.signal,
-  });
+  const basePrompt = buildPrompt(input) + (complaint ?? '');
+  const ask = (prompt: string) =>
+    deps.llm({
+      prompt,
+      schema: FILL_SCHEMA,
+      /* An answer that skipped half the slots is a bad answer, not a failed
+         step: complaining here rather than after the fill is what puts it in
+         front of the runner, which asks once more with the reason attached. */
+      validate: (x) => {
+        const values = validateFill(x);
+        const unanswered = modelPlaceholders(template).filter((name) => values[name] === undefined);
+        if (unanswered.length) throw new Error(`Platzhalter ohne Wert: ${unanswered.join(', ')}`);
+        return values;
+      },
+      timeoutMs: DOCUMENT_TIMEOUT,
+      signal: deps.signal,
+    });
+
+  let values = await ask(basePrompt);
+  let over = overBudget(values);
+  /* One redo, and then whatever it says. This is deliberately not routed
+     through validate(): a validator that throws gets one retry from
+     createLlmRunner and fails the step after it, which is right for a
+     malformed answer and wrong here — a letter a few words too long is worth
+     having, and the user is told about it in the closing comment instead. */
+  if (over.length && !skipBudgetRedo) {
+    values = await ask(basePrompt + budgetComplaint(over));
+    over = overBudget(values);
+  }
 
   /* Deleted during the call: its files were already purged with it, and
      writing now would recreate a folder nothing ever cleans again. */
@@ -581,7 +625,7 @@ async function generateDocument(
        wrote is not something to find out about from an empty card. */
     console.error('[agent] Kein Dokument-Row für', applicationId, kind);
   }
-  return html;
+  return { html, overBudget: over };
 }
 
 function finalComment(postingUrl: string | null, issues: string[]): string {

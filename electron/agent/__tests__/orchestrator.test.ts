@@ -395,6 +395,68 @@ describe('runPipeline', () => {
     expect(written).toContain(base64);
   });
 
+  it('dates the document itself, without ever offering the slot to the model', async () => {
+    /* The template used to fill its date from an inline script. Nothing runs
+       that script — printToPDF loads the document with javascript off — so
+       every letter carried the date the template was authored on. */
+    uploadTemplates(['lebenslauf']);
+    uploadTemplates(
+      ['anschreiben'],
+      'Standard',
+      '<!doctype html><html><body><p>München, {{LETTER_DATE}}</p><h1>{{COMPANY_NAME}}</h1></body></html>',
+    );
+    const appId = createApp({ postingText: 'Wir suchen einen Senior Designer …' });
+    const llm = fakeLlm();
+
+    await runPipeline(appId, createRun(appId), deps({ llm, now: () => NOW }));
+
+    const letter = repo
+      .load()
+      .documents.find((d) => d.application_id === appId && d.kind === DocumentKind.COVER_LETTER)!;
+    expect(readFileSync(path.join(root, letter.file_path!), 'utf8')).toContain('München, 14.08.2026');
+    /* The model has no clock: asked for a date it writes a plausible one, so
+       the slot is never listed among the ones it is asked to fill. It still
+       reads the Fassung's own text, slots and all — that is what tells it
+       where a value sits — so only the list is checked. */
+    const offered = llm.mock.calls
+      .map(([req]: [LlmRequest<unknown>]) => req.prompt)
+      .filter((prompt: string) => prompt.includes('<platzhalter>'))
+      /* On its own line — the output rules name the block in prose too. */
+      .map((prompt: string) => prompt.split('\n<platzhalter>\n')[1].split('\n</platzhalter>')[0]);
+    expect(offered.length).toBe(2);
+    for (const list of offered) expect(list).not.toContain('LETTER_DATE');
+  });
+
+  it('keeps its own date even when the model answers with one anyway', async () => {
+    /* The Fassung's text shows the slot, so a model can volunteer a value for
+       it. The process knows the day and the model does not — its answer goes
+       in first and is written over. */
+    uploadTemplates(['lebenslauf']);
+    uploadTemplates(
+      ['anschreiben'],
+      'Standard',
+      '<!doctype html><html><body><p>München, {{LETTER_DATE}}</p><h1>{{COMPANY_NAME}}</h1></body></html>',
+    );
+    const appId = createApp({ postingText: 'Wir suchen einen Senior Designer …' });
+    const llm = fakeLlm({
+      document: () => ({
+        fields: [
+          { key: 'COMPANY_NAME', value: 'Helios Energie' },
+          { key: 'LETTER_DATE', value: '01.01.2001' },
+        ],
+      }),
+    });
+
+    await runPipeline(appId, createRun(appId), deps({ llm, now: () => NOW }));
+
+    const letter = repo
+      .load()
+      .documents.find((d) => d.application_id === appId && d.kind === DocumentKind.COVER_LETTER)!;
+    const written = readFileSync(path.join(root, letter.file_path!), 'utf8');
+    expect(written).toContain('München, 14.08.2026');
+    expect(written).not.toContain('01.01.2001');
+  });
+
   it('fails the document step when a slot is left unanswered', async () => {
     /* Shipping a PDF with a literal {{…}} in it is worse than a failed step
        the retry icon offers to resume. */

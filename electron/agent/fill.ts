@@ -5,6 +5,7 @@
    than reproduced by a language model — which is the point: a template carries
    tens of kilobytes of base64 image data, and asking for it back verbatim
    returned it with the middle silently missing. */
+import { DocumentLanguage } from '../../src/shared/enums.ts';
 
 /* Uppercase only, so CSS rules and script braces are never mistaken for a
    slot: `.a{ color:red }` and `if(x){{y}}` both stay untouched. */
@@ -43,12 +44,51 @@ export interface FillResult {
   missing: string[];
 }
 
+/* Slots this file fills from what the process knows rather than from an
+   answer. A language model has no clock — asked for a date it writes a
+   plausible one — so the date is never offered to it: modelPlaceholders keeps
+   it out of the prompt and out of the check that every offered slot came back
+   answered, and systemValues supplies it at fill time. */
+export const SYSTEM_PLACEHOLDERS = ['LETTER_DATE'] as const;
+
 /* Every placeholder a template uses, deduplicated, in the order it first
-   appears — this is what the prompt lists for the model. */
+   appears — the system slots included, because unofferedSlots measures the
+   filled document against this list and a name missing here would be reported
+   as braces left in the PDF. */
 export function findPlaceholders(html: string): string[] {
   const found = new Set<string>();
   for (const match of html.matchAll(PLACEHOLDER)) found.add(match[1]);
   return [...found];
+}
+
+/* The slots the model is asked about — what the prompt lists under
+   <platzhalter>, and what the document steps demand a value for. */
+export function modelPlaceholders(html: string): string[] {
+  const system: readonly string[] = SYSTEM_PLACEHOLDERS;
+  return findPlaceholders(html).filter((name) => !system.includes(name));
+}
+
+/* How a date reads in a document of each language. The two forms are the ones
+   the validation pass is told to expect (see dateFormat in prompts.ts) — a
+   letter that dated itself one way and was then checked against the other
+   would report a problem on every run. */
+const DATE_FORMAT: Record<DocumentLanguage, { locale: string; options: Intl.DateTimeFormatOptions }> = {
+  [DocumentLanguage.DE]: {
+    locale: 'de-DE',
+    options: { day: '2-digit', month: '2-digit', year: 'numeric' },
+  },
+  [DocumentLanguage.EN]: {
+    locale: 'en-GB',
+    options: { day: 'numeric', month: 'long', year: 'numeric' },
+  },
+};
+
+/* The values behind SYSTEM_PLACEHOLDERS, for a document written on `now`. The
+   date is the one the document was generated on and stays what it says: a
+   letter carries the day it was written, not the day it is looked at again. */
+export function systemValues(language: DocumentLanguage, now: Date): Record<string, string> {
+  const { locale, options } = DATE_FORMAT[language];
+  return { LETTER_DATE: now.toLocaleDateString(locale, options) };
 }
 
 export function fillPlaceholders(html: string, values: Record<string, string>): FillResult {

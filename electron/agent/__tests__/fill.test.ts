@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { fillPlaceholders, findPlaceholders } from '../fill.ts';
+import {
+  SYSTEM_PLACEHOLDERS,
+  fillPlaceholders,
+  findPlaceholders,
+  modelPlaceholders,
+  systemValues,
+} from '../fill.ts';
+import { DocumentLanguage } from '../../../src/shared/enums.ts';
 
 describe('findPlaceholders', () => {
   it('lists every placeholder once, in the order the template uses them', () => {
@@ -101,5 +108,46 @@ describe('fillPlaceholders', () => {
 
     expect(missing).toEqual([]);
     expect(html).toContain('if(x){{y}}');
+  });
+});
+
+describe('modelPlaceholders', () => {
+  it('leaves out the slots the pipeline fills itself', () => {
+    const html = '<p>{{SALUTATION}}</p><p class="place-date">München, {{LETTER_DATE}}</p>';
+
+    expect(modelPlaceholders(html)).toEqual(['SALUTATION']);
+    /* The full list still sees it — unofferedSlots reads that one, and a slot
+       missing from it would be reported as printed braces. */
+    expect(findPlaceholders(html)).toEqual(['SALUTATION', 'LETTER_DATE']);
+  });
+});
+
+describe('systemValues', () => {
+  const day = new Date(2026, 7, 23);
+
+  it('writes the German date the way the Fassung reads', () => {
+    expect(systemValues(DocumentLanguage.DE, day)).toEqual({ LETTER_DATE: '23.08.2026' });
+  });
+
+  it('writes the English date in the long British form', () => {
+    expect(systemValues(DocumentLanguage.EN, day)).toEqual({ LETTER_DATE: '23 August 2026' });
+  });
+
+  it('covers every system placeholder, so none can reach the document unfilled', () => {
+    const values = systemValues(DocumentLanguage.DE, day);
+
+    for (const name of SYSTEM_PLACEHOLDERS) expect(values[name]).toBeTruthy();
+  });
+});
+
+describe('fillPlaceholders with a system slot', () => {
+  it('does not report a system slot as missing once its value is merged in', () => {
+    const { html, missing } = fillPlaceholders('München, {{LETTER_DATE}} — {{ROLE}}', {
+      ...systemValues(DocumentLanguage.DE, new Date(2026, 7, 23)),
+      ROLE: 'Entwickler',
+    });
+
+    expect(missing).toEqual([]);
+    expect(html).toBe('München, 23.08.2026 — Entwickler');
   });
 });

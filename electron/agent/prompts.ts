@@ -2,8 +2,9 @@
    (<anzeige>, <vorlage>, <profil>, <kontakte>) so listing text can never read as
    instructions; the output shape is enforced separately by the JSON Schemas
    in schemas.ts. */
-import { findPlaceholders } from './fill.ts';
+import { modelPlaceholders } from './fill.ts';
 import type { Extraction } from './schemas.ts';
+import { APPLICANT_EMAIL, APPLICANT_NAME } from '../../src/shared/applicant.ts';
 import { DocumentLanguage } from '../../src/shared/enums.ts';
 
 /* Listings are pages, not books — everything past this is boilerplate, and
@@ -109,7 +110,7 @@ ${sealed(documentText(input.template))}
 </vorlage>
 
 <platzhalter>
-${bullets(findPlaceholders(input.template), '(keine)')}
+${bullets(modelPlaceholders(input.template), '(keine)')}
 </platzhalter>
 
 <profil>
@@ -385,10 +386,17 @@ export function checksPrompt(extraction: Extraction, cvHtml: string, letterHtml:
 
 Prüfe:
 - Passen Rolle und Unternehmen in den Dokumenten zu den erfassten Daten?
-- Datumsformate (${TEXT[extraction.language ?? DocumentLanguage.DE].dateFormat}), Gehaltsformat, plausible URLs und E-Mail-Adressen?
+- Datumsformate (${TEXT[extraction.language ?? DocumentLanguage.DE].dateFormat}), Gehaltsformat, plausible URLs und E-Mail-Adressen des Unternehmens?
 - Widersprüche zwischen den Angaben?
 
-issues: höchstens die drei wichtigsten echten Probleme, je EIN kurzer Satz (unter 15 Wörter), ohne Herleitung oder Zitate; hebe den Kern jedes Hinweises mit **fett** hervor (z. B. "**E-Mail-Adresse** passt nicht zum Namen."). Leer, wenn alles stimmig ist.
+Die Kontaktdaten des Bewerbers stehen in <bewerber> und sind richtig, so wie sie dort stehen. Sie sind nie ein Hinweis — auch dann nicht, wenn die Adresse anders aussieht, als der Name vermuten ließe.
+
+issues: höchstens die drei wichtigsten echten Probleme, je EIN kurzer Satz (unter 15 Wörter), ohne Herleitung oder Zitate; hebe den Kern jedes Hinweises mit **fett** hervor (z. B. "**Gehaltsangabe** widerspricht der Anzeige."). Leer, wenn alles stimmig ist.
+
+<bewerber>
+Name: ${APPLICANT_NAME}
+E-Mail: ${APPLICANT_EMAIL}
+</bewerber>
 
 <daten>
 ${JSON.stringify(extraction, null, 1)}

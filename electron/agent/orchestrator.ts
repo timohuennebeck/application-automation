@@ -24,7 +24,7 @@ import {
 } from '../../src/shared/enums.ts';
 import { INTERRUPTED_HEADLINE } from '../../src/shared/agent.ts';
 import { KeplerError, userMessage } from './errors.ts';
-import { fillPlaceholders, findPlaceholders } from './fill.ts';
+import { fillPlaceholders, modelPlaceholders, systemValues } from './fill.ts';
 import { STOP_ERROR, stepLabel, type LabelCtx } from './labels.ts';
 import {
   checksPrompt,
@@ -70,6 +70,10 @@ export interface PipelineDeps {
   llm: LlmRunner;
   renderPdf(htmlAbs: string, pdfAbs: string): Promise<void>;
   emit(event: AgentEvent): void;
+  /* The day a document is written, which is the date it carries. Injected
+     like every other side channel so a generated letter can be checked
+     against a fixed date rather than against whatever the test ran on. */
+  now?: () => Date;
   /* Aborted by the service when the user stops the run. */
   signal?: AbortSignal;
 }
@@ -518,7 +522,7 @@ async function generateDocument(
        `missing` check below stays as the backstop for whatever comes back. */
     validate: (x) => {
       const values = validateFill(x);
-      const unanswered = findPlaceholders(template).filter((name) => values[name] === undefined);
+      const unanswered = modelPlaceholders(template).filter((name) => values[name] === undefined);
       if (unanswered.length) throw new Error(`Platzhalter ohne Wert: ${unanswered.join(', ')}`);
       return values;
     },
@@ -530,7 +534,13 @@ async function generateDocument(
      writing now would recreate a folder nothing ever cleans again. */
   if (!deps.repo.getApplicationWithCompany(applicationId)) throw new Deleted();
 
-  const { html, missing } = fillPlaceholders(template, values);
+  /* The slots the process fills itself go in beside the answers — never
+     before them in the record, so a model that answered a system slot anyway
+     cannot overwrite the value this side is sure of. */
+  const { html, missing } = fillPlaceholders(template, {
+    ...values,
+    ...systemValues(input.language, deps.now?.() ?? new Date()),
+  });
   /* A document that still shows {{…}} is worse than a failed step: the run
      would report success and the user would send it out. */
   if (missing.length) {

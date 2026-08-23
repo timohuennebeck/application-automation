@@ -11,6 +11,7 @@ import type {
   Assignee,
   Author,
   DocumentKind,
+  DocumentLanguage,
   FactKind,
   Interest,
   LinkKind,
@@ -57,6 +58,10 @@ export interface ApplicationRow {
   posting_url: string | null;
   posting_text: string | null;
   assignee: Assignee | null;
+  /* Which side of the template slots a run reads and what its files are
+     called. Null until Kepler read the posting or the user chose — an
+     explicit choice is never overwritten by detection. */
+  language: DocumentLanguage | null;
   created_at: string;
   updated_at: string;
 }
@@ -285,6 +290,7 @@ export type ApplicationPatch = Partial<
     | 'posting_url'
     | 'posting_text'
     | 'assignee'
+    | 'language'
   >
 >;
 export type CompanyPatch = Partial<
@@ -321,6 +327,7 @@ export interface DbApi {
       channel: string | null;
       postingUrl?: string | null;
       postingText?: string | null;
+      language?: DocumentLanguage | null;
     }): Promise<CreateApplicationResult>;
     update(id: string, patch: ApplicationPatch): Promise<ApplicationRow>;
     move(id: string, toStageId: string, toIndex: number): Promise<ApplicationRow[]>;

@@ -2,7 +2,7 @@ import { useRef, useState, type CSSProperties } from 'react';
 import { formatBytes } from '../../lib/bytes';
 import { isoToDate } from '../../lib/date';
 import type { TemplateVersion } from '../../shared/domain';
-import type { TemplateKind } from '../../shared/enums';
+import type { DocumentLanguage, TemplateKind } from '../../shared/enums';
 import { useApp } from '../../state/store-context';
 import { AddRow } from '../../ui/AddRow';
 import { DocumentCard } from '../../ui/DocumentCard';
@@ -27,12 +27,14 @@ const RENAME_INPUT: CSSProperties = {
   outline: 'none',
 };
 
-/* One template slot of the profile: every Fassung as a card, the dot on the
-   left marking the one Kepler uses, and a row to add another. All writes go
-   through the desktop bridge and the parent's list is patched with what came
-   back, so the cards always show what is on disk. */
+/* One language side of a template slot: every Fassung as a card, the dot on
+   the left marking the one Kepler uses for applications in that language, and
+   a row to add another. All writes go through the desktop bridge and the
+   parent's list is patched with what came back, so the cards always show what
+   is on disk. */
 export function TemplateSlot({
   kind,
+  language,
   title,
   versions,
   loaded,
@@ -40,6 +42,7 @@ export function TemplateSlot({
   onError,
 }: {
   kind: TemplateKind;
+  language: DocumentLanguage;
   title: string;
   versions: TemplateVersion[];
   /* False until the first listing landed — nothing is claimed about the slot. */
@@ -101,27 +104,28 @@ export function TemplateSlot({
       }
     });
 
-  const add = () => pickAndWrite('', (api, source) => api.templates.add(kind, source));
+  const add = () => pickAndWrite('', (api, source) => api.templates.add(kind, language, source));
   const replace = (label: string) =>
-    pickAndWrite(label, (api, source) => api.templates.replace(kind, label, source));
+    pickAndWrite(label, (api, source) => api.templates.replace(kind, language, label, source));
 
   const select = (label: string) =>
     act(async (api) => {
-      await api.templates.select(kind, label);
+      await api.templates.select(kind, language, label);
       onChange((prev) => prev.map((v) => ({ ...v, selected: v.label === label })));
     });
 
   const open = (label: string) =>
     act(async (api) => {
-      const err = await api.templates.open(kind, label);
+      const err = await api.templates.open(kind, language, label);
       if (err) onError(err);
     });
 
-  const openPdf = (label: string) => act(async (api) => patch(await api.templates.openPdf(kind, label)));
+  const openPdf = (label: string) =>
+    act(async (api) => patch(await api.templates.openPdf(kind, language, label)));
 
   const remove = (label: string) =>
     act(async (api) => {
-      await api.templates.remove(kind, label);
+      await api.templates.remove(kind, language, label);
       onChange((prev) => prev.filter((v) => v.label !== label));
     });
 
@@ -135,7 +139,7 @@ export function TemplateSlot({
       return;
     }
     committing.current = true;
-    await act(async (api) => patch(await api.templates.rename(kind, r.label, r.draft), r.label));
+    await act(async (api) => patch(await api.templates.rename(kind, language, r.label, r.draft), r.label));
     committing.current = false;
     setRenaming(null);
   };
@@ -200,7 +204,7 @@ export function TemplateSlot({
             }}
           >
             <DotsMenu
-              menuKey={`template:${kind}:${v.label}`}
+              menuKey={`template:${kind}:${language}:${v.label}`}
               /* The dialog body scrolls; the last card's menu opens upwards
                  rather than off the bottom edge. */
               flipUp={i === versions.length - 1 && versions.length > 1}

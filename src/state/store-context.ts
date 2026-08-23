@@ -15,7 +15,7 @@ import type {
 } from '../shared/db-types';
 import type { AgentRunView, PersonView, RoundView } from './db-view';
 import type { SortDir, SortKey } from '../data/config';
-import type { Assignee, DocumentKind, Interest, LinkKind } from '../shared/enums';
+import type { Assignee, DocumentKind, DocumentLanguage, Interest, LinkKind } from '../shared/enums';
 
 /* Components render rounds through this alias. */
 export type Round = RoundView;
@@ -157,6 +157,9 @@ export interface AppState {
      ("Plattform") it was found on. */
   jobUrl: string;
   jobChannel: string;
+  /* The language the application is conducted in; null leaves the decision
+     to Kepler, which reads it off the posting. */
+  jobLanguage: DocumentLanguage | null;
   /* Whether the posting is given as a link; off means jobText carries the
      listing pasted by hand. */
   jobHasUrl: boolean;
@@ -263,6 +266,9 @@ export interface AppStore {
      points the row at both. Resolves to the reason it failed, or null. */
   saveLetter: (id: string, html: string, note: boolean) => Promise<string | null>;
   setInterest: (id: string, interest: Interest) => void;
+  /* Which side of the templates Kepler reads for the card and what its files
+     are called. Null hands the decision back to the posting on the next run. */
+  setLanguage: (id: string, language: DocumentLanguage | null) => void;
   /* Kepler is the only assignee; assigning it starts a run and moves the
      card from Interessiert to In Bearbeitung. */
   setAssignee: (id: string, assignee: Assignee | null) => void;

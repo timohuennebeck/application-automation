@@ -442,4 +442,14 @@ export const MIGRATIONS: string[] = [
      SET email_subject = NULL, email_text = NULL, generated_at = NULL
    WHERE completed_at IS NULL AND email_text IS NOT NULL;
   `,
+
+  /* Migration 24 (index 21): the language an application is conducted in —
+     'de' or 'en', null until Kepler read the posting or the user chose. It
+     decides which side of each template slot a run reads and what the
+     generated files are called. Existing cards stay null: a card that never
+     runs again keeps its German documents, one that does gets the language
+     read from its posting. */
+  `
+  ALTER TABLE applications ADD COLUMN language TEXT;
+  `,
 ];

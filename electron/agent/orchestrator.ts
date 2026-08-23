@@ -15,7 +15,9 @@ import {
   AgentStepStatus,
   Author,
   DocumentKind,
+  DocumentLanguage,
   FactKind,
+  LANGUAGE_TITLES,
   LinkKind,
   TEMPLATE_TITLES,
   TemplateKind,
@@ -192,7 +194,7 @@ export async function runPipeline(applicationId: string, runId: number, deps: Pi
         signal,
       });
       alive();
-      applyExtraction(repo, applicationId, company, extraction);
+      applyExtraction(repo, applicationId, app, company, extraction);
       ({ application: app, company } = alive());
       /* The waiting document steps were planned before the company had a
          name — rewrite them now that it does. */
@@ -207,6 +209,13 @@ export async function runPipeline(applicationId: string, runId: number, deps: Pi
     /* On resume the extraction lives in the database — rebuild it from there
        (people are not reconstructable; the contact step researches instead). */
     const needExtraction = (): Extraction => (extraction ??= extractionFromDb(repo, applicationId));
+
+    /* The side of the template slots this run reads. applyExtraction wrote
+       the posting's language onto a card that had none, so by now the card
+       always says — a resumed run reads the same side the first attempt
+       wrote its files under. German for a card from before languages whose
+       extraction step is already done. */
+    const language: DocumentLanguage = app.language ?? DocumentLanguage.DE;
 
     /* ── Contacts: from the listing, else researched ──────────────────── */
     if (pending(AgentStepKey.CONTACTS)) {
@@ -234,12 +243,12 @@ export async function runPipeline(applicationId: string, runId: number, deps: Pi
     /* ── The uploaded templates ───────────────────────────────────────── */
     if (pending(AgentStepKey.READ_CV)) {
       start(AgentStepKey.READ_CV);
-      readTemplate(deps.userDataPath, TemplateKind.LEBENSLAUF);
+      readTemplate(deps.userDataPath, TemplateKind.LEBENSLAUF, language);
       done(AgentStepKey.READ_CV);
     }
     if (pending(AgentStepKey.READ_LETTER)) {
       start(AgentStepKey.READ_LETTER);
-      readTemplate(deps.userDataPath, TemplateKind.ANSCHREIBEN);
+      readTemplate(deps.userDataPath, TemplateKind.ANSCHREIBEN, language);
       done(AgentStepKey.READ_LETTER);
     }
 
@@ -247,11 +256,12 @@ export async function runPipeline(applicationId: string, runId: number, deps: Pi
     /* The prompt input plus the label of the Fassung it was read from — the
        label is stamped on the generated document, never shown to the model. */
     const docInput = (kind: TemplateKind): { input: DocumentInput; templateLabel: string } => {
-      const { html, label } = readTemplate(deps.userDataPath, kind);
+      const { html, label } = readTemplate(deps.userDataPath, kind, language);
       return {
         templateLabel: label,
         input: {
           template: html,
+          language,
           listing,
           extraction: needExtraction(),
           profileFacts: repo.load().profileFacts.map((f) => f.text),
@@ -262,7 +272,7 @@ export async function runPipeline(applicationId: string, runId: number, deps: Pi
              generate. */
           cv:
             kind === TemplateKind.ANSCHREIBEN
-              ? (readSelectedTemplate(deps.userDataPath, TemplateKind.LEBENSLAUF)?.html ?? null)
+              ? (readSelectedTemplate(deps.userDataPath, TemplateKind.LEBENSLAUF, language)?.html ?? null)
               : null,
           company: company.name,
           role: app.role,
@@ -299,8 +309,9 @@ export async function runPipeline(applicationId: string, runId: number, deps: Pi
       issues = await deps.llm({
         prompt: checksPrompt(
           needExtraction(),
-          cvHtml ?? readGeneratedHtml(deps.userDataPath, applicationId, DocumentKind.LEBENSLAUF),
-          letterHtml ?? readGeneratedHtml(deps.userDataPath, applicationId, DocumentKind.COVER_LETTER),
+          cvHtml ?? readGeneratedHtml(deps.userDataPath, applicationId, DocumentKind.LEBENSLAUF, language),
+          letterHtml ??
+            readGeneratedHtml(deps.userDataPath, applicationId, DocumentKind.COVER_LETTER, language),
         ),
         schema: CHECKS_SCHEMA,
         validate: validateChecks,
@@ -345,10 +356,21 @@ export async function runPipeline(applicationId: string, runId: number, deps: Pi
 
 /* Writes everything the extraction found through the same paths the sidebar
    uses, so the two write routes cannot diverge. */
-function applyExtraction(repo: Repo, applicationId: string, company: CompanyRow, ex: Extraction): void {
-  const appPatch: { role?: string; summary?: string } = {};
+function applyExtraction(
+  repo: Repo,
+  applicationId: string,
+  app: ApplicationRow,
+  company: CompanyRow,
+  ex: Extraction,
+): void {
+  const appPatch: { role?: string; summary?: string; language?: DocumentLanguage } = {};
   if (ex.role) appPatch.role = ex.role;
   if (ex.summary) appPatch.summary = ex.summary;
+  /* The posting's language becomes the card's — unless the user already
+     chose, which detection never overrides. Written even when the posting
+     gave nothing (then German), so the card shows what the run went with and
+     a later retry reads the same side. */
+  if (!app.language) appPatch.language = ex.language ?? DocumentLanguage.DE;
   if (Object.keys(appPatch).length) repo.updateApplication(applicationId, appPatch);
 
   let companyId = company.id;
@@ -422,26 +444,42 @@ function extractionFromDb(repo: Repo, applicationId: string): Extraction {
     standort: fact('Standort'),
     gehalt: fact('Gehalt'),
     erfahrung: fact('Erfahrung'),
+    language: ctx.application.language,
     people: [],
   };
 }
 
 /* A document generated by an earlier attempt of this run, for the checks. */
-function readGeneratedHtml(userDataPath: string, applicationId: string, kind: DocumentKind): string {
+function readGeneratedHtml(
+  userDataPath: string,
+  applicationId: string,
+  kind: DocumentKind,
+  language: DocumentLanguage,
+): string {
   try {
-    return readFileSync(documentPaths(userDataPath, applicationId, kind).htmlAbs, 'utf8');
+    return readFileSync(documentPaths(userDataPath, applicationId, kind, language).htmlAbs, 'utf8');
   } catch {
     return '';
   }
 }
 
-/* The selected Fassung of a slot: its markup and the label the generated
-   document is stamped with. */
-function readTemplate(userDataPath: string, kind: TemplateKind): { html: string; label: string } {
-  const selected = readSelectedTemplate(userDataPath, kind);
+/* The German adjective in the message that names an empty side. */
+const LANGUAGE_ADJECTIVE: Record<DocumentLanguage, string> = {
+  [DocumentLanguage.DE]: 'deutsche',
+  [DocumentLanguage.EN]: 'englische',
+};
+
+/* The selected Fassung on the run's side of a slot: its markup and the label
+   the generated document is stamped with. */
+function readTemplate(
+  userDataPath: string,
+  kind: TemplateKind,
+  language: DocumentLanguage,
+): { html: string; label: string } {
+  const selected = readSelectedTemplate(userDataPath, kind, language);
   if (!selected) {
     throw new KeplerError(
-      `Keine ${TEMPLATE_TITLES[kind]}-Vorlage hochgeladen. Bitte im Profil (⌘P) eine HTML-Vorlage hinterlegen.`,
+      `Keine ${LANGUAGE_ADJECTIVE[language]} ${TEMPLATE_TITLES[kind]}-Vorlage hochgeladen. Bitte im Profil (⌘P) unter „${LANGUAGE_TITLES[language]}“ eine HTML-Vorlage hinterlegen.`,
     );
   }
   return selected;
@@ -499,7 +537,12 @@ async function generateDocument(
     );
   }
 
-  const { htmlAbs, htmlRel, pdfAbs, pdfRel } = documentPaths(deps.userDataPath, applicationId, kind);
+  const { htmlAbs, htmlRel, pdfAbs, pdfRel } = documentPaths(
+    deps.userDataPath,
+    applicationId,
+    kind,
+    input.language,
+  );
   mkdirSync(path.dirname(htmlAbs), { recursive: true });
   writeFileSync(htmlAbs, html);
   let storedPdf: string | null = pdfRel;

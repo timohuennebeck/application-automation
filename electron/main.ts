@@ -32,7 +32,7 @@ import {
 } from './files.ts';
 import { renderPdf } from './pdf.ts';
 import type { DocumentUpload } from '../src/shared/domain.ts';
-import type { DocumentKind, TemplateKind } from '../src/shared/enums.ts';
+import type { DocumentKind, DocumentLanguage, TemplateKind } from '../src/shared/enums.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -178,9 +178,10 @@ function queuePdfRender(pdfPath: string, work: () => Promise<void>): Promise<voi
 async function exportDocumentPdf(
   applicationId: string,
   kind: DocumentKind,
+  language: DocumentLanguage,
   filePath: string,
 ): Promise<DocumentUpload> {
-  const { htmlAbs, pdfAbs, pdfRel } = documentPaths(root(), applicationId, kind);
+  const { htmlAbs, pdfAbs, pdfRel } = documentPaths(root(), applicationId, kind, language);
   try {
     await queuePdfRender(pdfAbs, async () => {
       try {
@@ -203,10 +204,16 @@ async function exportDocumentPdf(
    claims a source without the export that belongs to it. */
 ipcMain.handle(
   'documents:copy',
-  async (_e, applicationId: string, kind: DocumentKind, sourcePath: string): Promise<DocumentUpload> => {
+  async (
+    _e,
+    applicationId: string,
+    kind: DocumentKind,
+    language: DocumentLanguage,
+    sourcePath: string,
+  ): Promise<DocumentUpload> => {
     requirePicked(sourcePath);
-    const filePath = copyDocument(root(), applicationId, kind, sourcePath);
-    return exportDocumentPdf(applicationId, kind, filePath);
+    const filePath = copyDocument(root(), applicationId, kind, language, sourcePath);
+    return exportDocumentPdf(applicationId, kind, language, filePath);
   },
 );
 
@@ -233,14 +240,20 @@ ipcMain.handle('documents:read', (_e, filePath: string) =>
    renderer through db.documents.setFile, so both write routes stay one route. */
 ipcMain.handle(
   'documents:save',
-  async (_e, applicationId: string, kind: DocumentKind, html: string): Promise<DocumentUpload> => {
-    const { htmlAbs, htmlRel } = documentPaths(root(), applicationId, kind);
+  async (
+    _e,
+    applicationId: string,
+    kind: DocumentKind,
+    language: DocumentLanguage,
+    html: string,
+  ): Promise<DocumentUpload> => {
+    const { htmlAbs, htmlRel } = documentPaths(root(), applicationId, kind, language);
     /* No mkdir: a document being edited is one that was written before, so its
        folder exists. Recreating it would resurrect a folder that was purged
        with its application, which the orchestrator refuses for the same
        reason — better to let ENOENT surface. */
     writeFileSync(htmlAbs, html);
-    return exportDocumentPdf(applicationId, kind, htmlRel);
+    return exportDocumentPdf(applicationId, kind, language, htmlRel);
   },
 );
 
@@ -286,62 +299,70 @@ ipcMain.handle('attachments:copy', (_e, applicationId: string, sourcePaths: stri
    once more in the file layer before anything is written. */
 ipcMain.handle('templates:list', () => listTemplates(root()));
 
-ipcMain.handle('templates:add', (_e, kind: TemplateKind, sourcePath: string) => {
+ipcMain.handle('templates:add', (_e, kind: TemplateKind, language: DocumentLanguage, sourcePath: string) => {
   requirePicked(sourcePath);
-  return addTemplateVersion(root(), kind, sourcePath);
+  return addTemplateVersion(root(), kind, language, sourcePath);
 });
 
-ipcMain.handle('templates:replace', (_e, kind: TemplateKind, label: string, sourcePath: string) => {
-  requirePicked(sourcePath);
-  return replaceTemplateVersion(root(), kind, label, sourcePath);
-});
-
-ipcMain.handle('templates:select', (_e, kind: TemplateKind, label: string) =>
-  selectTemplateVersion(root(), kind, label),
+ipcMain.handle(
+  'templates:replace',
+  (_e, kind: TemplateKind, language: DocumentLanguage, label: string, sourcePath: string) => {
+    requirePicked(sourcePath);
+    return replaceTemplateVersion(root(), kind, language, label, sourcePath);
+  },
 );
 
-ipcMain.handle('templates:rename', (_e, kind: TemplateKind, from: string, to: string) =>
-  renameTemplateVersion(root(), kind, from, to),
+ipcMain.handle('templates:select', (_e, kind: TemplateKind, language: DocumentLanguage, label: string) =>
+  selectTemplateVersion(root(), kind, language, label),
 );
 
-ipcMain.handle('templates:remove', (_e, kind: TemplateKind, label: string) =>
-  removeTemplateVersion(root(), kind, label),
+ipcMain.handle(
+  'templates:rename',
+  (_e, kind: TemplateKind, language: DocumentLanguage, from: string, to: string) =>
+    renameTemplateVersion(root(), kind, language, from, to),
 );
 
-/* Without a label the selected Fassung opens — what the agent panel's doc
-   chips point at. */
-ipcMain.handle('templates:open', (_e, kind: TemplateKind, label?: string) => {
+ipcMain.handle('templates:remove', (_e, kind: TemplateKind, language: DocumentLanguage, label: string) =>
+  removeTemplateVersion(root(), kind, language, label),
+);
+
+/* Without a label the selected Fassung of that language opens — what the
+   agent panel's doc chips point at. */
+ipcMain.handle('templates:open', (_e, kind: TemplateKind, language: DocumentLanguage, label?: string) => {
   const filePath = label
-    ? templateVersionPath(root(), kind, label)
-    : (selectedTemplatePath(root(), kind)?.path ?? null);
+    ? templateVersionPath(root(), kind, language, label)
+    : (selectedTemplatePath(root(), kind, language)?.path ?? null);
   return filePath ? shell.openPath(filePath) : 'Noch keine Datei hochgeladen.';
 });
 
 /* The PDF of one Fassung, rendered beside its HTML on first request and again
    whenever the HTML is newer than the last render — the profile has nothing
    else that would trigger the export. Returns '' on success, else the reason. */
-ipcMain.handle('templates:openPdf', async (_e, kind: TemplateKind, label: string) => {
-  const htmlPath = templateVersionPath(root(), kind, label);
-  if (!htmlPath) throw new Error('Noch keine Datei hochgeladen.');
-  const pdfPath = templatePdfPath(htmlPath);
-  try {
-    await queuePdfRender(pdfPath, async () => {
-      if (!existsSync(pdfPath) || statSync(pdfPath).mtimeMs < statSync(htmlPath).mtimeMs) {
-        await renderPdf(htmlPath, pdfPath);
-      }
-    });
-  } catch (err) {
-    rmSync(pdfPath, { force: true });
-    throw new Error('Das PDF ließ sich nicht erzeugen: ' + String(err));
-  }
-  const openError = await shell.openPath(pdfPath);
-  if (openError) throw new Error(openError);
-  /* The Fassung as it now stands — the menu shows the PDF's size from here on.
+ipcMain.handle(
+  'templates:openPdf',
+  async (_e, kind: TemplateKind, language: DocumentLanguage, label: string) => {
+    const htmlPath = templateVersionPath(root(), kind, language, label);
+    if (!htmlPath) throw new Error('Noch keine Datei hochgeladen.');
+    const pdfPath = templatePdfPath(htmlPath);
+    try {
+      await queuePdfRender(pdfPath, async () => {
+        if (!existsSync(pdfPath) || statSync(pdfPath).mtimeMs < statSync(htmlPath).mtimeMs) {
+          await renderPdf(htmlPath, pdfPath);
+        }
+      });
+    } catch (err) {
+      rmSync(pdfPath, { force: true });
+      throw new Error('Das PDF ließ sich nicht erzeugen: ' + String(err));
+    }
+    const openError = await shell.openPath(pdfPath);
+    if (openError) throw new Error(openError);
+    /* The Fassung as it now stands — the menu shows the PDF's size from here on.
      It may be gone by now (deleted outside the app mid-render). */
-  const version = listTemplateVersions(root(), kind).find((v) => v.label === label);
-  if (!version) throw new Error(`Fassung „${label}“ ist nicht vorhanden.`);
-  return version;
-});
+    const version = listTemplateVersions(root(), kind, language).find((v) => v.label === label);
+    if (!version) throw new Error(`Fassung „${label}“ ist nicht vorhanden.`);
+    return version;
+  },
+);
 
 /* Profile documents: any further files kept with the profile. The picker is
    the unfiltered multi-select one; the bytes are copied in straight away, so

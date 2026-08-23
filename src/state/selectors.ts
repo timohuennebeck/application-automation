@@ -2,7 +2,17 @@
    chip and salary line were pre-rendered strings in the sample data; now they
    are computed from rounds, follow-ups and facts at render time. */
 import { INTEREST, roundColumn, SortDir, SortKey, Urgency } from '../data/config';
-import { AgentRunStatus, Assignee, DocumentKind, Interest, LinkKind, RoundState } from '../shared/enums';
+import {
+  AgentRunStatus,
+  Assignee,
+  DocumentKind,
+  DocumentLanguage,
+  Interest,
+  LinkKind,
+  RoundState,
+  TemplateKind,
+} from '../shared/enums';
+import { DOCUMENT_STEMS } from '../shared/applicant';
 import type { DocumentRow } from '../shared/db-types';
 import type { AgentRunView } from './db-view';
 import { MON_DE3, DOW_DE, dateToISO, dayDiff, todayISO } from '../lib/date';
@@ -14,6 +24,27 @@ import type { AppState } from './store-context';
    they cannot disagree about which row they mean. */
 export function coverLetterFor(st: AppState, id: string): DocumentRow | undefined {
   return (st.documentsByApp[id] || []).find((d) => d.kind === DocumentKind.COVER_LETTER);
+}
+
+/* The language the card's documents are in: which side of the template slots
+   a run reads and what the files are called. German until Kepler read the
+   posting or the user chose — every card started German, so a card from
+   before languages keeps the names its files already carry. */
+export function languageOf(st: AppState, id: string): DocumentLanguage {
+  return st.applications[id]?.language ?? DocumentLanguage.DE;
+}
+
+/* Which language an existing document is in, read off the file the row names
+   rather than off the card: switching a card to English does not rewrite the
+   documents it already has — those follow on the next Kepler run — so an edit
+   has to be saved over the file it was opened from. Falls back to the card
+   for a row that has no file yet, and for a name from neither side. */
+export function documentLanguageOf(st: AppState, id: string, kind: DocumentKind): DocumentLanguage {
+  const template = kind === DocumentKind.COVER_LETTER ? TemplateKind.ANSCHREIBEN : TemplateKind.LEBENSLAUF;
+  const stored = (st.documentsByApp[id] || []).find((d) => d.kind === kind)?.file_path;
+  const stem = stored?.slice(stored.lastIndexOf('/') + 1).replace(/\.[^.]+$/, '');
+  const match = Object.values(DocumentLanguage).find((l) => DOCUMENT_STEMS[l][template] === stem);
+  return match ?? languageOf(st, id);
 }
 
 /* The card's latest Kepler run, whatever state it ended in. */

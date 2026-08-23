@@ -3,7 +3,14 @@ import type { DatabaseSync } from 'node:sqlite';
 import { openDb } from '../open.ts';
 import { seedIfEmpty } from '../seed.ts';
 import { createRepo, type Repo } from '../repo.ts';
-import { Assignee, Author, FactKind, LinkKind, RoundState } from '../../../src/shared/enums.ts';
+import {
+  Assignee,
+  Author,
+  DocumentLanguage,
+  FactKind,
+  LinkKind,
+  RoundState,
+} from '../../../src/shared/enums.ts';
 import { UNKNOWN_COMPANY, UNKNOWN_ROLE } from '../../../src/shared/domain.ts';
 
 const NOW = new Date('2026-08-12T12:00:00.000Z');
@@ -146,6 +153,24 @@ describe('repo', () => {
     expect(row.assignee).toBe('kepler');
 
     expect(repo.updateApplication(res.application.id, { assignee: null }).assignee).toBeNull();
+  });
+
+  /* Null until Kepler read the posting or the user chose; either writes it. */
+  it('creates cards without a language and patches it', () => {
+    const res = repo.createApplication({ role: 'Designer', company: 'Acme GmbH', channel: null });
+    expect(res.application.language).toBeNull();
+    expect(repo.updateApplication(res.application.id, { language: DocumentLanguage.EN }).language).toBe('en');
+    expect(repo.updateApplication(res.application.id, { language: null }).language).toBeNull();
+  });
+
+  it('stores the language chosen in the dialog', () => {
+    const res = repo.createApplication({
+      role: 'Designer',
+      company: 'Acme GmbH',
+      channel: null,
+      language: DocumentLanguage.EN,
+    });
+    expect(res.application.language).toBe('en');
   });
 
   it('hands out an application together with its company', () => {

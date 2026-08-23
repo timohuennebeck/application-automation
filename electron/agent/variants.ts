@@ -10,7 +10,7 @@
 import type { Repo } from '../db/repo.ts';
 import type { RunStore } from './run-store.ts';
 import { readSelectedTemplate } from '../files.ts';
-import { TemplateKind } from '../../src/shared/enums.ts';
+import { DocumentLanguage, TemplateKind } from '../../src/shared/enums.ts';
 import type { VariantsRequest, VariantsResult } from '../../src/shared/agent.ts';
 import type { LlmRunner } from './orchestrator.ts';
 import { variantsPrompt } from './prompts.ts';
@@ -94,7 +94,12 @@ export function createVariantsService({ repo, runs, userDataPath, llm }: Variant
             /* The same Lebenslauf Fassung the letter was written from, so a
                rewritten passage draws on the facts the rest of it already
                used. */
-            cv: readSelectedTemplate(userDataPath, TemplateKind.LEBENSLAUF)?.html ?? null,
+            cv:
+              readSelectedTemplate(
+                userDataPath,
+                TemplateKind.LEBENSLAUF,
+                application.language ?? DocumentLanguage.DE,
+              )?.html ?? null,
             company: company.name,
             role: application.role,
             count: VARIANT_COUNT,

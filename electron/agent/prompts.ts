@@ -4,6 +4,7 @@
    in schemas.ts. */
 import { findPlaceholders } from './fill.ts';
 import type { Extraction } from './schemas.ts';
+import { DocumentLanguage } from '../../src/shared/enums.ts';
 
 /* Listings are pages, not books — everything past this is boilerplate, and
    the calls stay affordable. */
@@ -47,6 +48,7 @@ Regeln:
 - gehalt: die genannte Spanne, kompakt in ganzen Tausendern (z. B. "70–85k €" — niemals Dezimalzahlen wie "87.7"), null wenn keine genannt ist.
 - erfahrung: geforderte Berufserfahrung in Jahren, eingeordnet in die vorgegebenen Stufen.
 - people: alle in der Anzeige namentlich genannten Ansprechpersonen (Recruiter, Hiring Manager) mit dem, was dasteht.
+- language: die Sprache, in der die Anzeige überwiegend geschrieben ist — "de" oder "en". Eine deutsche Anzeige mit englischen Fachbegriffen oder englischem Titel ist "de"; null nur bei einer anderen Sprache.
 - Unbekanntes ist null, niemals ein Platzhalter.
 
 <anzeige>
@@ -81,6 +83,10 @@ export interface DocumentInput {
   cv: string | null;
   company: string;
   role: string;
+  /* The language of the Fassung and so of every value — the terms and the
+     worked examples the prompt hands over are phrased in it, so the model
+     never has to translate a German sentence into an English letter. */
+  language: DocumentLanguage;
 }
 
 /* What the model may answer, and in what shape. Kepler returns the values;
@@ -125,7 +131,7 @@ ${OUTPUT_RULES}
 - Alle Fakten kommen aus der Vorlage; die Profil-Angaben unten dürfen ergänzen, wo sie passen. Erfinde nichts — keine Station, keine Zahl, und vor allem keine Technologie, die nicht im Lebenslauf steht. Fordert die Anzeige etwas, das der Bewerber nicht kann, bleibt es draußen.
 - Zahlen werden wörtlich übernommen, samt ihrer Einschränkungen: aus "über 12.000" wird nicht "12.000", aus "bis zu 280 €" nicht "280 €".
 - Halte jeden Wert etwa so lang wie der Text in der Vorlage (höchstens rund 10 % Abweichung). Das Layout ist auf eine feste Seitenzahl gerechnet; eine längere Zeile bricht um und verschiebt alles.
-- Sprache: die Sprache der Vorlage.
+- ${TEXT[input.language].languageRule}
 - Platzhalter, die im Verzeichnis fehlen, füllst du sinngemäß nach ihrem Namen.
 
 Verzeichnis der Platzhalter:
@@ -134,36 +140,104 @@ ${CV_GLOSSARY}
 ${documentContext(input)}`;
 }
 
-/* What no document holds: the terms of the move itself. Everything else
-   about the applicant comes from the Lebenslauf and the Profil-Angaben. */
-const TERMS = `Kündigungsfrist: 3 Monate zum Monatsende. Frühester Eintritt: nach Absprache.
-Gehaltsvorstellung (nur wenn die Anzeige sie ausdrücklich verlangt): 75.000 EUR bei Mid-Level-Titeln oder kleineren Unternehmen, 80.000 EUR bei Senior-Rollen in Produktfirmen, 85.000 EUR bei Senior-Rollen in Scale-ups, Konzernen oder Fintech oder wenn die Anzeige selbst eine höhere Spanne nennt. Immer eine runde Zahl auf .000, brutto p.a.`;
+/* Everything in the prompts that is copied into the document rather than
+   read by the model: the terms of the move, the worked examples, and the
+   rule naming the language. Each exists once per language the Fassungen
+   come in, so an English letter is handed English sentences — a model told
+   to write English from a German example sentence translates it, and the
+   salary line or the salutation come out one shade off. The prompts around
+   them stay German; that is Kepler's voice, not the document's. */
+interface LanguageText {
+  /* The rule under "Regeln" that names the language of every value. */
+  languageRule: string;
+  /* What no document holds: the terms of the move itself. Everything else
+     about the applicant comes from the Lebenslauf and the Profil-Angaben. */
+  terms: string;
+  recipientExamples: string;
+  recipientFallback: string;
+  referenceFormat: string;
+  salutationExamples: string;
+  hookExamples: string;
+  hookOpening: string;
+  purposeLead: string;
+  purposeExamples: string;
+  experienceLead: string;
+  experienceExamples: string;
+  proofScope: string;
+  stackExamples: string;
+  salarySentence: string;
+}
+
+const TEXT: Record<DocumentLanguage, LanguageText> = {
+  [DocumentLanguage.DE]: {
+    languageRule: 'Sprache: Deutsch, wie die Vorlage. Perfekte deutsche Grammatik und Interpunktion.',
+    terms: `Kündigungsfrist: 3 Monate zum Monatsende. Frühester Eintritt: nach Absprache.
+Gehaltsvorstellung (nur wenn die Anzeige sie ausdrücklich verlangt): 75.000 EUR bei Mid-Level-Titeln oder kleineren Unternehmen, 80.000 EUR bei Senior-Rollen in Produktfirmen, 85.000 EUR bei Senior-Rollen in Scale-ups, Konzernen oder Fintech oder wenn die Anzeige selbst eine höhere Spanne nennt. Immer eine runde Zahl auf .000, brutto p.a.`,
+    recipientExamples: '"Frau Dr. Julia Weber", "Herr Thomas Müller"',
+    recipientFallback: '"Engineering Hiring Team"',
+    referenceFormat: '" – Ref. 2026-DEV-04"',
+    salutationExamples:
+      '"Sehr geehrte Frau Dr. Weber", "Sehr geehrter Herr Müller", "Sehr geehrtes Engineering Hiring Team"',
+    hookExamples:
+      '"Personio nimmt kleinen und mittleren Unternehmen die Personalarbeit ab – und wächst dabei gerade in fünf weitere europäische Märkte.", "Mit Ihrer App bringen Sie Zahnarztpraxen die Terminplanung ins Smartphone."',
+    hookOpening: 'Beginnt mit dem Firmennamen oder "Mit Ihrer/Ihrem …"',
+    purposeLead: 'als Relativsatz-Fragment nach "Software, die …"',
+    purposeExamples:
+      '"Personalprozesse für tausende Firmen zuverlässig macht", "Praxen den Alltag spürbar vereinfacht"',
+    experienceLead: 'als Objekt zu "in der ich … bereits in Produktion gebracht habe"',
+    experienceExamples: '"moderne Web- und Mobile-Clients", "robuste TypeScript- und API-Systeme"',
+    proofScope: '"drei Apps in Produktion"',
+    stackExamples: '"im React- und Expo-Ökosystem", "in moderner Software-Architektur und KI-Workflows"',
+    salarySentence: '" Meine Gehaltserwartung liegt bei <Betrag> EUR brutto p.a."',
+  },
+  [DocumentLanguage.EN]: {
+    languageRule:
+      'Sprache: Englisch, wie die Vorlage — British English (Schreibweisen wie "optimised", "organisation"), fehlerfreie Grammatik und Interpunktion. Nur die Werte sind englisch; dieses Verzeichnis und die Regeln bleiben deutsch.',
+    terms: `Notice period: 3 months to the end of the month. Earliest start date: by arrangement.
+Gehaltsvorstellung (nur wenn die Anzeige sie ausdrücklich verlangt): 75,000 EUR bei Mid-Level-Titeln oder kleineren Unternehmen, 80,000 EUR bei Senior-Rollen in Produktfirmen, 85,000 EUR bei Senior-Rollen in Scale-ups, Konzernen oder Fintech oder wenn die Anzeige selbst eine höhere Spanne nennt. Immer eine runde Zahl auf ,000, gross p.a.`,
+    recipientExamples: '"Dr Julia Weber", "Mr Thomas Müller"',
+    recipientFallback: '"Engineering Hiring Team"',
+    referenceFormat: '" – Ref. 2026-DEV-04"',
+    salutationExamples: '"Dear Dr Weber", "Dear Mr Müller", "Dear Engineering Hiring Team"',
+    hookExamples:
+      '"Personio takes HR administration off the hands of small and medium-sized businesses – and is expanding into five more European markets as it does.", "With your app, dental practices schedule their appointments from a smartphone."',
+    hookOpening: 'Beginnt mit dem Firmennamen oder "With your …"',
+    purposeLead: 'als Relativsatz-Fragment nach "Software that …"',
+    purposeExamples:
+      '"makes HR processes reliable for thousands of companies", "noticeably simplifies the day-to-day of practices"',
+    experienceLead: 'als Objekt zu "where I have already taken … into production"',
+    experienceExamples: '"modern web and mobile clients", "robust TypeScript and API systems"',
+    proofScope: '"three apps in production"',
+    stackExamples: '"in the React and Expo ecosystem", "in modern software architecture and AI workflows"',
+    salarySentence: '" My salary expectation is <Betrag> EUR gross p.a."',
+  },
+};
 
 /* The placeholder glossary is written for the T-format Fassung; a Fassung
    with other names still works through the "sinngemäß" rule at the end. */
-const PLACEHOLDER_GLOSSARY = `Briefkopf und Adressat
+const placeholderGlossary = (t: LanguageText) => `Briefkopf und Adressat
 - {{CANDIDATE_HEADER_ROLE}}: Unterzeile unter dem Namen des Bewerbers, auf die Ausrichtung der Stelle zugeschnitten (z. B. "Senior Frontend Developer · React, Next.js, Expo" oder "Software Developer · TypeScript, Cloud & AI Workflows").
 - {{COMPANY_NAME}}: offizieller Name des Unternehmens (z. B. "Personio SE", "BMW Group").
-- {{RECIPIENT_NAME}}: Ansprechperson mit Anrede (z. B. "Frau Dr. Julia Weber", "Herr Thomas Müller") — die erste Person aus <kontakte>, sonst die in der Anzeige genannte; gibt es keine: "Engineering Hiring Team".
+- {{RECIPIENT_NAME}}: Ansprechperson mit Anrede (z. B. ${t.recipientExamples}) — die erste Person aus <kontakte>, sonst die in der Anzeige genannte; gibt es keine: ${t.recipientFallback}.
 - {{COMPANY_STREET}}: Straße und Hausnummer, nur wenn die Anzeige sie nennt; sonst entfällt die ganze Zeile.
 - {{COMPANY_LOCATION}}: PLZ und Stadt (z. B. "80335 München"); ohne PLZ nur die Stadt; ist auch die unbekannt, entfällt die Zeile.
 - {{TARGET_JOB_TITLE}}: exakte Positionsbezeichnung aus der Anzeige, inklusive Zusätzen wie "(m/w/d)".
-- {{JOB_REFERENCE_OPTIONAL}}: Referenznummer aus der Anzeige im Format " – Ref. 2026-DEV-04"; ohne Referenz vollständig leer.
-- {{SALUTATION}}: formale Anrede passend zum Adressaten ("Sehr geehrte Frau Dr. Weber", "Sehr geehrter Herr Müller", "Sehr geehrtes Engineering Hiring Team").
+- {{JOB_REFERENCE_OPTIONAL}}: Referenznummer aus der Anzeige im Format ${t.referenceFormat}; ohne Referenz vollständig leer.
+- {{SALUTATION}}: formale Anrede passend zum Adressaten (${t.salutationExamples}).
 
 Einstieg
-- {{COMPANY_HOOK_SENTENCE}}: ein ganzer Satz über die Firma, aus der Anzeige belegt — was sie baut, für wen, und wenn genannt, wo sie gerade steht (Wachstum, neuer Markt, Relaunch). Nie über Technik, immer über Produkt und Wirkung (z. B. "Personio nimmt kleinen und mittleren Unternehmen die Personalarbeit ab – und wächst dabei gerade in fünf weitere europäische Märkte.", "Mit Ihrer App bringen Sie Zahnarztpraxen die Terminplanung ins Smartphone."). Beginnt mit dem Firmennamen oder "Mit Ihrer/Ihrem …" — er ist der erste Satz nach der Anrede. Er enthält mindestens ein Detail, das nur auf diese Firma passt (Produktname, Kundenzahl, Markt, Phase); ist nichts Konkretes belegbar, lieber schlicht formulieren als Allgemeinplätze wie "innovative Lösungen".
-- {{COMPANY_PRODUCT_PURPOSE}}: dieselbe Wirkung als Relativsatz-Fragment nach "Software, die …" (z. B. "Personalprozesse für tausende Firmen zuverlässig macht", "Praxen den Alltag spürbar vereinfacht"). Ohne Punkt, ohne Wiederholung des Firmennamens.
-- {{CANDIDATE_PRIMARY_EXPERIENCE}}: die zur Stelle am besten passende Erfahrung des Bewerbers als Objekt zu "in der ich … bereits in Produktion gebracht habe" (z. B. "moderne Web- und Mobile-Clients", "robuste TypeScript- und API-Systeme").
+- {{COMPANY_HOOK_SENTENCE}}: ein ganzer Satz über die Firma, aus der Anzeige belegt — was sie baut, für wen, und wenn genannt, wo sie gerade steht (Wachstum, neuer Markt, Relaunch). Nie über Technik, immer über Produkt und Wirkung (z. B. ${t.hookExamples}). ${t.hookOpening} — er ist der erste Satz nach der Anrede. Er enthält mindestens ein Detail, das nur auf diese Firma passt (Produktname, Kundenzahl, Markt, Phase); ist nichts Konkretes belegbar, lieber schlicht formulieren als Allgemeinplätze wie "innovative Lösungen".
+- {{COMPANY_PRODUCT_PURPOSE}}: dieselbe Wirkung ${t.purposeLead} (z. B. ${t.purposeExamples}). Ohne Punkt, ohne Wiederholung des Firmennamens.
+- {{CANDIDATE_PRIMARY_EXPERIENCE}}: die zur Stelle am besten passende Erfahrung des Bewerbers ${t.experienceLead} (z. B. ${t.experienceExamples}).
 
 Matrix — vier Zeilen Anforderung ↔ Beleg
 - {{JOB_REQUIREMENT_1}} … {{JOB_REQUIREMENT_4}}: die vier wichtigsten Anforderungen der Anzeige, prägnant formuliert — mit den Wörtern der Anzeige, nicht umschrieben ("Ownership" bleibt "Ownership", "React Native" wird nicht "Mobile"). Reihenfolge nach Gewicht in der Anzeige: was zuerst steht oder als Muss markiert ist, kommt in Zeile 1.
-- {{CANDIDATE_PROOF_POINT_1}} … {{CANDIDATE_PROOF_POINT_4}}: der jeweils passende Beleg aus Lebenslauf und Profil-Angaben nach der XYZ-Logik (Ergebnis + Methode/Tool). Jeder Beleg enthält mindestens eine Zahl (Nutzer, Prozent, Dauer, Teamgröße); gibt der Lebenslauf keine her, dann Umfang ("drei Apps in Produktion") statt Adjektiv — keine Zahl erfinden. Hebe in der rechten Spalte insgesamt ein bis zwei Highlights mit <strong>…</strong> hervor (z. B. <strong>phase6</strong>, <strong>Multi-Agenten-KI-Tool</strong>, <strong>Expo EAS</strong>, <strong>100 % TypeScript</strong>).
+- {{CANDIDATE_PROOF_POINT_1}} … {{CANDIDATE_PROOF_POINT_4}}: der jeweils passende Beleg aus Lebenslauf und Profil-Angaben nach der XYZ-Logik (Ergebnis + Methode/Tool). Jeder Beleg enthält mindestens eine Zahl (Nutzer, Prozent, Dauer, Teamgröße); gibt der Lebenslauf keine her, dann Umfang (${t.proofScope}) statt Adjektiv — keine Zahl erfinden. Hebe in der rechten Spalte insgesamt ein bis zwei Highlights mit <strong>…</strong> hervor (z. B. <strong>phase6</strong>, <strong>Multi-Agenten-KI-Tool</strong>, <strong>Expo EAS</strong>, <strong>100 % TypeScript</strong>).
 
 Schluss
-- {{RELEVANT_TECH_STACK_SUMMARY}}: der für die Stelle relevante Stack in einer Wendung (z. B. "im React- und Expo-Ökosystem", "in moderner Software-Architektur und KI-Workflows").
+- {{RELEVANT_TECH_STACK_SUMMARY}}: der für die Stelle relevante Stack in einer Wendung (z. B. ${t.stackExamples}).
 - {{NOTICE_PERIOD}} und {{EARLIEST_START_DATE}}: aus <konditionen>.
-- {{SALARY_EXPECTATION_SENTENCE}}: NUR wenn die Anzeige ausdrücklich eine Gehaltsvorstellung verlangt: " Meine Gehaltserwartung liegt bei <Betrag> EUR brutto p.a." (mit führendem Leerzeichen), Betrag nach <konditionen>. Fragt die Anzeige nicht danach, ist der Platzhalter vollständig leer — kein Leerzeichen, kein Text.`;
+- {{SALARY_EXPECTATION_SENTENCE}}: NUR wenn die Anzeige ausdrücklich eine Gehaltsvorstellung verlangt: ${t.salarySentence} (mit führendem Leerzeichen), Betrag nach <konditionen>. Fragt die Anzeige nicht danach, ist der Platzhalter vollständig leer — kein Leerzeichen, kein Text.`;
 
 export function letterPrompt(input: DocumentInput): string {
   return `Du bist Kepler, der Assistent einer Bewerbungs-App, und schreibst als erfahrener Tech-Recruiting-Stratege für den Münchner und europäischen Tech-Markt. Erstelle aus der hochgeladenen Anschreiben-Vorlage ein Anschreiben für diese Stelle: "${input.role}" bei ${input.company}. Ziel ist eine maximale Callback- und Interview-Rate bei Engineering Managern und CTOs.
@@ -178,13 +252,13 @@ ${OUTPUT_RULES}
 - Alle Fakten über den Bewerber kommen aus <lebenslauf> (Stationen, Projekte, Stack, Sprachen, Zertifikate) und <profil> (ergänzende Angaben, die der Lebenslauf nicht hat — sie gelten als verbindlich); die Konditionen aus <konditionen>; alles über die Stelle und das Unternehmen aus <anzeige> und <kontakte>. Erfinde nichts — keine Zahlen, keine Adressen, keine Namen.
 - Wähle aus dem Lebenslauf die Belege, die zur Anzeige passen — Ergebnis vor Tätigkeit, konkret vor allgemein.
 - Beziehe dich konkret auf die Stelle und das Unternehmen; kein generischer Text.
-- Perfekte deutsche Grammatik und Interpunktion; Sprache des Briefes ist die Sprache der Vorlage.
+- ${TEXT[input.language].languageRule}
 
 Verzeichnis der Platzhalter:
-${PLACEHOLDER_GLOSSARY}
+${placeholderGlossary(TEXT[input.language])}
 
 <konditionen>
-${TERMS}
+${TEXT[input.language].terms}
 </konditionen>
 
 <lebenslauf>

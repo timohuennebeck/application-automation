@@ -18,6 +18,7 @@ export const EMPTY_FILTER: BoardFilter = {
 export const EMPTY_DRAFT = {
   jobUrl: '',
   jobChannel: '',
+  jobLanguage: null,
   jobHasUrl: true,
   jobText: '',
   /* The channel dropdown lives in AppState.dropdown like every other select. */

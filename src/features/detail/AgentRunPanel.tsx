@@ -5,7 +5,8 @@ import { INTERRUPTED_HEADLINE } from '../../shared/agent';
 import type { AgentStepRow } from '../../shared/db-types';
 import type { TemplateSlots, TemplateVersion } from '../../shared/domain';
 import { AgentRunStatus, AgentStepKey, AgentStepStatus, TEMPLATE_TITLES } from '../../shared/enums';
-import type { TemplateKind } from '../../shared/enums';
+import type { DocumentLanguage, TemplateKind } from '../../shared/enums';
+import { languageOf } from '../../state/selectors';
 import { useApp } from '../../state/store-context';
 import { useNow } from '../../state/use-now';
 import { AttachmentChip } from '../../ui/AttachmentChip';
@@ -14,9 +15,14 @@ import { KeplerAvatar, RegenGlyph, StopGlyph } from '../../ui/icons';
 import { RUN_BORDER_BG, SHIMMER_BG } from '../../ui/styles';
 import { useDesktopList } from '../../ui/useDesktopList';
 
-/* The Fassung Kepler uses for a slot — what the doc chip stands for. */
-function selectedOf(templates: TemplateSlots | null, kind: TemplateKind): TemplateVersion | undefined {
-  return templates?.[kind].find((v) => v.selected);
+/* The Fassung Kepler uses for a slot in the card's language — what the doc
+   chip stands for. */
+function selectedOf(
+  templates: TemplateSlots | null,
+  kind: TemplateKind,
+  language: DocumentLanguage,
+): TemplateVersion | undefined {
+  return templates?.[kind][language].find((v) => v.selected);
 }
 
 const STEP_STYLE = {
@@ -141,12 +147,15 @@ function stepMeta(step: AgentStepRow): string {
 function StepRow({
   step,
   templates,
+  language,
   link,
   onRetry,
   onStop,
 }: {
   step: AgentStepRow;
   templates: TemplateSlots | null;
+  /* Which side of the slots the run reads — the card's language. */
+  language: DocumentLanguage;
   /* The address the step works from — the posting URL on the fetch step,
      shown as the same blue pill a link gets in comments and properties. */
   link?: string | null;
@@ -209,7 +218,7 @@ function StepRow({
         if (t.kind === 'doc') {
           const doc = step.doc;
           if (!doc) return null;
-          const selected = selectedOf(templates, doc);
+          const selected = selectedOf(templates, doc, language);
           return (
             <AttachmentChip
               key={i}
@@ -221,7 +230,7 @@ function StepRow({
               style={{ margin: '-3px 0', flexShrink: 0 }}
               onClick={(e) => {
                 e.stopPropagation();
-                window.desktop?.templates.open(doc);
+                window.desktop?.templates.open(doc, language);
               }}
             />
           );
@@ -284,6 +293,9 @@ export function AgentRunPanel({ view }: { view: AgentRunView }) {
   /* Keeps the 'seit 1:14' step timers counting; idle once nothing is running. */
   useNow(run.status === AgentRunStatus.RUNNING || run.status === AgentRunStatus.QUEUED);
   const postingUrl = st.applications[run.application_id]?.posting_url ?? null;
+  /* German until Kepler has read the posting — the side a run without a
+     choice falls back to. */
+  const language = languageOf(st, run.application_id);
   const failed = run.status === AgentRunStatus.FAILED;
   const doneCount = steps.filter((s) => s.status === AgentStepStatus.DONE).length;
   /* The step the run is at: the one in flight, or — while still queued —
@@ -339,6 +351,7 @@ export function AgentRunPanel({ view }: { view: AgentRunView }) {
               <StepRow
                 step={s}
                 templates={templates}
+                language={language}
                 link={s.key === AgentStepKey.FETCH ? postingUrl : null}
                 onRetry={showError ? () => retryAgentStep(run.application_id) : undefined}
                 onStop={s.id === currentId ? () => stopAgent(run.application_id) : undefined}

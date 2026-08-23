@@ -7,6 +7,7 @@ import { FACT_OPTIONS } from '../../src/data/config.ts';
 import { sanitizeInline } from '../../src/lib/inline-html.ts';
 import { normalizeSalaryText } from '../../src/lib/salary.ts';
 import { isHttpUrl } from '../../src/lib/url.ts';
+import { DocumentLanguage } from '../../src/shared/enums.ts';
 
 /* How many ways to say a passage the rewrite step asks for. Fixed, because the
    popover is built for three rows — a fourth would be generated and dropped. */
@@ -36,6 +37,9 @@ export interface Extraction {
   standort: string | null;
   gehalt: string | null;
   erfahrung: string | null;
+  /* The language the posting is written in — which side of the template
+     slots the run reads, unless the card already says. Null when unclear. */
+  language: DocumentLanguage | null;
   people: ExtractedPerson[];
 }
 
@@ -75,6 +79,7 @@ export const EXTRACTION_SCHEMA = {
     standort: nullableString,
     gehalt: nullableString,
     erfahrung: nullableEnum(FACT_OPTIONS.Erfahrung),
+    language: nullableEnum(Object.values(DocumentLanguage)),
     people: {
       type: 'array',
       items: {
@@ -85,7 +90,7 @@ export const EXTRACTION_SCHEMA = {
       },
     },
   },
-  required: ['role', 'summary', 'company', 'standort', 'gehalt', 'erfahrung', 'people'],
+  required: ['role', 'summary', 'company', 'standort', 'gehalt', 'erfahrung', 'language', 'people'],
 } as const;
 
 export const CONTACT_SCHEMA = {
@@ -219,6 +224,7 @@ export function validateExtraction(x: unknown): Extraction {
        the decimals a listing's "87.700 €" would otherwise smuggle in. */
     gehalt: ((g) => (g ? normalizeSalaryText(g) : null))(text(r.gehalt)),
     erfahrung: oneOf(r.erfahrung, FACT_OPTIONS.Erfahrung),
+    language: oneOf(r.language, Object.values(DocumentLanguage)) as DocumentLanguage | null,
     people,
   };
 }

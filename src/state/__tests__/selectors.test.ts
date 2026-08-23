@@ -1,15 +1,25 @@
 import { describe, expect, it } from 'vitest';
 import { SortDir, SortKey, Urgency } from '../../data/config.ts';
-import { AgentRunStatus, Assignee, Interest, LinkKind, RoundState } from '../../shared/enums.ts';
+import {
+  AgentRunStatus,
+  Assignee,
+  DocumentKind,
+  DocumentLanguage,
+  Interest,
+  LinkKind,
+  RoundState,
+} from '../../shared/enums.ts';
 import { isoToDate, shiftISO, todayISO } from '../../lib/date.ts';
-import type { ApplicationRow, CompanyRow, FactRow } from '../../shared/db-types.ts';
+import type { ApplicationRow, CompanyRow, DocumentRow, FactRow } from '../../shared/db-types.ts';
 import {
   activeFilterCount,
   cardSubtitle,
   interviewChip,
   isSorted,
   keplerHoldReason,
+  documentLanguageOf,
   keplerStartBlocked,
+  languageOf,
   peopleKeysForCard,
   visibleCards,
 } from '../selectors.ts';
@@ -35,6 +45,7 @@ const application = (
   posting_url: null,
   posting_text: null,
   assignee: null,
+  language: null,
   created_at: 't',
   updated_at: 't',
 });
@@ -176,6 +187,70 @@ describe('kepler assignment guards', () => {
     const pasted = keplerState(null, false);
     pasted.applications.A.posting_text = 'Wir suchen …';
     expect(keplerStartBlocked(pasted, 'A')).toBeNull();
+  });
+});
+
+describe('languageOf', () => {
+  /* What the card's files are named and which template side they come from:
+     the card's choice, else German — the side every card started on. */
+  it('falls back to German until the card says otherwise', () => {
+    const st = state();
+    expect(languageOf(st, 'A')).toBe(DocumentLanguage.DE);
+    st.applications.A.language = DocumentLanguage.EN;
+    expect(languageOf(st, 'A')).toBe(DocumentLanguage.EN);
+    expect(languageOf(st, 'gibts-nicht')).toBe(DocumentLanguage.DE);
+  });
+});
+
+describe('documentLanguageOf', () => {
+  /* Switching a card to English does not rewrite the documents it already
+     has — those follow on the next Kepler run. Until then the letter editor
+     has to save over the file the row actually names, or an edit would land
+     under the English name and orphan the German letter it was made from. */
+  function withLetter(fileName: string | null, cardLanguage: DocumentLanguage | null): AppState {
+    const st = state();
+    st.applications.A.language = cardLanguage;
+    st.documentsByApp = {
+      A: [
+        {
+          id: 1,
+          application_id: 'A',
+          kind: DocumentKind.COVER_LETTER,
+          file_path: fileName && 'documents/A/' + fileName,
+        } as DocumentRow,
+      ],
+    };
+    return st;
+  }
+
+  it('takes the language from the file the row names, not from the card', () => {
+    expect(
+      documentLanguageOf(
+        withLetter('Timo_Huennebeck_Anschreiben.html', DocumentLanguage.EN),
+        'A',
+        DocumentKind.COVER_LETTER,
+      ),
+    ).toBe(DocumentLanguage.DE);
+    expect(
+      documentLanguageOf(
+        withLetter('Timo_Huennebeck_Cover_Letter.html', DocumentLanguage.DE),
+        'A',
+        DocumentKind.COVER_LETTER,
+      ),
+    ).toBe(DocumentLanguage.EN);
+  });
+
+  it('falls back to the card while the row has no file yet', () => {
+    expect(documentLanguageOf(withLetter(null, DocumentLanguage.EN), 'A', DocumentKind.COVER_LETTER)).toBe(
+      DocumentLanguage.EN,
+    );
+    expect(documentLanguageOf(withLetter(null, null), 'A', DocumentKind.COVER_LETTER)).toBe(
+      DocumentLanguage.DE,
+    );
+    /* A name from neither side (hand-uploaded before the stems settled). */
+    expect(
+      documentLanguageOf(withLetter('irgendwas.html', DocumentLanguage.EN), 'A', DocumentKind.COVER_LETTER),
+    ).toBe(DocumentLanguage.EN);
   });
 });
 

@@ -34,6 +34,7 @@ import type {
   StageRow,
 } from '../../src/shared/db-types.ts';
 import { Author, DocumentKind, FactKind, Interest, LinkKind } from '../../src/shared/enums.ts';
+import type { DocumentLanguage } from '../../src/shared/enums.ts';
 import {
   DEFAULT_COMMENT,
   DEFAULT_FOLLOWUPS,
@@ -66,6 +67,7 @@ const APPLICATION_FIELDS: (keyof ApplicationPatch)[] = [
   'posting_url',
   'posting_text',
   'assignee',
+  'language',
 ];
 const COMPANY_FIELDS: (keyof CompanyPatch)[] = [
   'name',
@@ -274,6 +276,8 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
          was no link. At most one is set. */
       postingUrl?: string | null;
       postingText?: string | null;
+      /* The dialog's choice; absent when Kepler is to decide. */
+      language?: DocumentLanguage | null;
     }): CreateApplicationResult {
       return tx(() => {
         const now = nowFn();
@@ -287,8 +291,8 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
           'interessiert',
         );
         db.prepare(
-          `INSERT INTO applications (id, role, company_id, interest, channel, stage_id, stage_position, posting_url, posting_text, created_at, updated_at)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+          `INSERT INTO applications (id, role, company_id, interest, channel, stage_id, stage_position, posting_url, posting_text, language, created_at, updated_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
         ).run(
           id,
           input.role,
@@ -299,6 +303,7 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
           0,
           input.postingUrl || null,
           input.postingText || null,
+          input.language ?? null,
           t,
           t,
         );

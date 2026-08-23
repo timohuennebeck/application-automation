@@ -1,6 +1,6 @@
 /* Domain constants and types shared by the Electron main process (seed, repo,
    files) and the renderer. */
-import type { TemplateKind } from './enums.ts';
+import type { DocumentLanguage, TemplateKind } from './enums.ts';
 
 /* The preset titles the create-interview dialog offers, mirroring the
    interview stages of the kanban board. */
@@ -56,9 +56,9 @@ export interface TemplateVersion extends TemplateInfo {
   pdfSize: number | null;
 }
 
-/* Every slot's Fassungen, as templates:list reports them — the shape the
-   profile dialog and the run panel's doc chips both consume. */
-export type TemplateSlots = Record<TemplateKind, TemplateVersion[]>;
+/* Every slot's Fassungen by language side, as templates:list reports them —
+   the shape the profile dialog and the run panel's doc chips both consume. */
+export type TemplateSlots = Record<TemplateKind, Record<DocumentLanguage, TemplateVersion[]>>;
 
 /* A file in the profile's document folder — Immatrikulationsbescheinigung,
    Zeugnisse, whatever should be kept in one place. Same shape as a template,

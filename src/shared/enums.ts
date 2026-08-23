@@ -64,6 +64,22 @@ export const TemplateKind = {
 } as const;
 export type TemplateKind = (typeof TemplateKind)[keyof typeof TemplateKind];
 
+/* The language an application is conducted in — which side of each template
+   slot Kepler reads and what the generated files are called. Stored on the
+   application (null until Kepler has read the posting) and used as a path
+   segment under each slot, so the values are short and lowercase. */
+export const DocumentLanguage = {
+  DE: 'de',
+  EN: 'en',
+} as const;
+export type DocumentLanguage = (typeof DocumentLanguage)[keyof typeof DocumentLanguage];
+
+/* What the UI calls each language. */
+export const LANGUAGE_TITLES: Record<DocumentLanguage, string> = {
+  [DocumentLanguage.DE]: 'Deutsch',
+  [DocumentLanguage.EN]: 'Englisch',
+};
+
 /* What the UI (and Kepler's error messages) call each template slot. */
 export const TEMPLATE_TITLES: Record<TemplateKind, string> = {
   [TemplateKind.LEBENSLAUF]: 'Lebenslauf',

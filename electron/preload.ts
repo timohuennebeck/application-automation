@@ -9,8 +9,13 @@ import type {
   VariantsResult,
 } from '../src/shared/agent.ts';
 import type { AttachmentInput, DbApi } from '../src/shared/db-types.ts';
-import type { DocumentUpload, ProfileDocumentInfo, TemplateVersion } from '../src/shared/domain.ts';
-import type { DocumentKind, TemplateKind } from '../src/shared/enums.ts';
+import type {
+  DocumentUpload,
+  ProfileDocumentInfo,
+  TemplateSlots,
+  TemplateVersion,
+} from '../src/shared/domain.ts';
+import type { DocumentKind, DocumentLanguage, TemplateKind } from '../src/shared/enums.ts';
 
 const invoke =
   (channel: string) =>
@@ -40,8 +45,13 @@ const api = {
       ipcRenderer.invoke('documents:pick', title, type),
     /* Copies the picked HTML into userData and renders the PDF beside it,
        resolving to both stored paths. */
-    copy: (applicationId: string, kind: DocumentKind, sourcePath: string): Promise<DocumentUpload> =>
-      ipcRenderer.invoke('documents:copy', applicationId, kind, sourcePath),
+    copy: (
+      applicationId: string,
+      kind: DocumentKind,
+      language: DocumentLanguage,
+      sourcePath: string,
+    ): Promise<DocumentUpload> =>
+      ipcRenderer.invoke('documents:copy', applicationId, kind, language, sourcePath),
     /* Sizes in bytes, index-aligned with the paths; null where the file is gone. */
     sizes: (filePaths: string[]): Promise<(number | null)[]> =>
       ipcRenderer.invoke('documents:sizes', filePaths),
@@ -52,8 +62,12 @@ const api = {
     read: (filePath: string): Promise<string> => ipcRenderer.invoke('documents:read', filePath),
     /* Writes an edited document back and re-renders the PDF beside it. The
        caller still has to store the paths through db.documents.setFile. */
-    save: (applicationId: string, kind: DocumentKind, html: string): Promise<DocumentUpload> =>
-      ipcRenderer.invoke('documents:save', applicationId, kind, html),
+    save: (
+      applicationId: string,
+      kind: DocumentKind,
+      language: DocumentLanguage,
+      html: string,
+    ): Promise<DocumentUpload> => ipcRenderer.invoke('documents:save', applicationId, kind, language, html),
   },
   /* Files attached to comments. Picking only stages sources in the renderer;
      copy() puts the bytes into userData at send time and resolves to what
@@ -101,32 +115,41 @@ const api = {
       };
     },
   },
-  /* The profile-wide templates, as Fassungen per slot. There is no database
-     behind these — the files on disk are the state, so every call reads fresh. */
+  /* The profile-wide templates, as Fassungen per slot and language side.
+     There is no database behind these — the files on disk are the state, so
+     every call reads fresh. */
   templates: {
-    list: (): Promise<Record<TemplateKind, TemplateVersion[]>> => ipcRenderer.invoke('templates:list'),
+    list: (): Promise<TemplateSlots> => ipcRenderer.invoke('templates:list'),
     /* Copies a picked file in as a new Fassung under the next free name. */
-    add: (kind: TemplateKind, sourcePath: string): Promise<TemplateVersion> =>
-      ipcRenderer.invoke('templates:add', kind, sourcePath),
+    add: (kind: TemplateKind, language: DocumentLanguage, sourcePath: string): Promise<TemplateVersion> =>
+      ipcRenderer.invoke('templates:add', kind, language, sourcePath),
     /* Swaps the file of an existing Fassung. */
-    replace: (kind: TemplateKind, label: string, sourcePath: string): Promise<TemplateVersion> =>
-      ipcRenderer.invoke('templates:replace', kind, label, sourcePath),
-    /* Marks the Fassung Kepler uses. */
-    select: (kind: TemplateKind, label: string): Promise<void> =>
-      ipcRenderer.invoke('templates:select', kind, label),
-    rename: (kind: TemplateKind, from: string, to: string): Promise<TemplateVersion> =>
-      ipcRenderer.invoke('templates:rename', kind, from, to),
+    replace: (
+      kind: TemplateKind,
+      language: DocumentLanguage,
+      label: string,
+      sourcePath: string,
+    ): Promise<TemplateVersion> => ipcRenderer.invoke('templates:replace', kind, language, label, sourcePath),
+    /* Marks the Fassung Kepler uses for that language. */
+    select: (kind: TemplateKind, language: DocumentLanguage, label: string): Promise<void> =>
+      ipcRenderer.invoke('templates:select', kind, language, label),
+    rename: (
+      kind: TemplateKind,
+      language: DocumentLanguage,
+      from: string,
+      to: string,
+    ): Promise<TemplateVersion> => ipcRenderer.invoke('templates:rename', kind, language, from, to),
     /* Refused for the selected Fassung. */
-    remove: (kind: TemplateKind, label: string): Promise<void> =>
-      ipcRenderer.invoke('templates:remove', kind, label),
-    /* Hands a Fassung's file to the OS — the selected one when no label is
-       given; '' on success, else the reason. */
-    open: (kind: TemplateKind, label?: string): Promise<string> =>
-      ipcRenderer.invoke('templates:open', kind, label),
+    remove: (kind: TemplateKind, language: DocumentLanguage, label: string): Promise<void> =>
+      ipcRenderer.invoke('templates:remove', kind, language, label),
+    /* Hands a Fassung's file to the OS — the selected one of that language
+       when no label is given; '' on success, else the reason. */
+    open: (kind: TemplateKind, language: DocumentLanguage, label?: string): Promise<string> =>
+      ipcRenderer.invoke('templates:open', kind, language, label),
     /* Renders the Fassung to PDF (once per change), hands that to the OS and
        resolves to the Fassung with its PDF size; rejects with the reason. */
-    openPdf: (kind: TemplateKind, label: string): Promise<TemplateVersion> =>
-      ipcRenderer.invoke('templates:openPdf', kind, label),
+    openPdf: (kind: TemplateKind, language: DocumentLanguage, label: string): Promise<TemplateVersion> =>
+      ipcRenderer.invoke('templates:openPdf', kind, language, label),
   },
   /* Further profile documents (Immatrikulationsbescheinigung, Zeugnisse, …).
      Like the templates there is no database — the folder listing is the state

@@ -1,7 +1,14 @@
 import type { ReactNode } from 'react';
 import { COLUMNS, DATE_FIELDS, FACT_OPTIONS, INTEREST, INTEREST_ORDER, SECTIONS } from '../../../data/config';
 import { agentLocked, keplerHoldReason } from '../../../state/selectors';
-import { Assignee, FactKind, Interest, LinkKind } from '../../../shared/enums';
+import {
+  Assignee,
+  DocumentLanguage,
+  FactKind,
+  Interest,
+  LANGUAGE_TITLES,
+  LinkKind,
+} from '../../../shared/enums';
 import { isoToDate } from '../../../lib/date';
 import { useApp } from '../../../state/store-context';
 import { FieldChip } from '../../../ui/FieldChip';
@@ -80,12 +87,14 @@ interface PropertiesSidebarProps {
    Most labels are windows onto real DB columns (see the fact-label routing in
    the design spec); only the free-form POSITION fields live in facts rows. */
 export function PropertiesSidebar({ cardId, role, company, columnIndex }: PropertiesSidebarProps) {
-  const { st, set, contactsFor, setContacts, moveCard, logAct, setInterest, setAssignee } = useApp();
+  const { st, set, contactsFor, setContacts, moveCard, logAct, setInterest, setLanguage, setAssignee } =
+    useApp();
   const locked = agentLocked(st, cardId);
   const keplerHold = keplerHoldReason(st, cardId);
 
   const app = st.applications[cardId];
   const assignee = app?.assignee ?? null;
+  const language = app?.language ?? null;
   const comp = app ? st.companies[app.company_id] : undefined;
   const facts = st.factsByApp[cardId] || [];
 
@@ -211,6 +220,44 @@ export function PropertiesSidebar({ cardId, role, company, columnIndex }: Proper
                     >
                       <PriorityBars level={INTEREST[k][1]} />
                       <span style={{ flex: '1 1 auto', whiteSpace: 'nowrap' }}>{INTEREST[k][0]}</span>
+                    </MenuItem>
+                  ))}
+                </Popover>
+              )}
+            </PopoverAnchor>
+          </PropertyRow>
+
+          <PropertyRow label="Sprache">
+            <PopoverAnchor style={{ marginLeft: -6 }}>
+              <FieldChip
+                open={st.dropdown === 'language'}
+                gap={7}
+                chevron
+                empty={!language}
+                onClick={() =>
+                  set((s) => ({ dropdown: s.dropdown === 'language' ? null : 'language', editing: null }))
+                }
+                onClear={language ? () => setLanguage(cardId, null) : undefined}
+                clearTitle="Kepler entscheiden lassen"
+              >
+                <span>{language ? LANGUAGE_TITLES[language] : 'Kepler entscheidet'}</span>
+              </FieldChip>
+              {st.dropdown === 'language' && (
+                <Popover minWidth={180}>
+                  {/* The choice takes effect on the next run: documents
+                      already generated keep their language until Kepler is
+                      run again — the menu entry for that sits in the card's
+                      own menu. */}
+                  {Object.values(DocumentLanguage).map((l) => (
+                    <MenuItem
+                      key={l}
+                      selected={l === language}
+                      onClick={() => {
+                        setLanguage(cardId, l);
+                        set({ dropdown: null });
+                      }}
+                    >
+                      <span style={{ flex: '1 1 auto', whiteSpace: 'nowrap' }}>{LANGUAGE_TITLES[l]}</span>
                     </MenuItem>
                   ))}
                 </Popover>

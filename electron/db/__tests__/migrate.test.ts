@@ -547,6 +547,20 @@ describe('migration 16', () => {
   });
 });
 
+describe('migration 24', () => {
+  /* The language an application is conducted in. Null for every existing card:
+     Kepler decides from the posting on its next run, and a card that never
+     runs again keeps its German documents. */
+  it('adds a nullable language column to applications', () => {
+    const db = dbAtVersion(21);
+    seedApp(db);
+    migrate(db);
+    expect(db.prepare('SELECT language FROM applications').get()).toEqual({ language: null });
+    db.prepare("UPDATE applications SET language = 'en'").run();
+    expect(db.prepare('SELECT language FROM applications').get()).toEqual({ language: 'en' });
+  });
+});
+
 describe('migration 20', () => {
   /* Migration 20: generated documents remember the Fassung they came from, and
      the letter is called by its German name like everything else. */

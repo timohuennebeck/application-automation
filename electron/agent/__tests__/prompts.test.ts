@@ -1,6 +1,7 @@
 /* The prompts, and what each one guarantees about the blocks it builds. */
 import { describe, expect, it } from 'vitest';
-import { askPrompt, cvPrompt, letterPrompt, variantsPrompt } from '../prompts.ts';
+import { askPrompt, cvPrompt, extractionPrompt, letterPrompt, variantsPrompt } from '../prompts.ts';
+import { DocumentLanguage } from '../../../src/shared/enums.ts';
 import type { AskInput, DocumentInput, VariantsInput } from '../prompts.ts';
 
 const TEMPLATE = `<!doctype html><html><head><style>.a{ color:red }</style></head>
@@ -24,8 +25,10 @@ const DOC_INPUT: DocumentInput = {
     standort: 'München',
     gehalt: '70–85k €',
     erfahrung: '5–8',
+    language: DocumentLanguage.DE,
     people: [],
   },
+  language: DocumentLanguage.DE,
   profileFacts: ['Umzug nach München geplant'],
   contacts: ['Lena Vogt (Recruiterin)'],
   cv: '<!doctype html><html><body><p>Frontend seit 2019</p></body></html>',
@@ -86,6 +89,39 @@ describe('letterPrompt', () => {
   it('names the contacts it knows, and says so when it knows none', () => {
     expect(letterPrompt(DOC_INPUT)).toContain('- Lena Vogt (Recruiterin)');
     expect(letterPrompt({ ...DOC_INPUT, contacts: [] })).toContain('(keine bekannt)');
+  });
+
+  /* The terms and the worked examples are sentences the model copies into the
+     letter; an English letter must not be handed German ones. */
+  it('states the terms and the examples in the language of the letter', () => {
+    const de = letterPrompt(DOC_INPUT);
+    expect(de).toContain('Meine Gehaltserwartung liegt bei');
+    expect(de).toContain('Sehr geehrte Frau Dr. Weber');
+    expect(de).toContain('Perfekte deutsche Grammatik');
+
+    const en = letterPrompt({ ...DOC_INPUT, language: DocumentLanguage.EN });
+    expect(en).toContain('My salary expectation is');
+    expect(en).toContain('Dear Dr Weber');
+    expect(en).toContain('Notice period: 3 months');
+    expect(en).toContain('British English');
+    expect(en).not.toContain('Meine Gehaltserwartung');
+    expect(en).not.toContain('Perfekte deutsche Grammatik');
+  });
+});
+
+describe('cvPrompt', () => {
+  it('asks for English values for an English Fassung', () => {
+    expect(cvPrompt({ ...DOC_INPUT, language: DocumentLanguage.EN })).toContain('British English');
+    expect(cvPrompt(DOC_INPUT)).not.toContain('British English');
+  });
+});
+
+describe('extractionPrompt', () => {
+  it('asks which of the two languages the posting is written in', () => {
+    const prompt = extractionPrompt('We are hiring a Senior Frontend Developer.');
+    expect(prompt).toContain('language');
+    expect(prompt).toContain('"en"');
+    expect(prompt).toContain('"de"');
   });
 });
 

@@ -5,12 +5,23 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { STAGE_IDS, URL_FIELDS } from '../data/config';
 import { isHttpUrl } from '../lib/url';
-import { Assignee, Author, DocumentKind, FactKind, Interest, LinkKind, RoundState } from '../shared/enums';
+import {
+  Assignee,
+  Author,
+  DocumentKind,
+  FactKind,
+  Interest,
+  LANGUAGE_TITLES,
+  LinkKind,
+  RoundState,
+} from '../shared/enums';
+import type { DocumentLanguage } from '../shared/enums';
 import type { ActivityRow, DocumentRow, FollowupRow, PersonWithCompany } from '../shared/db-types';
 import { indexSnapshot, roundInput, personView } from './db-view';
 import type { PersonView } from './db-view';
 import {
   coverLetterFor,
+  documentLanguageOf,
   keplerHoldReason,
   keplerStartBlocked,
   peopleKeysForCard,
@@ -544,6 +555,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           channel: s.jobChannel || null,
           postingUrl: url || null,
           postingText: text || null,
+          language: s.jobLanguage,
         })
         .then((res) => {
           set((s2) => ({
@@ -1067,7 +1079,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         const source = await api.documents.pick('Dokument ersetzen', 'html');
         if (!source) return null; // cancelled
-        const { filePath, pdfPath, pdfError } = await api.documents.copy(id, kind, source);
+        const { filePath, pdfPath, pdfError } = await api.documents.copy(
+          id,
+          kind,
+          documentLanguageOf(stRef.current, id, kind),
+          source,
+        );
         /* A hand-picked file did not come from a Fassung. */
         const row = await api.db.documents.setFile(documentId, filePath, pdfPath, null);
         putDocumentRow(id, row);
@@ -1097,7 +1114,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const doc = coverLetterFor(stRef.current, id);
       if (!doc) return 'Kein Anschreiben vorhanden.';
       try {
-        const { filePath, pdfPath, pdfError } = await api.documents.save(id, DocumentKind.COVER_LETTER, html);
+        const { filePath, pdfPath, pdfError } = await api.documents.save(
+          id,
+          DocumentKind.COVER_LETTER,
+          documentLanguageOf(stRef.current, id, DocumentKind.COVER_LETTER),
+          html,
+        );
         /* The Fassung it was generated from still describes where it came
            from — editing a passage does not change that lineage. */
         const row = await api.db.documents.setFile(doc.id, filePath, pdfPath, doc.template_label);
@@ -1120,6 +1142,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
       persist(db()?.applications.update(id, { interest }));
     },
     [set],
+  );
+
+  const setLanguage = useCallback(
+    (id: string, language: DocumentLanguage | null) => {
+      if ((stRef.current.applications[id]?.language ?? null) === language) return;
+      set((s) => ({ applications: { ...s.applications, [id]: { ...s.applications[id], language } } }));
+      persist(db()?.applications.update(id, { language }));
+      logAct(
+        id,
+        language
+          ? `hat die Sprache auf ${LANGUAGE_TITLES[language]} gesetzt`
+          : 'hat die Sprache zurückgesetzt',
+      );
+    },
+    [logAct, set],
   );
 
   /* Who owns the card. Assigning Kepler is what starts a run — the card
@@ -1491,6 +1528,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       replaceDocument,
       saveLetter,
       setInterest,
+      setLanguage,
       setAssignee,
       saveSummary,
       addComment,

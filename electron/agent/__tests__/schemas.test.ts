@@ -52,6 +52,16 @@ describe('validateExtraction', () => {
     expect(ex.people.map((p) => p.name)).toEqual(['Jo Peters']);
   });
 
+  /* The posting's language decides which template side a run reads. Anything
+     but the two sides Kepler knows is treated as unknown — the run then falls
+     back to German rather than looking for a French side that cannot exist. */
+  it('keeps the language to the two sides a slot has', () => {
+    expect(validateExtraction({ ...FULL, language: 'en' }).language).toBe('en');
+    expect(validateExtraction({ ...FULL, language: 'de' }).language).toBe('de');
+    expect(validateExtraction({ ...FULL, language: 'fr' }).language).toBeNull();
+    expect(validateExtraction(FULL).language).toBeNull();
+  });
+
   it('rejects something that is not an object at all', () => {
     expect(() => validateExtraction('kein json')).toThrow();
   });

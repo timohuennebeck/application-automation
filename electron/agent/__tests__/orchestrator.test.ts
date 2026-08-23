@@ -16,6 +16,7 @@ import {
   AgentStepStatus,
   Author,
   DocumentKind,
+  DocumentLanguage,
   FactKind,
   LinkKind,
 } from '../../../src/shared/enums.ts';
@@ -42,6 +43,7 @@ const EXTRACTION = {
   standort: 'Berlin',
   gehalt: '70–85k €',
   erfahrung: '5–8',
+  language: 'de',
   people: [{ name: 'Lena Vogt', role: 'Recruiterin', email: null, phone: null, linkedin: null }],
 };
 
@@ -63,17 +65,24 @@ afterEach(() => {
   rmSync(root, { recursive: true, force: true });
 });
 
-/* Writes one Fassung per slot and marks it as the one Kepler uses. */
-function uploadTemplates(slots: string[] = ['lebenslauf', 'anschreiben'], label = 'Standard', html?: string) {
+/* Writes one Fassung per slot on one language side and marks it as the one
+   Kepler uses for that language. */
+function uploadTemplates(
+  slots: string[] = ['lebenslauf', 'anschreiben'],
+  label = 'Standard',
+  html?: string,
+  language: DocumentLanguage = DocumentLanguage.DE,
+) {
   for (const dir of slots) {
-    const d = path.join(root, 'templates', dir, label);
+    const side = path.join(root, 'templates', dir, language);
+    const d = path.join(side, label);
     mkdirSync(d, { recursive: true });
     writeFileSync(path.join(d, dir + '.html'), html ?? templateHtml(dir));
-    writeFileSync(path.join(root, 'templates', dir, '.selected'), label);
+    writeFileSync(path.join(side, '.selected'), label);
   }
 }
 
-function createApp(input: { postingUrl?: string; postingText?: string }) {
+function createApp(input: { postingUrl?: string; postingText?: string; language?: DocumentLanguage }) {
   return repo.createApplication({
     role: 'Neue Bewerbung',
     company: 'Unbekanntes Unternehmen',
@@ -134,6 +143,129 @@ describe('runPipeline', () => {
     const docs = repo.load().documents.filter((doc) => doc.application_id === appId);
     expect(docs.find((doc) => doc.kind === DocumentKind.LEBENSLAUF)!.template_label).toBe('Kurz');
     expect(docs.find((doc) => doc.kind === DocumentKind.COVER_LETTER)!.template_label).toBe('Standard');
+  });
+
+  /* Which side of the slots a run reads, in order of precedence: what the
+     card says, else what the posting is written in, else German. */
+  describe('language', () => {
+    const ENGLISH = (slot: string) => `<html><body>English ${slot} for {{COMPANY_NAME}}</body></html>`;
+    const uploadBoth = () => {
+      uploadTemplates();
+      uploadTemplates(['lebenslauf'], 'Standard', ENGLISH('lebenslauf'), DocumentLanguage.EN);
+      uploadTemplates(['anschreiben'], 'Standard', ENGLISH('anschreiben'), DocumentLanguage.EN);
+    };
+    const fillPrompts = (llm: ReturnType<typeof fakeLlm>) =>
+      llm.mock.calls.map(([req]) => req).filter((req) => req.schema === FILL_SCHEMA);
+    const filePaths = (appId: string) =>
+      repo
+        .load()
+        .documents.filter((d) => d.application_id === appId)
+        .map((d) => path.basename(d.file_path ?? ''))
+        .sort();
+
+    it('reads the English side and names the files in English when the card says so', async () => {
+      uploadBoth();
+      const appId = createApp({ postingUrl: 'https://linkedin.com/jobs/1', language: DocumentLanguage.EN });
+      const runId = createRun(appId);
+      const d = deps();
+      await runPipeline(appId, runId, d);
+
+      expect(runs.getRun(runId).status).toBe(AgentRunStatus.DONE);
+      expect(filePaths(appId)).toEqual(['Timo_Huennebeck_CV.html', 'Timo_Huennebeck_Cover_Letter.html']);
+      expect(readFileSync(path.join(root, 'documents', appId, 'Timo_Huennebeck_CV.html'), 'utf8')).toBe(
+        '<html><body>English lebenslauf for Helios Energie</body></html>',
+      );
+      for (const req of fillPrompts(d.llm as ReturnType<typeof fakeLlm>)) {
+        expect(req.prompt).toContain('English');
+        expect(req.prompt).toContain('British English');
+      }
+      expect(existsSync(path.join(root, 'documents', appId, 'Timo_Huennebeck_Lebenslauf.html'))).toBe(false);
+    });
+
+    it('takes the language from the posting when the card has none, and writes it onto the card', async () => {
+      uploadBoth();
+      const appId = createApp({ postingUrl: 'https://linkedin.com/jobs/1' });
+      expect(repo.getApplicationWithCompany(appId)!.application.language).toBeNull();
+      await runPipeline(
+        appId,
+        createRun(appId),
+        deps({ llm: fakeLlm({ extraction: () => ({ ...EXTRACTION, language: 'en' }) }) }),
+      );
+
+      expect(repo.getApplicationWithCompany(appId)!.application.language).toBe('en');
+      expect(filePaths(appId)).toEqual(['Timo_Huennebeck_CV.html', 'Timo_Huennebeck_Cover_Letter.html']);
+    });
+
+    it('lets the card overrule the posting', async () => {
+      uploadBoth();
+      const appId = createApp({ postingUrl: 'https://linkedin.com/jobs/1', language: DocumentLanguage.DE });
+      await runPipeline(
+        appId,
+        createRun(appId),
+        deps({ llm: fakeLlm({ extraction: () => ({ ...EXTRACTION, language: 'en' }) }) }),
+      );
+
+      expect(repo.getApplicationWithCompany(appId)!.application.language).toBe('de');
+      expect(filePaths(appId)).toEqual([
+        'Timo_Huennebeck_Anschreiben.html',
+        'Timo_Huennebeck_Lebenslauf.html',
+      ]);
+    });
+
+    it('falls back to German when neither the card nor the posting says', async () => {
+      uploadBoth();
+      const appId = createApp({ postingUrl: 'https://linkedin.com/jobs/1' });
+      await runPipeline(
+        appId,
+        createRun(appId),
+        deps({ llm: fakeLlm({ extraction: () => ({ ...EXTRACTION, language: null }) }) }),
+      );
+
+      expect(repo.getApplicationWithCompany(appId)!.application.language).toBe('de');
+      expect(filePaths(appId)).toEqual([
+        'Timo_Huennebeck_Anschreiben.html',
+        'Timo_Huennebeck_Lebenslauf.html',
+      ]);
+    });
+
+    it('fails the template step naming the missing English side', async () => {
+      uploadTemplates(); // German only
+      const appId = createApp({ postingUrl: 'https://linkedin.com/jobs/1', language: DocumentLanguage.EN });
+      const runId = createRun(appId);
+      await runPipeline(appId, runId, deps());
+
+      const run = runs.getRun(runId);
+      expect(run.status).toBe(AgentRunStatus.FAILED);
+      expect(run.error).toMatch(/englische Lebenslauf-Vorlage/);
+      expect(runs.stepsFor(runId).find((s) => s.key === AgentStepKey.READ_CV)!.status).toBe(
+        AgentStepStatus.ERROR,
+      );
+    });
+
+    /* A resumed run must not re-decide: the documents already written carry
+       the first decision's names, and the retry writes beside them. */
+    it('keeps the language a resumed run was started with', async () => {
+      uploadBoth();
+      const appId = createApp({ postingUrl: 'https://linkedin.com/jobs/1' });
+      const runId = createRun(appId);
+      let fails = 0;
+      const llm = fakeLlm({
+        extraction: () => ({ ...EXTRACTION, language: 'en' }),
+        document: () => {
+          if (fails++ === 0) throw new Error('Modell nicht erreichbar');
+          return FILLED;
+        },
+      });
+      await runPipeline(appId, runId, deps({ llm }));
+      expect(runs.getRun(runId).status).toBe(AgentRunStatus.FAILED);
+
+      const failed = runs.stepsFor(runId).find((s) => s.status === AgentStepStatus.ERROR)!;
+      runs.resetStep(failed.id, failed.label);
+      runs.requeueRun(runId, 'Kepler wartet in der Warteschlange…');
+      await runPipeline(appId, runId, deps({ llm }));
+      expect(runs.getRun(runId).status).toBe(AgentRunStatus.DONE);
+      expect(filePaths(appId)).toEqual(['Timo_Huennebeck_CV.html', 'Timo_Huennebeck_Cover_Letter.html']);
+    });
   });
 
   it('walks a URL posting through every step and lands the results in the DB', async () => {

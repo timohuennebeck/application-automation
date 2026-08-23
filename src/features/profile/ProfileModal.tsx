@@ -1,5 +1,5 @@
 import type { TemplateSlots } from '../../shared/domain';
-import { TEMPLATE_TITLES, TemplateKind } from '../../shared/enums';
+import { DocumentLanguage, LANGUAGE_TITLES, TEMPLATE_TITLES, TemplateKind } from '../../shared/enums';
 import { CLOSED_PROFILE, useApp } from '../../state/store-context';
 import { useState } from 'react';
 import { FieldGroup, ModalShell } from '../../ui/ModalShell';
@@ -9,7 +9,11 @@ import { ProfileDocuments } from './ProfileDocuments';
 import { TemplateSlot } from './TemplateSlot';
 import { ERROR_TEXT } from '../../ui/styles';
 
-const EMPTY_SLOTS: TemplateSlots = { [TemplateKind.LEBENSLAUF]: [], [TemplateKind.ANSCHREIBEN]: [] };
+const EMPTY_SIDES = { [DocumentLanguage.DE]: [], [DocumentLanguage.EN]: [] };
+const EMPTY_SLOTS: TemplateSlots = {
+  [TemplateKind.LEBENSLAUF]: EMPTY_SIDES,
+  [TemplateKind.ANSCHREIBEN]: EMPTY_SIDES,
+};
 
 /* The documents that belong to you rather than to a single application. There
    is no table behind them: the dialog reads the Fassungen from disk when it
@@ -26,28 +30,39 @@ export function ProfileModal() {
     >
       <FieldGroup
         label="Templates"
-        hint="Deine HTML-Templates. Du kannst je mehrere Fassungen halten — der Punkt markiert die, die Kepler für neue Bewerbungen nutzt. Die Originale bleiben unberührt."
+        hint="Deine HTML-Templates, je auf Deutsch und auf Englisch. Du kannst je mehrere Fassungen halten — der Punkt markiert die, die Kepler für Bewerbungen in dieser Sprache nutzt. Die Originale bleiben unberührt."
       >
         {error && <div style={ERROR_TEXT}>{error}</div>}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
           {Object.values(TemplateKind).map((kind) => (
-            <TemplateSlot
-              key={kind}
-              kind={kind}
-              title={TEMPLATE_TITLES[kind]}
-              versions={slots?.[kind] ?? []}
-              loaded={slots !== null}
-              /* Applied to the list as it stands — falling back to a blank
-                 pair rather than dropping the change: the initial listing may
-                 still be in flight, or may have failed. */
-              onChange={(update) =>
-                setSlots((s) => {
-                  const prev = s ?? EMPTY_SLOTS;
-                  return { ...prev, [kind]: update(prev[kind]) };
-                })
-              }
-              onError={setError}
-            />
+            <div key={kind} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-1b1a17)' }}>
+                {TEMPLATE_TITLES[kind]}
+              </div>
+              {/* The two sides of a slot sit under one heading: the card's
+                  language decides which of them a run reads, so they are
+                  the same document twice rather than two documents. */}
+              {Object.values(DocumentLanguage).map((language) => (
+                <TemplateSlot
+                  key={language}
+                  kind={kind}
+                  language={language}
+                  title={LANGUAGE_TITLES[language]}
+                  versions={slots?.[kind][language] ?? []}
+                  loaded={slots !== null}
+                  /* Applied to the list as it stands — falling back to blank
+                     slots rather than dropping the change: the initial
+                     listing may still be in flight, or may have failed. */
+                  onChange={(update) =>
+                    setSlots((s) => {
+                      const prev = s ?? EMPTY_SLOTS;
+                      return { ...prev, [kind]: { ...prev[kind], [language]: update(prev[kind][language]) } };
+                    })
+                  }
+                  onError={setError}
+                />
+              ))}
+            </div>
           ))}
         </div>
       </FieldGroup>

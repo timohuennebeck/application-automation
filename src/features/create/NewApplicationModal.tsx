@@ -1,8 +1,10 @@
 import { CHANNEL_BG, CHANNEL_OPTIONS } from '../../data/config';
+import { DocumentLanguage, LANGUAGE_TITLES } from '../../shared/enums';
 import { useApp } from '../../state/store-context';
 import { FieldChip } from '../../ui/FieldChip';
 import { FieldHint, FieldLabel, ModalShell, SubmitButton } from '../../ui/ModalShell';
-import { PopoverAnchor } from '../../ui/Popover';
+import { MenuItem } from '../../ui/MenuItem';
+import { Popover, PopoverAnchor } from '../../ui/Popover';
 import { SelectPopover } from '../../ui/SelectPopover';
 import { Switch } from '../../ui/Switch';
 import { Avatar, KeplerAvatar } from '../../ui/icons';
@@ -12,6 +14,7 @@ import { DIALOG_INPUT } from '../../ui/styles';
 /* The dialog's channel dropdown shares AppState.dropdown with every other
    select, so the global outside-click handler closes it like the rest. */
 const CHANNEL_DD = 'jobChannel';
+const LANGUAGE_DD = 'jobLanguage';
 
 /* ⌘C dialog: paste a posting URL — or, without one, the listing text itself —
    and pick the channel the posting was found on. */
@@ -21,11 +24,12 @@ export function NewApplicationModal() {
   /* A posting link has to be a full web address; anything else is text. */
   const valid = st.jobHasUrl ? isHttpUrl(st.jobUrl) : !!st.jobText.trim();
   const channelOpen = st.dropdown === CHANNEL_DD;
+  const languageOpen = st.dropdown === LANGUAGE_DD;
 
   return (
     <ModalShell
       onClose={close}
-      overflowVisible={channelOpen}
+      overflowVisible={channelOpen || languageOpen}
       header={
         <div
           style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: 14, color: 'var(--c-5f5c56)' }}
@@ -169,6 +173,41 @@ export function NewApplicationModal() {
           )}
         </PopoverAnchor>
         <FieldHint>Falls du hier nichts auswählst, ergänzt Kepler die Plattform automatisch.</FieldHint>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 4 }}>
+        <FieldLabel>Sprache</FieldLabel>
+        <PopoverAnchor style={{ width: 'fit-content' }}>
+          <FieldChip
+            open={languageOpen}
+            empty={!st.jobLanguage}
+            chevron
+            gap={7}
+            style={{ padding: '3px 7px' }}
+            onClick={() => set((s) => ({ dropdown: s.dropdown === LANGUAGE_DD ? null : LANGUAGE_DD }))}
+            onClear={st.jobLanguage ? () => set({ jobLanguage: null, dropdown: null }) : undefined}
+            clearTitle="Kepler entscheiden lassen"
+          >
+            <span>{st.jobLanguage ? LANGUAGE_TITLES[st.jobLanguage] : 'Kepler entscheidet'}</span>
+          </FieldChip>
+          {languageOpen && (
+            <Popover minWidth={160} zIndex={70}>
+              {Object.values(DocumentLanguage).map((l) => (
+                <MenuItem
+                  key={l}
+                  selected={l === st.jobLanguage}
+                  onClick={() => set({ jobLanguage: l, dropdown: null })}
+                >
+                  <span style={{ whiteSpace: 'nowrap' }}>{LANGUAGE_TITLES[l]}</span>
+                </MenuItem>
+              ))}
+            </Popover>
+          )}
+        </PopoverAnchor>
+        <FieldHint>
+          Die Sprache von Lebenslauf und Anschreiben. Falls du hier nichts auswählst, nimmt Kepler die Sprache
+          der Stellenanzeige.
+        </FieldHint>
       </div>
     </ModalShell>
   );

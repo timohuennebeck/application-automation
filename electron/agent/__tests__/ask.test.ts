@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -290,6 +290,55 @@ describe('a comment that mentions a document', () => {
     expect(renderPdf).toHaveBeenCalled();
     const reply = repo.load().comments.at(-1)!;
     expect(repo.commentEdits(reply.id)).toHaveLength(1);
+    /* The card must point at the freshly rendered PDF, not whatever it had
+       before the edit. */
+    const row = repo
+      .load()
+      .documents.find((d) => d.application_id === appId && d.kind === DocumentKind.COVER_LETTER)!;
+    expect(row.pdf_path).toBe(
+      documentPaths(ROOT, appId, DocumentKind.COVER_LETTER, DocumentLanguage.DE).pdfRel,
+    );
+  });
+
+  it('clears pdf_path when the re-render after an edit fails', async () => {
+    const { service, repo, appId, renderPdf } = fixture({
+      answer: {
+        antwort: 'Eingetragen.',
+        edits: [
+          {
+            document: 'COVER_LETTER',
+            kind: 'replace',
+            find: 'Engineering Hiring Team',
+            replace: 'Frau Maria Haushofer',
+            after: null,
+          },
+        ],
+      },
+    });
+    writeLetter(appId, '<p>Sehr geehrtes Engineering Hiring Team,</p>');
+    /* Simulates a PDF that already exists from an earlier, successful render
+       — the case the old bug got wrong: it left this stale path in place
+       instead of clearing it, so proving the fix needs a non-null path to
+       start from. */
+    const { htmlRel, pdfRel } = documentPaths(ROOT, appId, DocumentKind.COVER_LETTER, DocumentLanguage.DE);
+    const before = repo
+      .load()
+      .documents.find((d) => d.application_id === appId && d.kind === DocumentKind.COVER_LETTER)!;
+    repo.setDocumentFile(before.id, htmlRel, pdfRel, 'Standard');
+
+    renderPdf.mockRejectedValueOnce(new Error('Chromium ist abgestürzt'));
+    const comment = addComment(appId, '@Kepler trag Maria ins @Anschreiben ein');
+
+    await service.ask({ applicationId: appId, commentId: comment.id, openDocument: null });
+
+    /* The HTML still carries the edit — losing it would be worse than a
+       missing PDF — but the card must not advertise a PDF whose text is the
+       pre-edit text while the HTML underneath it has already moved on. */
+    expect(readLetter(appId)).toContain('Frau Maria Haushofer');
+    const after = repo
+      .load()
+      .documents.find((d) => d.application_id === appId && d.kind === DocumentKind.COVER_LETTER)!;
+    expect(after.pdf_path).toBeNull();
   });
 
   it('changes nothing when a passage cannot be placed', async () => {
@@ -344,6 +393,47 @@ describe('a comment that mentions a document', () => {
        refused because the Lebenslauf's does not. */
     expect(readLetter(appId)).toBe(letterOriginal);
     expect(readCv(appId)).toBe(cvOriginal);
+  });
+
+  it('an unreadable document turns into a German reason, not a throw that poisons the queue', async () => {
+    const { service, repo, appId } = fixture({
+      answer: {
+        antwort: 'Ich ändere das.',
+        edits: [{ document: 'COVER_LETTER', kind: 'replace', find: 'X', replace: 'Y', after: null }],
+      },
+    });
+    /* Points the row at a file that was never written — the plan phase's
+       read must turn into a German reason, not a throw that would reject
+       the promise and poison the chain for whatever is queued behind it.
+       Application ids are reused across tests (each starts from a fresh
+       in-memory db), but the temp directory is shared for the whole file, so
+       an earlier test's file at this same path is removed first. */
+    const { htmlAbs, htmlRel } = documentPaths(ROOT, appId, DocumentKind.COVER_LETTER, DocumentLanguage.DE);
+    rmSync(htmlAbs, { force: true });
+    const row = repo
+      .load()
+      .documents.find((d) => d.application_id === appId && d.kind === DocumentKind.COVER_LETTER)!;
+    repo.setDocumentFile(row.id, htmlRel, null, 'Standard');
+    const first = addComment(appId, '@Kepler ändere das @Anschreiben');
+    const second = addComment(appId, '@Kepler nochmal, bitte');
+
+    const a = service.ask({ applicationId: appId, commentId: first.id, openDocument: null });
+    const b = service.ask({ applicationId: appId, commentId: second.id, openDocument: null });
+
+    const resA = await a;
+    expect(resA.ok).toBe(true);
+    if (resA.ok) expect(resA.comment.text).toContain('ist nicht mehr da');
+
+    /* The point: the second call still gets answered rather than inheriting
+       a rejection from the first. */
+    const resB = await b;
+    expect(resB.ok).toBe(true);
+    /* createApplication itself leaves a "Karte angelegt" Kepler comment —
+       counted alongside the two replies rather than filtered out by hand. */
+    const replies = repo
+      .load()
+      .comments.filter((c) => c.application_id === appId && c.text.includes('ist nicht mehr da'));
+    expect(replies).toHaveLength(2);
   });
 
   it('refuses while the document is open in the editor, without calling the model', async () => {
@@ -416,6 +506,78 @@ describe('undo', () => {
     const again = await service.undo(appId, reply.id);
 
     expect(again.ok).toBe(false);
+  });
+
+  it('waits for an in-flight ask instead of racing it', async () => {
+    const appId = createApp();
+    writeLetter(appId, '<p>Sehr geehrtes Engineering Hiring Team,</p>');
+
+    /* Setup: an already-applied edit, awaited normally, gives undo() something
+       to reverse. */
+    const setupComment = addComment(appId, '@Kepler trag Maria ins @Anschreiben ein');
+    const setupSvc = createAskService({
+      repo,
+      runs,
+      userDataPath: ROOT,
+      renderPdf,
+      llm: (async (req: LlmRequest<unknown>) =>
+        req.validate({
+          antwort: 'Eingetragen.',
+          edits: [
+            {
+              document: 'COVER_LETTER',
+              kind: 'replace',
+              find: 'Engineering Hiring Team',
+              replace: 'Frau Maria Haushofer',
+              after: null,
+            },
+          ],
+        })) as Parameters<typeof createAskService>[0]['llm'],
+    });
+    await setupSvc.ask({ applicationId: appId, commentId: setupComment.id, openDocument: null });
+    const reply = repo.load().comments.at(-1)!;
+
+    /* A second ask, held open by a deferred llm response, builds on that
+       edit's result; undo() is queued right behind it. */
+    let release!: (v: unknown) => void;
+    const secondComment = addComment(appId, '@Kepler mach daraus eine Doktorin');
+    const svc = createAskService({
+      repo,
+      runs,
+      userDataPath: ROOT,
+      renderPdf,
+      llm: (async (req: LlmRequest<unknown>) =>
+        req.validate(await new Promise((r) => (release = r)))) as Parameters<
+        typeof createAskService
+      >[0]['llm'],
+    });
+    const askPending = svc.ask({ applicationId: appId, commentId: secondComment.id, openDocument: null });
+    await Promise.resolve();
+    const undoPending = svc.undo(appId, reply.id);
+
+    release({
+      antwort: 'Gemacht.',
+      edits: [
+        {
+          document: 'COVER_LETTER',
+          kind: 'replace',
+          find: 'Frau Maria Haushofer',
+          replace: 'Frau Dr. Haushofer',
+          after: null,
+        },
+      ],
+    });
+    const askResult = await askPending;
+    const undoResult = await undoPending;
+
+    /* The ask, already in flight when undo was called, has to land first —
+       undo then tries to reverse a passage the ask has since changed, and
+       refuses rather than silently discarding the ask's write. Had undo
+       raced ahead instead, it would have found "Frau Maria Haushofer" intact
+       and succeeded, which is exactly the bug this locks out. */
+    expect(askResult.ok).toBe(true);
+    expect(readLetter(appId)).toBe('<p>Sehr geehrtes Frau Dr. Haushofer,</p>');
+    expect(undoResult.ok).toBe(false);
   });
 });
 

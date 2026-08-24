@@ -338,8 +338,11 @@ export function createAskService({ repo, runs, llm, userDataPath, renderPdf }: A
   /* The retry icon on an applied answer. The stored pairs turned around are
      the whole of it — if the document has moved on since, they no longer
      match and applyEdits refuses, which is the same guard the forward
-     direction has. Registers in inFlight like answer() does, so stop() reaches
-     an undo in progress the same way it reaches an answer. */
+     direction has. Registers in inFlight so stop() has a controller to find
+     for this card, but the signal itself is never read here: an undo's only
+     await is the PDF re-render inside writeGroups, and by then the file
+     write it belongs to has already happened synchronously — there is
+     nothing left to call off, only a later, still-unstarted call. */
   const undoOne = async (applicationId: string, commentId: number): Promise<AskResult> => {
     if (!repo.getApplicationWithCompany(applicationId)) {
       return { ok: false, error: 'Unbekannte Bewerbung.' };

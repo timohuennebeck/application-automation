@@ -56,6 +56,22 @@ function writeLetter(appId: string, html: string): void {
 const readLetter = (appId: string) =>
   readFileSync(documentPaths(ROOT, appId, DocumentKind.COVER_LETTER, DocumentLanguage.DE).htmlAbs, 'utf8');
 
+/* Same shape, the other document — for the cross-document all-or-nothing
+   test, which needs two files on disk to prove one group's failure leaves
+   the other's untouched. */
+function writeCv(appId: string, html: string): void {
+  const { htmlAbs, htmlRel } = documentPaths(ROOT, appId, DocumentKind.LEBENSLAUF, DocumentLanguage.DE);
+  mkdirSync(path.dirname(htmlAbs), { recursive: true });
+  writeFileSync(htmlAbs, html);
+  const row = repo
+    .load()
+    .documents.find((d) => d.application_id === appId && d.kind === DocumentKind.LEBENSLAUF)!;
+  repo.setDocumentFile(row.id, htmlRel, null, 'Standard');
+}
+
+const readCv = (appId: string) =>
+  readFileSync(documentPaths(ROOT, appId, DocumentKind.LEBENSLAUF, DocumentLanguage.DE).htmlAbs, 'utf8');
+
 /* Stands in for the SDK call: hands back whatever the validator makes of
    `answer`, so the service's own behaviour is what is under test. */
 const renderPdf = vi.fn(async () => undefined);
@@ -295,6 +311,39 @@ describe('a comment that mentions a document', () => {
     const reply = repo.load().comments.at(-1)!;
     expect(repo.commentEdits(reply.id)).toHaveLength(0);
     expect(reply.text).toContain('gibt es nicht');
+  });
+
+  it('leaves every document untouched when one of several groups cannot be placed', async () => {
+    /* The plan-then-write split is the load-bearing line of the design: an
+       implementation that wrote each group as it went would pass every other
+       test here and still fail this one. */
+    const { service, appId } = fixture({
+      answer: {
+        antwort: 'Ich ändere beides.',
+        edits: [
+          {
+            document: 'COVER_LETTER',
+            kind: 'replace',
+            find: 'Engineering Hiring Team',
+            replace: 'Frau Haushofer',
+            after: null,
+          },
+          { document: 'LEBENSLAUF', kind: 'replace', find: 'gibt es nicht', replace: 'X', after: null },
+        ],
+      },
+    });
+    const letterOriginal = '<p>Sehr geehrtes Engineering Hiring Team,</p>';
+    const cvOriginal = '<p>Lebenslauf-Inhalt</p>';
+    writeLetter(appId, letterOriginal);
+    writeCv(appId, cvOriginal);
+    const comment = addComment(appId, '@Kepler trag Maria im @Anschreiben und @Lebenslauf ein');
+
+    await service.ask({ applicationId: appId, commentId: comment.id, openDocument: null });
+
+    /* The Anschreiben's edit lands fine in isolation — it must still be
+       refused because the Lebenslauf's does not. */
+    expect(readLetter(appId)).toBe(letterOriginal);
+    expect(readCv(appId)).toBe(cvOriginal);
   });
 
   it('refuses while the document is open in the editor, without calling the model', async () => {

@@ -534,7 +534,6 @@ export interface AskInterview {
    therefore cannot be changed from the thread; the rules below say so. */
 export interface AskDocument {
   kind: DocumentKind;
-  title: string;
   text: string;
 }
 

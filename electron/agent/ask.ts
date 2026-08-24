@@ -6,7 +6,7 @@
    renderer appends it without a re-pull. Kepler reads the card, and — when the
    comment named one — the document it named; it may change that document, but
    nothing else. */
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import type { Repo } from '../db/repo.ts';
 import { resolveDocumentPath } from '../files.ts';
 import type { RunStore } from './run-store.ts';
@@ -62,6 +62,9 @@ const DOCUMENT_MENTION: Record<DocumentKind, string> = {
 function mentionedDocuments(text: string): DocumentKind[] {
   const found: DocumentKind[] = [];
   for (const [kind, title] of Object.entries(DOCUMENT_MENTION) as [DocumentKind, string][]) {
+    /* An empty title (OTHER has no mention word) would degenerate the regex
+       into a bare "@" match — nothing is ever mentioned that way. */
+    if (!title) continue;
     if (new RegExp('(?<![\\p{L}\\d@])@' + title + '(?![\\p{L}\\d])', 'u').test(text)) found.push(kind);
   }
   return found;
@@ -200,7 +203,15 @@ export function createAskService({ repo, runs, llm, userDataPath, renderPdf }: A
     for (const kind of new Set(edits.map((e) => e.document))) {
       const row = rows.find((d) => d.kind === kind);
       if (!row?.file_path) return { error: `Für ${DOCUMENT_MENTION[kind]} gibt es keine Datei.` };
-      const html = readFileSync(resolveDocumentPath(userDataPath, row.file_path), 'utf8');
+      let html: string;
+      try {
+        html = readFileSync(resolveDocumentPath(userDataPath, row.file_path), 'utf8');
+      } catch {
+        /* The row points at a file that is gone or moved — a German reason
+           the caller can post, not a throw that would reject the whole
+           service call (and, for ask(), poison the chain behind it). */
+        return { error: `Die Datei zu ${DOCUMENT_MENTION[kind]} ist nicht mehr da.` };
+      }
       const res = applyEdits(
         html,
         edits.filter((e) => e.document === kind),
@@ -214,14 +225,20 @@ export function createAskService({ repo, runs, llm, userDataPath, renderPdf }: A
       const abs = resolveDocumentPath(userDataPath, row.file_path!);
       writeFileSync(abs, html);
       const pdfAbs = abs.replace(/\.html?$/i, '.pdf');
+      /* Mirrors generateDocument in orchestrator.ts for the same failure:
+         keep the edited HTML — losing it because Chromium could not print
+         would be worse — but never leave pdf_path pointing at a PDF whose
+         text is now stale (or, when it was null before, at a PDF that no
+         longer exists). The applicant sends the PDF, not the HTML. */
+      let storedPdf: string | null = row.file_path!.replace(/\.html?$/i, '.pdf');
       try {
         await renderPdf(abs, pdfAbs);
       } catch (err) {
-        /* Same trade the orchestrator makes: the HTML is the document, and
-           losing it because Chromium could not print would be worse. */
         console.error('[agent] PDF-Export nach Änderung fehlgeschlagen', err);
+        rmSync(pdfAbs, { force: true });
+        storedPdf = null;
       }
-      repo.setDocumentFile(row.id, row.file_path!, row.pdf_path, row.template_label);
+      repo.setDocumentFile(row.id, row.file_path!, storedPdf, row.template_label);
     }
     return { error: null };
   };
@@ -251,8 +268,13 @@ export function createAskService({ repo, runs, llm, userDataPath, renderPdf }: A
     for (const kind of mentioned) {
       const row = snap.documents.find((d) => d.application_id === req.applicationId && d.kind === kind);
       if (!row?.file_path) continue;
-      const html = readFileSync(resolveDocumentPath(userDataPath, row.file_path), 'utf8');
-      documents.push({ kind, title: DOCUMENT_MENTION[kind], text: documentExcerpt(html) });
+      try {
+        const html = readFileSync(resolveDocumentPath(userDataPath, row.file_path), 'utf8');
+        documents.push({ kind, text: documentExcerpt(html) });
+      } catch {
+        /* Same as no file: the row's path is stale, so the mention is
+           dropped rather than the whole answer failing over it. */
+      }
     }
 
     const controller = new AbortController();
@@ -297,30 +319,37 @@ export function createAskService({ repo, runs, llm, userDataPath, renderPdf }: A
     }
   };
 
-  return {
-    ask(req: AskRequest): Promise<AskResult> {
-      const previous = chains.get(req.applicationId) ?? Promise.resolve();
-      /* answer() never rejects, so the chain cannot poison; a queued question
-         re-checks the card once its turn comes, since it may have gone by then. */
-      const next = previous.then(() => answer(req));
-      chains.set(req.applicationId, next);
-      next.finally(() => {
-        if (chains.get(req.applicationId) === next) chains.delete(req.applicationId);
-      });
-      return next;
-    },
+  /* Runs one task for a card after whatever is already queued for it, and
+     serializes ask() and undo() through the same queue: an undo clicked while
+     an answer is still in flight must not plan from the pre-edit HTML and
+     write after that answer's write lands, discarding it. */
+  const enqueue = (applicationId: string, task: () => Promise<AskResult>): Promise<AskResult> => {
+    const previous = chains.get(applicationId) ?? Promise.resolve();
+    /* Neither task ever rejects, so the chain cannot poison; a queued call
+       re-checks the card once its turn comes, since it may have gone by then. */
+    const next = previous.then(task);
+    chains.set(applicationId, next);
+    next.finally(() => {
+      if (chains.get(applicationId) === next) chains.delete(applicationId);
+    });
+    return next;
+  };
 
-    /* The retry icon on an applied answer. The stored pairs turned around are
-       the whole of it — if the document has moved on since, they no longer
-       match and applyEdits refuses, which is the same guard the forward
-       direction has. */
-    async undo(applicationId: string, commentId: number): Promise<AskResult> {
-      if (!repo.getApplicationWithCompany(applicationId)) {
-        return { ok: false, error: 'Unbekannte Bewerbung.' };
-      }
-      if (runs.activeRun(applicationId)) {
-        return { ok: false, error: 'Kepler arbeitet bereits an dieser Bewerbung.' };
-      }
+  /* The retry icon on an applied answer. The stored pairs turned around are
+     the whole of it — if the document has moved on since, they no longer
+     match and applyEdits refuses, which is the same guard the forward
+     direction has. Registers in inFlight like answer() does, so stop() reaches
+     an undo in progress the same way it reaches an answer. */
+  const undoOne = async (applicationId: string, commentId: number): Promise<AskResult> => {
+    if (!repo.getApplicationWithCompany(applicationId)) {
+      return { ok: false, error: 'Unbekannte Bewerbung.' };
+    }
+    if (runs.activeRun(applicationId)) {
+      return { ok: false, error: 'Kepler arbeitet bereits an dieser Bewerbung.' };
+    }
+    const controller = new AbortController();
+    inFlight.set(applicationId, controller);
+    try {
       const stored = repo.commentEdits(commentId).filter((r) => r.undone_at === null);
       if (!stored.length) return { ok: false, error: 'Diese Änderung wurde schon zurückgenommen.' };
 
@@ -328,6 +357,20 @@ export function createAskService({ repo, runs, llm, userDataPath, renderPdf }: A
       if (written.error) return { ok: false, error: written.error };
       repo.markEditsUndone(commentId);
       return { ok: true, comment: repo.load().comments.find((c) => c.id === commentId)!, edits: [] };
+    } catch (err) {
+      return { ok: false, error: userMessage(err) };
+    } finally {
+      inFlight.delete(applicationId);
+    }
+  };
+
+  return {
+    ask(req: AskRequest): Promise<AskResult> {
+      return enqueue(req.applicationId, () => answer(req));
+    },
+
+    undo(applicationId: string, commentId: number): Promise<AskResult> {
+      return enqueue(applicationId, () => undoOne(applicationId, commentId));
     },
 
     /* The card is gone: end the call in the air rather than let it run out its

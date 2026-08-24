@@ -440,7 +440,6 @@ describe('askPrompt', () => {
       documents: [
         {
           kind: DocumentKind.COVER_LETTER,
-          title: 'Anschreiben',
           text: 'Sehr geehrtes Engineering Hiring Team,',
         },
       ],
@@ -454,7 +453,7 @@ describe('askPrompt', () => {
   it('tells the model how a change has to be worded', () => {
     const prompt = askPrompt({
       ...ASK,
-      documents: [{ kind: DocumentKind.COVER_LETTER, title: 'Anschreiben', text: 'Text' }],
+      documents: [{ kind: DocumentKind.COVER_LETTER, text: 'Text' }],
     });
 
     /* The passage has to be quoted exactly, or applyEdits refuses it. */

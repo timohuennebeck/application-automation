@@ -1,6 +1,9 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { splitMentions } from '../lib/mentions';
-import { LinkGlyph } from './icons';
+import type { Mentionable } from '../lib/mentions';
+import type { DocumentKind } from '../shared/enums';
+import { formatBytes } from '../lib/bytes';
+import { LinkGlyph, PaperclipGlyph } from './icons';
 
 /* URLs in body text; trailing sentence punctuation stays text. */
 const URL_RE = /(https?:\/\/[^\s]+?)([.,;:!?)]*)(?=\s|$)/g;
@@ -70,12 +73,59 @@ function BoldAndLinks({ text }: { text: string }) {
   );
 }
 
-/* One line's content: mention chips, bold spans, link pills. */
-function Inline({ text, names }: { text: string; names: string[] }) {
+/* One line's content: mention chips, bold spans, link pills. A mention is
+   looked up in `mentionables` to tell a document ("@Anschreiben") from a
+   person ("@Marek Hübner") — only the former gets the attachment look. */
+function Inline({
+  text,
+  mentionables,
+  sizeOf,
+  onOpenDocument,
+}: {
+  text: string;
+  mentionables: Mentionable[];
+  sizeOf?: (kind: DocumentKind) => number | null;
+  onOpenDocument?: (kind: DocumentKind) => void;
+}) {
   return (
     <>
-      {splitMentions(text, names).map((p, i) =>
-        p.mention ? (
+      {splitMentions(
+        text,
+        mentionables.map((m) => m.name),
+      ).map((p, i) => {
+        if (!p.mention) return <BoldAndLinks key={i} text={p.t} />;
+        const entry = mentionables.find((m) => '@' + m.name === p.t);
+        if (entry?.kind === 'document') {
+          const size = entry.document != null ? sizeOf?.(entry.document) : null;
+          return (
+            <span
+              key={i}
+              className="attachment-chip"
+              title={entry.name}
+              style={{
+                display: 'inline-flex',
+                gap: 4,
+                padding: '1px 5px',
+                verticalAlign: -2,
+                /* The attachment chip is built to stand alone in a row under the
+                   composer. In running text it needs less padding, or it breaks
+                   the line it sits in — same colour, same paperclip, same radius. */
+              }}
+              onClick={() => onOpenDocument?.(entry.document!)}
+            >
+              <PaperclipGlyph />
+              <span style={{ fontSize: 12, color: 'var(--c-1b1a17)', whiteSpace: 'nowrap' }}>
+                {entry.name}
+              </span>
+              {size != null && (
+                <span style={{ fontSize: 11, color: 'var(--c-a5a29a)', whiteSpace: 'nowrap' }}>
+                  {formatBytes(size)}
+                </span>
+              )}
+            </span>
+          );
+        }
+        return (
           <span
             key={i}
             style={{
@@ -91,10 +141,8 @@ function Inline({ text, names }: { text: string; names: string[] }) {
           >
             {p.t}
           </span>
-        ) : (
-          <BoldAndLinks key={i} text={p.t} />
-        ),
-      )}
+        );
+      })}
     </>
   );
 }
@@ -107,12 +155,20 @@ const BULLET_RE = /^\s*[•–-]\s+(.*)$/;
    the card comment thread and the per-interview note thread. */
 export function MentionText({
   text,
-  names,
+  mentionables,
+  sizeOf,
+  onOpenDocument,
   style,
 }: {
   text: string;
-  /* Only these names become chips; anything else stays plain text. */
-  names: string[];
+  /* Only these entries become chips; anything else stays plain text. Each
+     entry's `kind` decides whether it renders as a person or a document. */
+  mentionables: Mentionable[];
+  /* A document chip's size, read at render time so it does not go stale when
+     Kepler rewrites the file. Absent (e.g. the interview note thread, which
+     offers no documents) simply omits the size. */
+  sizeOf?: (kind: DocumentKind) => number | null;
+  onOpenDocument?: (kind: DocumentKind) => void;
   style?: CSSProperties;
 }) {
   return (
@@ -132,7 +188,12 @@ export function MentionText({
             <div key={i} style={{ display: 'flex', gap: 8 }}>
               <span style={{ flexShrink: 0, color: 'var(--c-a5a29a)' }}>•</span>
               <span style={{ minWidth: 0 }}>
-                <Inline text={bullet[1]} names={names} />
+                <Inline
+                  text={bullet[1]}
+                  mentionables={mentionables}
+                  sizeOf={sizeOf}
+                  onOpenDocument={onOpenDocument}
+                />
               </span>
             </div>
           );
@@ -140,7 +201,7 @@ export function MentionText({
         if (!line.trim()) return <div key={i} style={{ height: 7 }} />;
         return (
           <div key={i}>
-            <Inline text={line} names={names} />
+            <Inline text={line} mentionables={mentionables} sizeOf={sizeOf} onOpenDocument={onOpenDocument} />
           </div>
         );
       })}

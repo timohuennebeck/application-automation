@@ -39,7 +39,6 @@ export function RoundNoteThread({
     KEPLER_ENTRY,
     ...people.map((p) => ({ ...p, kind: 'person' as const })),
   ];
-  const mentionNames = mentionable.map((p) => p.name);
 
   const send = () => {
     if (!note.trim()) return;
@@ -80,7 +79,7 @@ export function RoundNoteThread({
                 </div>
                 <MentionText
                   text={n.text}
-                  names={mentionNames}
+                  mentionables={mentionable}
                   style={{ lineHeight: 1.6, whiteSpace: 'pre-line' }}
                 />
               </div>

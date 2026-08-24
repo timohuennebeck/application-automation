@@ -1,9 +1,11 @@
+import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { KEPLER_ENTRY, USER_ENTRY } from '../../lib/mentions';
 import type { Mentionable } from '../../lib/mentions';
 import { Author, AUTHOR_LABEL } from '../../shared/enums';
+import type { DocumentKind } from '../../shared/enums';
 import { relTime } from '../../state/db-view';
-import { documentEntries } from '../../state/selectors';
+import { documentEntries, documentFor } from '../../state/selectors';
 import { useApp } from '../../state/store-context';
 import { MentionComposer } from '../../ui/MentionComposer';
 import { MentionText } from '../../ui/MentionText';
@@ -58,13 +60,42 @@ export function CommentsSection({ cardId }: { cardId: string }) {
 
   // Kepler is always mentionable; everyone attached to this card, plus its
   // generated documents, as well.
+  const docEntries = documentEntries(st, cardId);
   const mentionable: Mentionable[] = [
     KEPLER_ENTRY,
     USER_ENTRY,
     ...peopleForCard(cardId).map((p) => ({ ...p, kind: 'person' as const })),
-    ...documentEntries(st, cardId),
+    ...docEntries,
   ];
-  const names = mentionable.map((p) => p.name);
+
+  /* Sizes for a mentioned document's chip, read from disk rather than stored —
+     the same call DocumentsSection makes, keyed here by kind instead of path
+     so a rewritten file's size never goes stale under an old mention. */
+  const [docSizes, setDocSizes] = useState<Partial<Record<DocumentKind, number | null>>>({});
+  const docPaths = docEntries
+    .map((e) => documentFor(st, cardId, e.document!)?.file_path)
+    .filter((p): p is string => !!p);
+  const docSizeKey = docPaths.join(',');
+  useEffect(() => {
+    if (!docPaths.length) return;
+    let live = true;
+    window.desktop?.documents
+      .sizes(docPaths)
+      .then((list) => {
+        if (!live) return;
+        setDocSizes(Object.fromEntries(docEntries.map((e, i) => [e.document, list[i]])));
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [docSizeKey]);
+  const sizeOfDocument = (kind: DocumentKind): number | null => docSizes[kind] ?? null;
+  const openDocument = (kind: DocumentKind) => {
+    const doc = documentFor(st, cardId, kind);
+    if (doc?.file_path) openAttachment(doc.file_path);
+  };
 
   const comments = st.commentsByApp[cardId] || [];
   const ask = st.keplerAsk[cardId];
@@ -155,7 +186,14 @@ export function CommentsSection({ cardId }: { cardId: string }) {
                 </div>
               </>
             ) : (
-              c.text && <MentionText text={c.text} names={names} />
+              c.text && (
+                <MentionText
+                  text={c.text}
+                  mentionables={mentionable}
+                  sizeOf={sizeOfDocument}
+                  onOpenDocument={openDocument}
+                />
+              )
             )}
 
             {attachments.length > 0 && (

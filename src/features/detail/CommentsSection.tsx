@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { KEPLER_ENTRY, USER_ENTRY } from '../../lib/mentions';
 import type { Mentionable } from '../../lib/mentions';
-import { Author, AUTHOR_LABEL } from '../../shared/enums';
+import { Author, AUTHOR_LABEL, EditKind } from '../../shared/enums';
 import type { DocumentKind } from '../../shared/enums';
+import type { CommentEditRow } from '../../shared/db-types';
 import { relTime } from '../../state/db-view';
-import { documentEntries, documentFor } from '../../state/selectors';
+import { documentEntries, documentFor, editStatus, editsForComment } from '../../state/selectors';
+import type { EditStatus } from '../../state/selectors';
 import { useApp } from '../../state/store-context';
 import { MentionComposer } from '../../ui/MentionComposer';
 import { MentionText } from '../../ui/MentionText';
@@ -13,8 +15,114 @@ import { MenuItem } from '../../ui/MenuItem';
 import { Popover, PopoverAnchor } from '../../ui/Popover';
 import { Section } from '../../ui/Section';
 import { AttachmentChip } from '../../ui/AttachmentChip';
-import { Avatar, DotsGlyph } from '../../ui/icons';
+import { Avatar, DotsGlyph, RegenGlyph } from '../../ui/icons';
 import { SHIMMER_BG } from '../../ui/styles';
+
+/* The old half of a replacement or a deletion. The rule follows the text
+   rather than sitting a shade lighter — a lighter rule read as a printing
+   flaw rather than a decision. */
+const OLD: CSSProperties = {
+  color: 'var(--c-9a978f)',
+  textDecoration: 'line-through',
+  textDecorationColor: 'currentColor',
+  textDecorationThickness: 1,
+};
+/* The green the editor puts on a passage that stands. Flat: it means "this
+   holds now", and an underline would make it look like the marks. */
+const NEW: CSSProperties = {
+  fontWeight: 600,
+  color: 'var(--c-1b1a17)',
+  background: 'color-mix(in srgb, var(--c-4f8f6a) 12%, transparent)',
+  borderRadius: 3,
+  padding: '0 3px',
+};
+/* A replacement shows both halves and needs no sign. The other two are each
+   missing a half, so each takes one — green cannot carry the difference,
+   because the right half of a replacement is green too. */
+const SIGN: CSSProperties = {
+  color: 'var(--c-b3b0a8)',
+  fontSize: 11.5,
+  display: 'inline-block',
+  width: 11,
+};
+
+/* One line of Kepler's answer: the pair a replacement shows, or the single
+   half a deletion or an insertion has. */
+function EditLine({ edit }: { edit: CommentEditRow }) {
+  if (edit.kind === EditKind.DELETE) {
+    return (
+      <div style={{ fontSize: 12.5, lineHeight: 1.6 }}>
+        <span style={SIGN}>−</span>
+        <span style={OLD}>{edit.find_text}</span>
+      </div>
+    );
+  }
+  if (edit.kind === EditKind.INSERT) {
+    return (
+      <div style={{ fontSize: 12.5, lineHeight: 1.6 }}>
+        <span style={SIGN}>+</span>
+        <span style={NEW}>{edit.replace_text}</span>
+      </div>
+    );
+  }
+  return (
+    <div style={{ fontSize: 12.5, lineHeight: 1.6 }}>
+      <span style={OLD}>{edit.find_text}</span>
+      <span style={{ color: 'var(--c-b3b0a8)' }}> → </span>
+      <span style={NEW}>{edit.replace_text}</span>
+    </div>
+  );
+}
+
+/* The pairs a Kepler reply carried, plus the line that says whether they
+   still hold. Rendered only when editStatus found something to show. */
+function EditSet({
+  edits,
+  status,
+  onUndo,
+}: {
+  edits: CommentEditRow[];
+  status: EditStatus;
+  onUndo: () => void;
+}) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginTop: 4 }}>
+      {edits.map((edit) => (
+        <EditLine key={edit.id} edit={edit} />
+      ))}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 7,
+          marginTop: 8,
+          fontSize: 11.5,
+          color: status.applied ? 'var(--c-4f8f6a)' : 'var(--c-8b8880)',
+        }}
+      >
+        <span
+          style={{
+            width: 5,
+            height: 5,
+            borderRadius: '50%',
+            flexShrink: 0,
+            background: status.applied ? 'var(--c-4f8f6a)' : 'var(--c-c9c5bb)',
+          }}
+        />
+        {status.applied ? `${status.title} und PDF aktualisiert` : 'Nichts geändert'}
+        <span style={{ flex: 1 }} />
+        <div
+          className="icon-btn"
+          title={status.applied ? 'Änderung zurücknehmen' : 'Nochmal versuchen'}
+          style={{ flexShrink: 0, marginTop: -4, marginBottom: -4 }}
+          onClick={onUndo}
+        >
+          <RegenGlyph />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /* Avatar, name and body — the shape of one entry in the thread. The row that
    stands in for the answer Kepler still owes borrows it, so the wait reads as
@@ -56,6 +164,7 @@ export function CommentsSection({ cardId }: { cardId: string }) {
     openStagedAttachment,
     openAttachment,
     peopleForCard,
+    undoEdits,
   } = useApp();
 
   // Kepler is always mentionable; everyone attached to this card, plus its
@@ -108,6 +217,9 @@ export function CommentsSection({ cardId }: { cardId: string }) {
         const menuOpen = st.commentMenu === ck;
         const attachments = st.attachmentsByComment[String(c.id)] || [];
         const saveEdit = () => updateComment(cardId, c.id, st.commentEditDraft);
+        /* Only a Kepler reply can carry an edit set — editStatus is null for
+           every ordinary comment, so nothing renders below those. */
+        const status = c.author === Author.KEPLER ? editStatus(st, c.id) : null;
 
         return (
           <ThreadRow
@@ -209,6 +321,20 @@ export function CommentsSection({ cardId }: { cardId: string }) {
                   />
                 ))}
               </div>
+            )}
+
+            {status && (
+              <EditSet
+                edits={editsForComment(st, c.id)}
+                status={status}
+                onUndo={() =>
+                  undoEdits(cardId, c.id).then((err) => {
+                    // The retry icon has nowhere to show a reason; the console
+                    // gets it, same as every other fire-and-forget bridge call.
+                    if (err) console.warn('[comments] undo failed', err);
+                  })
+                }
+              />
             )}
           </ThreadRow>
         );

@@ -13,7 +13,7 @@ import {
   TemplateKind,
 } from '../shared/enums';
 import { DOCUMENT_STEMS } from '../shared/applicant';
-import type { DocumentRow } from '../shared/db-types';
+import type { CommentEditRow, DocumentRow } from '../shared/db-types';
 import type { AgentRunView } from './db-view';
 import { MON_DE3, DOW_DE, dateToISO, dayDiff, todayISO } from '../lib/date';
 import type { Mentionable } from '../lib/mentions';
@@ -48,25 +48,58 @@ export function documentLanguageOf(st: AppState, id: string, kind: DocumentKind)
   return match ?? languageOf(st, id);
 }
 
+/* Titles the way Kepler's own mentions spell them out — the picker, the
+   comment chip and the edit status line all read off the same word, so
+   nothing can drift between "@Anschreiben" and what the thread reports back.
+   OTHER is never mentioned or edited, but the record stays total. */
+export const DOCUMENT_TITLE: Record<DocumentKind, string> = {
+  [DocumentKind.COVER_LETTER]: 'Anschreiben',
+  [DocumentKind.LEBENSLAUF]: 'Lebenslauf',
+  [DocumentKind.OTHER]: 'Dokument',
+};
+
 /* The card's two generated documents as mention entries — only the ones that
    actually have a file, since a mention of a document that was never
    generated would offer Kepler nothing to read. */
 export function documentEntries(st: AppState, cardId: string): Mentionable[] {
-  const titles: [DocumentKind, string][] = [
-    [DocumentKind.COVER_LETTER, 'Anschreiben'],
-    [DocumentKind.LEBENSLAUF, 'Lebenslauf'],
-  ];
-  return titles
-    .filter(([kind]) => !!documentFor(st, cardId, kind)?.file_path)
-    .map(([kind, name]) => ({
+  return ([DocumentKind.COVER_LETTER, DocumentKind.LEBENSLAUF] as const)
+    .filter((kind) => !!documentFor(st, cardId, kind)?.file_path)
+    .map((kind) => ({
       key: 'doc:' + kind,
-      name,
+      name: DOCUMENT_TITLE[kind],
       role: 'Dokument',
       bg: 'var(--c-f1efe9)',
       initials: '',
       kind: 'document' as const,
       document: kind,
     }));
+}
+
+/* Kepler's changes for one reply, oldest first. The repo already hands rows
+   back in that order (`ORDER BY comment_id, position`), so nothing here
+   re-sorts them. */
+export function editsForComment(st: AppState, commentId: number): CommentEditRow[] {
+  return st.commentEdits[String(commentId)] || [];
+}
+
+export interface EditStatus {
+  /* Whether the file still carries the set — false once every row in it has
+     been undone. Never a mix: undo reverses the whole set at once. */
+  applied: boolean;
+  /* The document(s) the set touched, for "… und PDF aktualisiert" — usually
+     one, but the all-or-nothing write can land across both at once. */
+  title: string;
+}
+
+/* Null for an ordinary reply that never carried an edit set — the thread
+   shows nothing beyond the text for those. */
+export function editStatus(st: AppState, commentId: number): EditStatus | null {
+  const rows = editsForComment(st, commentId);
+  if (!rows.length) return null;
+  return {
+    applied: rows.every((r) => r.undone_at === null),
+    title: [...new Set(rows.map((r) => DOCUMENT_TITLE[r.document]))].join(' und '),
+  };
 }
 
 /* The card's latest Kepler run, whatever state it ended in. */

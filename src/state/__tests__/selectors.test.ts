@@ -5,15 +5,23 @@ import {
   Assignee,
   DocumentKind,
   DocumentLanguage,
+  EditKind,
   Interest,
   LinkKind,
   RoundState,
 } from '../../shared/enums.ts';
 import { isoToDate, shiftISO, todayISO } from '../../lib/date.ts';
-import type { ApplicationRow, CompanyRow, DocumentRow, FactRow } from '../../shared/db-types.ts';
+import type {
+  ApplicationRow,
+  CommentEditRow,
+  CompanyRow,
+  DocumentRow,
+  FactRow,
+} from '../../shared/db-types.ts';
 import {
   activeFilterCount,
   cardSubtitle,
+  editStatus,
   interviewChip,
   isSorted,
   keplerHoldReason,
@@ -348,5 +356,50 @@ describe('interviewChip', () => {
   it('falls back to the position for a round saved before rounds carried a stage', () => {
     expect(interviewChip(cardWithRound(''), 'A')?.meta).toBe('Finales Gespräch · Google Meet');
     expect(interviewChip(cardWithRound('', 1), 'A')?.meta).toBe('Screening · Google Meet');
+  });
+});
+
+const edit = (over: Partial<CommentEditRow> = {}): CommentEditRow => ({
+  id: 1,
+  comment_id: 42,
+  document: DocumentKind.COVER_LETTER,
+  kind: EditKind.REPLACE,
+  find_text: 'alt',
+  replace_text: 'neu',
+  after_text: null,
+  position: 0,
+  undone_at: null,
+  ...over,
+});
+
+describe('editStatus', () => {
+  it('is null for a reply that carries no edit set — an ordinary comment', () => {
+    const st = { commentEdits: {} } as unknown as AppState;
+    expect(editStatus(st, 42)).toBeNull();
+  });
+
+  it('reads as applied while every row of the set still stands', () => {
+    const st = { commentEdits: { '42': [edit()] } } as unknown as AppState;
+    expect(editStatus(st, 42)).toEqual({ applied: true, title: 'Anschreiben' });
+  });
+
+  it('reads as unapplied once the whole set has been undone', () => {
+    const st = {
+      commentEdits: { '42': [edit({ undone_at: '2026-01-01T00:00:00.000Z' })] },
+    } as unknown as AppState;
+    expect(editStatus(st, 42)?.applied).toBe(false);
+  });
+
+  it('names every document the all-or-nothing write touched, once each', () => {
+    const st = {
+      commentEdits: {
+        '42': [
+          edit(),
+          edit({ id: 2, kind: EditKind.DELETE }),
+          edit({ id: 3, document: DocumentKind.LEBENSLAUF }),
+        ],
+      },
+    } as unknown as AppState;
+    expect(editStatus(st, 42)?.title).toBe('Anschreiben und Lebenslauf');
   });
 });

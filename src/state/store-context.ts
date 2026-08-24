@@ -6,6 +6,7 @@ import type {
   ApplicationPersonRow,
   ApplicationRow,
   CommentAttachmentRow,
+  CommentEditRow,
   CommentRow,
   CompanyRow,
   DocumentRow,
@@ -118,6 +119,9 @@ export interface AppState {
   commentsByApp: Record<string, CommentRow[]>;
   /* Keyed by String(comment id). */
   attachmentsByComment: Record<string, CommentAttachmentRow[]>;
+  /* Keyed by String(comment id); only a reply that carried an edit set has an
+     entry — see editStatus in selectors.ts. */
+  commentEdits: Record<string, CommentEditRow[]>;
   roundsState: Record<string, RoundView[]>;
   followupsByApp: Record<string, FollowupRow[]>;
   documentsByApp: Record<string, DocumentRow[]>;
@@ -244,6 +248,10 @@ export interface AppStore {
   stopAgent: (id: string) => void;
   /* Asks Kepler to answer the comment; the reply lands in the thread. */
   askKepler: (id: string, commentId: number) => void;
+  /* The retry icon on a reply that carried an edit set: puts the document(s)
+     back and marks the set undone. Resolves to the reason it failed, or
+     null. */
+  undoEdits: (applicationId: string, commentId: number) => Promise<string | null>;
   deleteCard: (id: string) => void;
   savePerson: () => void;
   deletePerson: (id: string, key: string, isNew: boolean) => void;

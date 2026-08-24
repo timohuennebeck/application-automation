@@ -523,10 +523,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         });
       set((s) => ({ keplerAsk: { ...s.keplerAsk, [id]: { pending: true, error: null } } }));
       desktop.agent
-        /* Which document is open in the editor is not wired up from here yet
-           — a later task teaches the store that. Until then a comment naming
-           an open document reaches the model rather than being refused. */
-        .ask({ applicationId: id, commentId, openDocument: null })
+        /* Kepler must not rewrite a document the user is looking at — the
+           main process has no view of renderer state, so the store hands it
+           over. Only true on this card: the editor being open on a different
+           application says nothing about this one. */
+        .ask({
+          applicationId: id,
+          commentId,
+          openDocument: stRef.current.editorCardId === id ? stRef.current.editorKind : null,
+        })
         .then((res) => {
           if (res.ok) {
             set((s) => {
@@ -534,7 +539,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
               /* A resync during the wait may already have pulled the reply
                  from the database — same row, not a second copy. */
               const others = (s.commentsByApp[id] || []).filter((c) => c.id !== res.comment.id);
-              return { commentsByApp: { ...s.commentsByApp, [id]: [...others, res.comment] } };
+              return {
+                commentsByApp: { ...s.commentsByApp, [id]: [...others, res.comment] },
+                /* Only an entry when there is a set to show — a reply that
+                   answered a question or was refused carries none, and must
+                   read exactly like an ordinary comment (see editStatus). */
+                commentEdits: res.edits.length
+                  ? { ...s.commentEdits, [String(res.comment.id)]: res.edits }
+                  : s.commentEdits,
+              };
             });
           }
           settle(res.ok ? null : res.error);
@@ -1311,18 +1324,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
       set((s) => {
         const attachmentsByComment = { ...s.attachmentsByComment };
         delete attachmentsByComment[String(commentId)];
+        const commentEdits = { ...s.commentEdits };
+        delete commentEdits[String(commentId)];
         return {
           commentsByApp: {
             ...s.commentsByApp,
             [id]: (s.commentsByApp[id] || []).filter((c) => c.id !== commentId),
           },
           attachmentsByComment,
+          commentEdits,
           commentMenu: null,
         };
       });
       persist(db()?.comments.delete(commentId));
     },
     [set],
+  );
+
+  /* The retry icon on a reply that carried an edit set: puts the document(s)
+     back and marks the set undone. */
+  const undoEdits = useCallback(
+    async (applicationId: string, commentId: number): Promise<string | null> => {
+      const res = await window.desktop?.agent.undo(applicationId, commentId);
+      if (!res) return 'Ohne Desktop-Umgebung nicht möglich.';
+      if (!res.ok) return res.error;
+      /* The undo moved files and rewrote rows on the main side; the
+         in-memory view has no way to know what changed, so it re-pulls.
+         `resync` is the store's own name for that — see useResync near the
+         top of the file. */
+      resync();
+      return null;
+    },
+    [resync],
   );
 
   /* ── Profile facts ──────────────────────────────────────────────────────
@@ -1541,6 +1574,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       retryAgentStep,
       stopAgent,
       askKepler,
+      undoEdits,
       deleteCard,
       savePerson,
       deletePerson,
@@ -1598,6 +1632,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       retryAgentStep,
       stopAgent,
       askKepler,
+      undoEdits,
       deleteCard,
       savePerson,
       deletePerson,

@@ -37,6 +37,7 @@ export const initialState = (): AppState => ({
   linksByApp: {},
   commentsByApp: {},
   attachmentsByComment: {},
+  commentEdits: {},
   roundsState: {},
   followupsByApp: {},
   documentsByApp: {},

@@ -8,6 +8,7 @@ import type {
   ApplicationPersonRow,
   ApplicationRow,
   CommentAttachmentRow,
+  CommentEditRow,
   CommentRow,
   CompanyRow,
   DbSnapshot,
@@ -74,6 +75,9 @@ export interface DomainState {
   commentsByApp: Record<string, CommentRow[]>;
   /* Keyed by String(comment id). */
   attachmentsByComment: Record<string, CommentAttachmentRow[]>;
+  /* Keyed by String(comment id); only comments that carry an edit set have an
+     entry. */
+  commentEdits: Record<string, CommentEditRow[]>;
   roundsState: Record<string, RoundView[]>;
   followupsByApp: Record<string, FollowupRow[]>;
   documentsByApp: Record<string, DocumentRow[]>;
@@ -203,6 +207,7 @@ export function indexSnapshot(snap: DbSnapshot, now = new Date()): DomainState {
     linksByApp: groupBy(snap.applicationPeople, (l) => l.application_id),
     commentsByApp: groupBy(snap.comments, (c) => c.application_id),
     attachmentsByComment: groupBy(snap.commentAttachments, (a) => a.comment_id),
+    commentEdits: groupBy(snap.commentEdits, (e) => e.comment_id),
     roundsState,
     followupsByApp: groupBy(snap.followups, (f) => f.application_id),
     documentsByApp: groupBy(snap.documents, (d) => d.application_id),

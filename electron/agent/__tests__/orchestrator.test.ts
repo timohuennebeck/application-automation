@@ -745,6 +745,51 @@ describe('runPipeline', () => {
     expect(repo.load().applicationPeople.filter((l) => l.application_id === appId)).toEqual([]);
   });
 
+  it('names a researched contact in the closing comment, with the profile link', async () => {
+    /* The posting names nobody, so the step goes looking. Linking the person
+       silently means the user never learns that the name in their letter is a
+       guess someone should check. */
+    uploadTemplates();
+    const appId = createApp({ postingText: 'Wir suchen einen Senior Designer …' });
+    const llm = fakeLlm({
+      extraction: () => ({ ...EXTRACTION, people: [] }),
+      contact: () => ({
+        person: {
+          name: 'Maria Haushofer',
+          role: 'Talent Acquisition',
+          email: null,
+          phone: null,
+          linkedin: 'https://linkedin.com/in/mariahaushofer',
+        },
+      }),
+    });
+
+    await runPipeline(appId, createRun(appId), deps({ llm }));
+
+    const text = repo
+      .load()
+      .comments.filter((c) => c.application_id === appId)
+      .at(-1)!.text;
+    expect(text).toContain('Maria Haushofer');
+    expect(text).toContain('https://linkedin.com/in/mariahaushofer');
+    expect(text).toContain('prüf');
+  });
+
+  it('says nothing about a contact the posting named itself', async () => {
+    /* Only a researched name is a guess. One the posting printed is a fact,
+       and reporting it would spend a bullet on nothing. */
+    uploadTemplates();
+    const appId = createApp({ postingText: 'Wir suchen einen Senior Designer …' });
+
+    await runPipeline(appId, createRun(appId), deps());
+
+    const text = repo
+      .load()
+      .comments.filter((c) => c.application_id === appId)
+      .at(-1)!.text;
+    expect(text).not.toContain('Lena Vogt');
+  });
+
   it('fails the template step in German when no CV template was uploaded', async () => {
     const appId = createApp({ postingUrl: 'https://linkedin.com/jobs/1' });
     const runId = createRun(appId);

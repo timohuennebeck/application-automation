@@ -227,6 +227,12 @@ export async function runPipeline(applicationId: string, runId: number, deps: Pi
     const language: DocumentLanguage = app.language ?? DocumentLanguage.DE;
 
     /* ── Contacts: from the listing, else researched ──────────────────── */
+    /* Only a researched contact is worth reporting: one the posting printed
+       is a fact, one Kepler found is a guess the user has to confirm before
+       the letter goes out addressed to them. On a resumed run this stays
+       null — the research happened in an earlier attempt, and the comment
+       reports what this run did, not what an earlier one found. */
+    let researched: ExtractedPerson | null = null;
     if (pending(AgentStepKey.CONTACTS)) {
       start(AgentStepKey.CONTACTS);
       let people = needExtraction().people;
@@ -241,8 +247,10 @@ export async function runPipeline(applicationId: string, runId: number, deps: Pi
           signal,
         });
         /* Researched, not stated in the listing — say so on the person. */
-        if (found)
+        if (found) {
           people = [{ ...found, role: found.role ? found.role + ' (unbestätigt)' : '(unbestätigt)' }];
+          researched = found;
+        }
       }
       alive();
       linkContacts(repo, applicationId, people);
@@ -441,7 +449,7 @@ export async function runPipeline(applicationId: string, runId: number, deps: Pi
       repo.addComment(
         applicationId,
         Author.KEPLER,
-        finalComment(app.posting_url, { claims, tooLong, issues }),
+        finalComment(app.posting_url, { researched, claims, tooLong, issues }),
       );
       repo.addActivity(applicationId, Author.KEPLER, 'hat Firmendetails, Kontakte und Unterlagen ergänzt');
       done(AgentStepKey.COMMENT, true);
@@ -753,10 +761,14 @@ async function generateDocument(
 }
 
 /* Everything the run has to say about what it produced, in the order it
-   matters. A claim the Lebenslauf does not back is the one thing that can
-   cost an interview; a value a few words too long is a blemish; the format
-   check is the long tail. */
+   matters. A researched contact is a guess in the salutation — worth more
+   than any of the rest, because getting it wrong costs the application, not
+   just a sentence. A claim the Lebenslauf does not back is next, then a
+   value a few words too long, then the format check as the long tail. */
 interface Findings {
+  /* Null when the listing named someone itself, or on a resumed run — the
+     research happened in an earlier attempt and is not reconstructed here. */
+  researched: ExtractedPerson | null;
   claims: UnsupportedClaim[];
   /* Keyed by document, the way the pipeline collects it: the same slot can be
      over budget in both documents, and a bullet naming only the slot would not
@@ -782,7 +794,14 @@ function finalComment(postingUrl: string | null, findings: Findings): string {
       (o) => `**${DOCUMENT_LABEL[kind]}**: ${o.slot} ist mit ${o.words} Wörtern zu lang (${o.budget}).`,
     ),
   );
+  const contact = findings.researched
+    ? [
+        `**${findings.researched.name}**${findings.researched.role ? ` (${findings.researched.role})` : ''} ` +
+          `im Web gefunden und eingetragen — bitte prüf sie${findings.researched.linkedin ? `: ${findings.researched.linkedin}` : '.'}`,
+      ]
+    : [];
   const bullets = [
+    ...contact,
     ...findings.claims.map(
       (c) => `**${DOCUMENT_LABEL[c.document]}**: „${c.quote}“ ist nicht belegt — ${c.why}`,
     ),

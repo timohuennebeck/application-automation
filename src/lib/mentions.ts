@@ -108,6 +108,28 @@ export function mentionQuery(value: string, caret: number): MentionQuery | null 
   return { q: q.toLowerCase(), start: at };
 }
 
+/* At most this many rows fit the popover comfortably before it grows past a
+   dropdown. Documents get first claim on up to two of them — Anschreiben and
+   Lebenslauf are the only ones that will ever exist — so a card with three or
+   more linked people (the common case once Kepler has added a recruiter)
+   still leaves the Dokumente group room to show up under a bare "@". */
+const MENTION_ROW_BUDGET = 5;
+const DOCUMENT_ROW_RESERVE = 2;
+
+/* Splits the mentionables matching a query into the two rendered groups,
+   applying the row budget per group rather than to the combined list — see
+   MENTION_ROW_BUDGET above for why. */
+export function selectMentionMatches(
+  candidates: Mentionable[],
+  q: string,
+  budget = MENTION_ROW_BUDGET,
+): { people: Mentionable[]; docs: Mentionable[] } {
+  const matches = candidates.filter((m) => m.name.toLowerCase().startsWith(q));
+  const docs = matches.filter((m) => m.kind === 'document').slice(0, DOCUMENT_ROW_RESERVE);
+  const people = matches.filter((m) => m.kind === 'person').slice(0, budget - docs.length);
+  return { people, docs };
+}
+
 /* Replaces the in-progress query with the chosen name, leaving a trailing space
    and reporting where the caret should land. */
 export function applyMention(

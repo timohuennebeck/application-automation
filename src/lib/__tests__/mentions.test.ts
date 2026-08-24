@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { applyMention, mentionQuery, mentionsKepler, splitMentions } from '../mentions';
+import { applyMention, mentionQuery, mentionsKepler, selectMentionMatches, splitMentions } from '../mentions';
+import type { Mentionable } from '../mentions';
 
 describe('mentionsKepler', () => {
   it('finds the assistant as a whole word anywhere in the text', () => {
@@ -61,5 +62,59 @@ describe('document mentions', () => {
     const parts = splitMentions('mein @Anschreibens', ['Anschreiben']);
 
     expect(parts.every((p) => !p.mention)).toBe(true);
+  });
+});
+
+describe('selectMentionMatches', () => {
+  const person = (name: string): Mentionable => ({
+    key: name,
+    name,
+    role: 'Kontakt',
+    bg: 'var(--c-3f6ea8)',
+    initials: name[0],
+    kind: 'person',
+  });
+  const doc = (name: string): Mentionable => ({
+    key: name,
+    name,
+    role: 'Dokument',
+    bg: 'var(--c-3f6ea8)',
+    initials: name[0],
+    kind: 'document',
+  });
+
+  it('reserves rows for both documents even when five or more people match a bare @', () => {
+    const candidates = [
+      person('Anna Berg'),
+      person('Marek Hübner'),
+      person('Timo'),
+      person('Kepler'),
+      person('Sara Voss'),
+      doc('Anschreiben'),
+      doc('Lebenslauf'),
+    ];
+
+    const { people, docs } = selectMentionMatches(candidates, '');
+
+    expect(docs.map((m) => m.name)).toEqual(['Anschreiben', 'Lebenslauf']);
+    expect(people).toHaveLength(3);
+  });
+
+  it('gives people the full budget when no document matches', () => {
+    const candidates = [person('Anna Berg'), person('Timo'), doc('Anschreiben')];
+
+    const { people, docs } = selectMentionMatches(candidates, 'ti');
+
+    expect(docs).toEqual([]);
+    expect(people.map((m) => m.name)).toEqual(['Timo']);
+  });
+
+  it('narrows both groups by the typed query', () => {
+    const candidates = [person('Anna Berg'), person('Timo'), doc('Anschreiben'), doc('Lebenslauf')];
+
+    const { people, docs } = selectMentionMatches(candidates, 'ans');
+
+    expect(people).toEqual([]);
+    expect(docs.map((m) => m.name)).toEqual(['Anschreiben']);
   });
 });

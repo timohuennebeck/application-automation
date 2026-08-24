@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import type { CSSProperties, KeyboardEvent } from 'react';
-import { applyMention, mentionQuery } from '../lib/mentions';
+import { applyMention, mentionQuery, selectMentionMatches } from '../lib/mentions';
 import type { Mentionable } from '../lib/mentions';
 import { Composer } from './Composer';
 import type { PendingAttachment } from './Composer';
@@ -56,13 +56,11 @@ export function MentionComposer({
   /* The popover is open while the caret sits in an "@query". */
   const query =
     at !== null && boxRef.current ? mentionQuery(value, boxRef.current.selectionStart ?? value.length) : null;
-  const matches = query
-    ? allMentionables.filter((p) => p.name.toLowerCase().startsWith(query.q)).slice(0, 5)
-    : [];
-  const open = !!query && matches.length > 0;
+  const { people, docs } = query
+    ? selectMentionMatches(allMentionables, query.q)
+    : { people: [] as Mentionable[], docs: [] as Mentionable[] };
+  const open = !!query && (people.length > 0 || docs.length > 0);
 
-  const people = matches.filter((m) => m.kind === 'person');
-  const docs = matches.filter((m) => m.kind === 'document');
   /* The arrow keys walk what is rendered, so the flat order has to be the
      rendered order — and a heading must never be a stop on the way. */
   const ordered = [...people, ...docs];

@@ -1356,6 +1356,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const res = await window.desktop?.agent.undo(applicationId, commentId);
       if (!res) return fail('Ohne Desktop-Umgebung nicht möglich.');
       if (!res.ok) return fail(res.error);
+      /* Same shape askKepler's settle() writes on success — a prior refusal
+         sitting in this row must not outlive the attempt that fixed it. */
+      set((s) => ({ keplerAsk: { ...s.keplerAsk, [applicationId]: { pending: false, error: null } } }));
       /* The undo moved files and rewrote rows on the main side; the
          in-memory view has no way to know what changed, so it re-pulls.
          `resync` is the store's own name for that — see useResync near the

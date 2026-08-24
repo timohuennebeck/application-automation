@@ -339,6 +339,10 @@ export async function runPipeline(applicationId: string, runId: number, deps: Pi
     /* Pipeline-scoped like `tooLong` above — empty, not a bug, on a run
        resumed at COMMENT. */
     let claims: UnsupportedClaim[] = [];
+    /* Set when the check itself broke. Without it `claims = []` below reads
+       exactly like "every claim is backed", and the run closes with a clean
+       comment over a letter nobody checked. */
+    let proofsError: string | null = null;
     if (pending(AgentStepKey.PROOFS)) {
       start(AgentStepKey.PROOFS);
       try {
@@ -417,7 +421,10 @@ export async function runPipeline(applicationId: string, runId: number, deps: Pi
            still have to reach the run's outer catch, not be swallowed here. */
         if (err instanceof Deleted || err instanceof Stopped || signal?.aborted) throw err;
         console.error('[agent] Belege-Prüfung fehlgeschlagen', err);
-        claims = [];
+        /* Whatever the first reading already found stays — it is still true
+           of the document on disk, and the second call throwing is no reason
+           to unsay it. */
+        proofsError = userMessage(err);
       }
       done(AgentStepKey.PROOFS, true);
     }
@@ -449,7 +456,7 @@ export async function runPipeline(applicationId: string, runId: number, deps: Pi
       repo.addComment(
         applicationId,
         Author.KEPLER,
-        finalComment(app.posting_url, { researched, claims, tooLong, issues }),
+        finalComment(app.posting_url, { researched, claims, tooLong, issues, proofsError }),
       );
       repo.addActivity(applicationId, Author.KEPLER, 'hat Firmendetails, Kontakte und Unterlagen ergänzt');
       done(AgentStepKey.COMMENT, true);
@@ -584,11 +591,16 @@ function readGeneratedHtml(deps: PipelineDeps, applicationId: string, kind: Docu
   const stored = deps.repo
     .load()
     .documents.find((doc) => doc.application_id === applicationId && doc.kind === kind)?.file_path;
-  if (!stored) return '';
+  /* Not '': the checks below read this to decide whether the document says
+     anything unbacked, and an empty string answers "nothing unbacked" for
+     every question they ask — a clean bill of health over a file nobody
+     looked at. The caller decides what a failed read costs; PROOFS carries
+     it into the comment, VALIDATE fails the step. */
+  if (!stored) throw new KeplerError(`Die Datei zum ${DOCUMENT_LABEL[kind]} fehlt.`);
   try {
     return readFileSync(resolveDocumentPath(deps.userDataPath, stored), 'utf8');
   } catch {
-    return '';
+    throw new KeplerError(`Die Datei zum ${DOCUMENT_LABEL[kind]} ist nicht mehr da.`);
   }
 }
 
@@ -775,6 +787,10 @@ interface Findings {
      say which file to open. */
   tooLong: Map<DocumentKind, OverBudget[]>;
   issues: string[];
+  /* Why the proofs check has nothing to say, when the reason is that it
+     broke rather than that the documents are clean. Outranks every other
+     bullet: "not checked" and "nothing found" must never read alike. */
+  proofsError: string | null;
 }
 
 /* Three bullets. The comment is a note under the card, not a report — a
@@ -801,6 +817,7 @@ function finalComment(postingUrl: string | null, findings: Findings): string {
       ]
     : [];
   const bullets = [
+    ...(findings.proofsError ? [`**Belege**: nicht geprüft — ${findings.proofsError}`] : []),
     ...contact,
     ...findings.claims.map(
       (c) => `**${DOCUMENT_LABEL[c.document]}**: „${c.quote}“ ist nicht belegt — ${c.why}`,
@@ -809,7 +826,14 @@ function finalComment(postingUrl: string | null, findings: Findings): string {
     ...findings.issues,
   ];
   const lines = ['**Fertig** — Firmendetails, Kontakte und Unterlagen sind ergänzt.'];
-  if (bullets.length) lines.push('', ...bullets.slice(0, MAX_BULLETS).map((b) => '• ' + b));
+  const shown = bullets.slice(0, MAX_BULLETS);
+  if (bullets.length) lines.push('', ...shown.map((b) => '• ' + b));
+  /* Three findings is the cap, and it stays the cap — but three presented as
+     all of them is a different claim from three out of five. The remainder is
+     counted on a line of its own rather than spending a bullet a reader could
+     have acted on. */
+  const rest = bullets.length - shown.length;
+  if (rest > 0) lines.push(`(${rest} weitere${rest === 1 ? 'r Hinweis' : ' Hinweise'} nicht aufgeführt.)`);
   lines.push('', postingUrl ? `@Timo Hier bewerben: ${postingUrl}` : '@Timo Die Unterlagen sind bereit.');
   return lines.join('\n');
 }

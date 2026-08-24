@@ -48,6 +48,20 @@ describe('validateExtraction', () => {
     expect(ex.erfahrung).toBeNull();
   });
 
+  it('reads the kind of text the model recognised', () => {
+    expect(validateExtraction({ ...FULL, textKind: 'error_page' }).textKind).toBe('error_page');
+  });
+
+  it('drops a kind outside the closed set', () => {
+    expect(validateExtraction({ ...FULL, textKind: 'werbung' }).textKind).toBeNull();
+  });
+
+  /* Fail open: only a kind the model actually named stops a run. A model that
+     left the field out must not cost the user a scraped listing. */
+  it('leaves the kind null when the model did not say', () => {
+    expect(validateExtraction(FULL).textKind).toBeNull();
+  });
+
   it('tolerates missing fields and drops nameless people', () => {
     const ex = validateExtraction({ people: [{ name: '' }, { role: 'HR' }, { name: ' Jo Peters ' }] });
     expect(ex.role).toBeNull();

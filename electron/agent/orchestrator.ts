@@ -50,6 +50,7 @@ import {
   validateProofs,
   type ExtractedPerson,
   type Extraction,
+  type TextKind,
   type UnsupportedClaim,
 } from './schemas.ts';
 
@@ -202,6 +203,16 @@ export async function runPipeline(applicationId: string, runId: number, deps: Pi
         timeoutMs: SINGLE_CALL_TIMEOUT,
         signal,
       });
+      /* Before anything is written: the scrape only checks length, so a
+         cookie banner or an error page gets this far — and on the pasted-text
+         path it never ran at all. Extracting either would rename the company,
+         overwrite the card and generate two documents out of nothing, all of
+         which the user would have to undo by hand. */
+      if (extraction.textKind && extraction.textKind !== 'posting') {
+        throw new KeplerError(
+          `Der hinterlegte Text sieht nach ${TEXT_KIND_LABEL[extraction.textKind]} aus, nicht nach einer Stellenanzeige. Bitte prüf den Link oder füge den Text der Anzeige ein.`,
+        );
+      }
       alive();
       applyExtraction(repo, applicationId, app, company, extraction);
       ({ application: app, company } = alive());
@@ -579,6 +590,9 @@ function extractionFromDb(repo: Repo, applicationId: string): Extraction {
     erfahrung: fact('Erfahrung'),
     language: ctx.application.language,
     people: [],
+    /* The step that asks this question is already DONE on a resumed run — it
+       answered once, and the card exists because of it. */
+    textKind: 'posting',
   };
 }
 
@@ -603,6 +617,16 @@ function readGeneratedHtml(deps: PipelineDeps, applicationId: string, kind: Docu
     throw new KeplerError(`Die Datei zum ${DOCUMENT_LABEL[kind]} ist nicht mehr da.`);
   }
 }
+
+/* What the run says it found instead, in the case the sentence needs. Typed
+   without 'posting': that kind never reaches the message, and saying so here
+   means the compiler agrees rather than a comment claiming it. */
+const TEXT_KIND_LABEL: Record<Exclude<TextKind, 'posting'>, string> = {
+  cookie_notice: 'einem Cookie-Hinweis',
+  error_page: 'einer Fehlerseite',
+  login_wall: 'einer Anmeldeseite',
+  other: 'etwas anderem',
+};
 
 /* The German adjective in the message that names an empty side. */
 const LANGUAGE_ADJECTIVE: Record<DocumentLanguage, string> = {

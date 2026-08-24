@@ -42,6 +42,12 @@ export interface Extraction {
      slots the run reads, unless the card already says. Null when unclear. */
   language: DocumentLanguage | null;
   people: ExtractedPerson[];
+  /* What the text the run was handed turned out to be. A cookie banner or a
+     404 clears the scrape's length check and would otherwise be extracted into
+     a confident card built out of nothing — and on the pasted-text path the
+     scrape never runs at all, so this is the only place it can be caught.
+     Null when the model would not commit; the run then goes on. */
+  textKind: TextKind | null;
 }
 
 /* One claim in a generated document that nothing in the Lebenslauf or the
@@ -63,6 +69,14 @@ export const MAX_UNSUPPORTED = 5;
 const nullable = (schema: Record<string, unknown>) => ({ anyOf: [schema, { type: 'null' }] });
 const nullableString = nullable({ type: 'string' });
 const nullableEnum = (values: string[]) => nullable({ type: 'string', enum: values });
+
+/* What the handed-over text is, as the model may name it. A closed set rather
+   than free text: the answer reaches the user inside a German sentence, and a
+   model inventing its own wording there would write half of that sentence.
+   The model only observes — what follows from a kind is orchestrator.ts's
+   decision, which is why nothing here is called "blocked" or "rejected". */
+export const TEXT_KINDS = ['posting', 'cookie_notice', 'error_page', 'login_wall', 'other'] as const;
+export type TextKind = (typeof TEXT_KINDS)[number];
 
 const PERSON_PROPS = {
   name: { type: 'string' },
@@ -104,8 +118,19 @@ export const EXTRACTION_SCHEMA = {
         required: ['name'],
       },
     },
+    textKind: nullableEnum([...TEXT_KINDS]),
   },
-  required: ['role', 'summary', 'company', 'standort', 'gehalt', 'erfahrung', 'language', 'people'],
+  required: [
+    'role',
+    'summary',
+    'company',
+    'standort',
+    'gehalt',
+    'erfahrung',
+    'language',
+    'people',
+    'textKind',
+  ],
 } as const;
 
 export const CONTACT_SCHEMA = {
@@ -289,6 +314,10 @@ export function validateExtraction(x: unknown): Extraction {
     erfahrung: oneOf(r.erfahrung, FACT_OPTIONS.Erfahrung),
     language: oneOf(r.language, Object.values(DocumentLanguage)) as DocumentLanguage | null,
     people,
+    /* Fail open: only a kind the model actually named stops the run. Anything
+       outside the closed set is nulled like every other enum here, so a
+       misspelling costs the user nothing. */
+    textKind: oneOf(r.textKind, [...TEXT_KINDS]) as TextKind | null,
   };
 }
 

@@ -40,6 +40,7 @@ const DOC_INPUT: DocumentInput = {
     erfahrung: '5–8',
     language: DocumentLanguage.DE,
     people: [],
+    textKind: 'posting',
   },
   language: DocumentLanguage.DE,
   profileFacts: ['Umzug nach München geplant'],

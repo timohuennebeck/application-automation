@@ -136,6 +136,42 @@ function deps(over: Partial<PipelineDeps> = {}): PipelineDeps {
 }
 
 describe('runPipeline', () => {
+  /* The scrape only measures length, so a cookie banner or a login wall
+     reaches the extraction. Stopping there costs one call; going on would
+     build a whole card and two documents out of nothing. */
+  it('stops the run when the extraction recognised something other than a posting', async () => {
+    uploadTemplates();
+    const appId = createApp({ postingText: 'Wir verwenden Cookies, um Inhalte zu personalisieren.' });
+    const runId = createRun(appId);
+    await runPipeline(
+      appId,
+      runId,
+      deps({ llm: fakeLlm({ extraction: () => ({ ...EXTRACTION, textKind: 'cookie_notice' }) }) }),
+    );
+
+    expect(runs.getRun(runId).status).toBe(AgentRunStatus.FAILED);
+    const failed = runs.stepsFor(runId).find((s) => s.status === AgentStepStatus.ERROR)!;
+    expect(failed.key).toBe(AgentStepKey.EXTRACT);
+    expect(repo.load().documents.filter((d) => d.application_id === appId && d.file_path)).toEqual([]);
+  });
+
+  /* The message names what the text looked like — "eine Fehlerseite" tells the
+     user to check the link, "ein Cookie-Hinweis" tells them the page never
+     loaded properly. One sentence apart, two different repairs. */
+  it('says in the error which kind of text it found', async () => {
+    uploadTemplates();
+    const appId = createApp({ postingText: '404 — Seite nicht gefunden' });
+    const runId = createRun(appId);
+    await runPipeline(
+      appId,
+      runId,
+      deps({ llm: fakeLlm({ extraction: () => ({ ...EXTRACTION, textKind: 'error_page' }) }) }),
+    );
+
+    const failed = runs.stepsFor(runId).find((s) => s.status === AgentStepStatus.ERROR)!;
+    expect(failed.error).toMatch(/Fehlerseite/);
+  });
+
   it('generates from the selected Fassung of each slot and records its label', async () => {
     uploadTemplates(['lebenslauf', 'anschreiben']);
     uploadTemplates(['lebenslauf'], 'Kurz'); // marks "Kurz" for the CV slot only

@@ -52,6 +52,7 @@ Regeln:
 - erfahrung: geforderte Berufserfahrung in Jahren, eingeordnet in die vorgegebenen Stufen.
 - people: alle in der Anzeige namentlich genannten Ansprechpersonen (Recruiter, Hiring Manager) mit dem, was dasteht.
 - language: die Sprache, in der die Anzeige überwiegend geschrieben ist — "de" oder "en". Eine deutsche Anzeige mit englischen Fachbegriffen oder englischem Titel ist "de"; null nur bei einer anderen Sprache.
+- textKind: was der Text überhaupt ist — "posting" für eine Stellenanzeige, "cookie_notice" für einen Cookie-Hinweis, "error_page" für eine Fehlerseite, "login_wall" für eine Anmeldeseite, "other" für alles andere (Artikel, Startseite, leere Seite). Null nur, wenn du dich nicht entscheiden kannst.
 - Unbekanntes ist null, niemals ein Platzhalter.
 
 <anzeige>

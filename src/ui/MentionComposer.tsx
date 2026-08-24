@@ -5,7 +5,18 @@ import type { Mentionable } from '../lib/mentions';
 import { Composer } from './Composer';
 import type { PendingAttachment } from './Composer';
 import { MenuItem } from './MenuItem';
-import { Avatar } from './icons';
+import { Avatar, DocFormat, DocGlyph } from './icons';
+
+/* Small caps, no rule line: the heading names a group, it does not draw a
+   border between two lists. */
+const GROUP_LABEL: CSSProperties = {
+  fontSize: 10,
+  letterSpacing: '0.06em',
+  textTransform: 'uppercase',
+  color: 'var(--c-b3b0a8)',
+  fontWeight: 600,
+  padding: '7px 7px 3px',
+};
 
 /* A Composer with @-mention autocomplete. The query state is local, so every
    thread on the page (the card comments and each interview's notes) runs its
@@ -14,7 +25,7 @@ export function MentionComposer({
   value,
   onChange,
   onSend,
-  people,
+  people: allMentionables,
   placeholder,
   onKeyDown,
   popoverWidth = 290,
@@ -45,8 +56,20 @@ export function MentionComposer({
   /* The popover is open while the caret sits in an "@query". */
   const query =
     at !== null && boxRef.current ? mentionQuery(value, boxRef.current.selectionStart ?? value.length) : null;
-  const matches = query ? people.filter((p) => p.name.toLowerCase().startsWith(query.q)).slice(0, 5) : [];
+  const matches = query
+    ? allMentionables.filter((p) => p.name.toLowerCase().startsWith(query.q)).slice(0, 5)
+    : [];
   const open = !!query && matches.length > 0;
+
+  const people = matches.filter((m) => m.kind === 'person');
+  const docs = matches.filter((m) => m.kind === 'document');
+  /* The arrow keys walk what is rendered, so the flat order has to be the
+     rendered order — and a heading must never be a stop on the way. */
+  const ordered = [...people, ...docs];
+  /* Headings only earn their place when there are two groups to tell apart.
+     By the second keystroke the query is usually down to one, and a heading
+     over a single row is decoration. */
+  const grouped = people.length > 0 && docs.length > 0;
 
   const sync = (next: string) => {
     const q = mentionQuery(next, boxRef.current?.selectionStart ?? next.length);
@@ -74,12 +97,12 @@ export function MentionComposer({
     if (open) {
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         e.preventDefault();
-        setIx((i) => (i + (e.key === 'ArrowDown' ? 1 : -1) + matches.length) % matches.length);
+        setIx((i) => (i + (e.key === 'ArrowDown' ? 1 : -1) + ordered.length) % ordered.length);
         return;
       }
       if (e.key === 'Enter' || e.key === 'Tab') {
         e.preventDefault();
-        pick(matches[ix % matches.length].name);
+        pick(ordered[ix % ordered.length].name);
         return;
       }
       if (e.key === 'Escape') {
@@ -108,6 +131,42 @@ export function MentionComposer({
     gap: 1,
   };
 
+  const row = (m: Mentionable) => (
+    <MenuItem
+      key={m.key}
+      selected={ordered.indexOf(m) === ix % ordered.length}
+      hideCheck
+      // mousedown, not click: the textarea must not blur first.
+      onMouseDown={() => pick(m.name)}
+    >
+      {m.kind === 'document' ? (
+        /* A round avatar means "human" everywhere in this app, so a document
+           takes the same page glyph its card carries. */
+        <span style={{ display: 'flex', width: 20, justifyContent: 'center', flexShrink: 0 }}>
+          <DocGlyph format={DocFormat.HTML} width={17} height={21} />
+        </span>
+      ) : (
+        <Avatar bg={m.bg} size={20} fontSize={8.5}>
+          {m.initials}
+        </Avatar>
+      )}
+      <span style={{ whiteSpace: 'nowrap' }}>{m.name}</span>
+      <span
+        style={{
+          fontSize: 11.5,
+          color: 'var(--c-a5a29a)',
+          marginLeft: 'auto',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          maxWidth: '50%',
+        }}
+      >
+        {m.role}
+      </span>
+    </MenuItem>
+  );
+
   return (
     <Composer
       ref={boxRef}
@@ -123,33 +182,10 @@ export function MentionComposer({
     >
       {open && (
         <div data-dd="1" style={popStyle}>
-          {matches.map((m, i) => (
-            <MenuItem
-              key={m.key}
-              selected={i === ix % matches.length}
-              hideCheck
-              // mousedown, not click: the textarea must not blur first.
-              onMouseDown={() => pick(m.name)}
-            >
-              <Avatar bg={m.bg} size={20} fontSize={8.5}>
-                {m.initials}
-              </Avatar>
-              <span style={{ whiteSpace: 'nowrap' }}>{m.name}</span>
-              <span
-                style={{
-                  fontSize: 11.5,
-                  color: 'var(--c-a5a29a)',
-                  marginLeft: 'auto',
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  maxWidth: '50%',
-                }}
-              >
-                {m.role}
-              </span>
-            </MenuItem>
-          ))}
+          {grouped && <div style={GROUP_LABEL}>Personen</div>}
+          {people.map((m) => row(m))}
+          {grouped && <div style={GROUP_LABEL}>Dokumente</div>}
+          {docs.map((m) => row(m))}
         </div>
       )}
     </Composer>

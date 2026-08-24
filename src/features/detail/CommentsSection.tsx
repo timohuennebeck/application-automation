@@ -1,7 +1,9 @@
 import type { ReactNode } from 'react';
 import { KEPLER_ENTRY, USER_ENTRY } from '../../lib/mentions';
+import type { Mentionable } from '../../lib/mentions';
 import { Author, AUTHOR_LABEL } from '../../shared/enums';
 import { relTime } from '../../state/db-view';
+import { documentEntries } from '../../state/selectors';
 import { useApp } from '../../state/store-context';
 import { MentionComposer } from '../../ui/MentionComposer';
 import { MentionText } from '../../ui/MentionText';
@@ -54,8 +56,14 @@ export function CommentsSection({ cardId }: { cardId: string }) {
     peopleForCard,
   } = useApp();
 
-  // Kepler is always mentionable; everyone attached to this card as well.
-  const mentionable = [KEPLER_ENTRY, USER_ENTRY, ...peopleForCard(cardId)];
+  // Kepler is always mentionable; everyone attached to this card, plus its
+  // generated documents, as well.
+  const mentionable: Mentionable[] = [
+    KEPLER_ENTRY,
+    USER_ENTRY,
+    ...peopleForCard(cardId).map((p) => ({ ...p, kind: 'person' as const })),
+    ...documentEntries(st, cardId),
+  ];
   const names = mentionable.map((p) => p.name);
 
   const comments = st.commentsByApp[cardId] || [];

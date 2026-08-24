@@ -2,6 +2,7 @@
    being typed, inserting a pick, and splitting stored text back into plain runs
    and mention chips. */
 import { Author, AUTHOR_LABEL } from '../shared/enums';
+import type { DocumentKind } from '../shared/enums';
 
 /* The name Kepler is mentioned by — the same one its comments are signed with. */
 export const KEPLER_NAME = AUTHOR_LABEL[Author.KEPLER];
@@ -15,12 +16,20 @@ export function mentionsKepler(text: string): boolean {
   return KEPLER_MENTION.test(text);
 }
 
+/* What a mention stands for. A person gets a round avatar, which in this app
+   means "human" everywhere — so a document may not have one, and the picker
+   and the comment text both branch on this. */
+export type MentionKind = 'person' | 'document';
+
 export interface Mentionable {
   key: string;
   name: string;
   role: string;
   bg: string;
   initials: string;
+  kind: MentionKind;
+  /* Set for a document mention; the chip needs it to open the file. */
+  document?: DocumentKind;
 }
 
 /* The assistant is mentionable in every thread, alongside the card's people. */
@@ -30,6 +39,7 @@ export const KEPLER_ENTRY: Mentionable = {
   role: 'KI-Assistent',
   bg: 'var(--c-1b1a17)',
   initials: 'K',
+  kind: 'person',
 };
 
 /* The app's user — who Kepler addresses in its reports ("@Timo …"), and the
@@ -40,6 +50,7 @@ export const USER_ENTRY: Mentionable = {
   role: 'Du',
   bg: 'var(--c-3f6ea8)',
   initials: 'T',
+  kind: 'person',
 };
 
 export interface TextPart {

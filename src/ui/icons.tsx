@@ -210,11 +210,24 @@ const DOC_INK: Record<DocFormat, string> = {
   [DocFormat.EMPTY]: 'var(--c-c9c5bb)',
 };
 
-export function DocGlyph({ format = DocFormat.PDF }: { format?: DocFormat }) {
+export function DocGlyph({
+  format = DocFormat.PDF,
+  width = 26,
+  height = 32,
+}: {
+  format?: DocFormat;
+  width?: number;
+  height?: number;
+}) {
   const empty = format === DocFormat.EMPTY;
   const paper = empty ? 'var(--c-e0ded8)' : 'var(--c-d5d1c7)';
   return (
-    <svg width={26} height={32} viewBox="0 0 26 32" style={{ flexShrink: 0, opacity: empty ? 0.6 : 1 }}>
+    <svg
+      width={width}
+      height={height}
+      viewBox="0 0 26 32"
+      style={{ flexShrink: 0, opacity: empty ? 0.6 : 1 }}
+    >
       <path
         d="M3 4 a2 2 0 0 1 2-2 h11 l7 7 v19 a2 2 0 0 1-2 2 H5 a2 2 0 0 1-2-2 Z"
         fill="var(--c-f6f5f1)"

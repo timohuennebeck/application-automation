@@ -47,3 +47,19 @@ describe('mentionQuery / applyMention', () => {
     expect(mentionQuery('@Ke\nx', 5)).toBeNull();
   });
 });
+
+describe('document mentions', () => {
+  it('splits a document mention out of the text like a person’s', () => {
+    const parts = splitMentions('trag sie ins @Anschreiben ein', ['Kepler', 'Anschreiben']);
+
+    expect(parts.map((p) => p.t)).toEqual(['trag sie ins ', '@Anschreiben', ' ein']);
+    expect(parts[1].mention).toBe(true);
+  });
+
+  it('does not take @Anschreibens for the document', () => {
+    /* Same word rule the assistant's own mention uses. */
+    const parts = splitMentions('mein @Anschreibens', ['Anschreiben']);
+
+    expect(parts.every((p) => !p.mention)).toBe(true);
+  });
+});

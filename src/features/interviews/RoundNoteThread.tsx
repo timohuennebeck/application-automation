@@ -28,12 +28,17 @@ export function RoundNoteThread({
   cardId: string;
   ri: number;
   notes: RoundNote[];
-  people: Mentionable[];
+  /* peopleForCard doesn't tag its rows with a mention kind — this thread only
+     ever mentions people, so it is filled in here rather than upstream. */
+  people: Omit<Mentionable, 'kind'>[];
 }) {
   const { addRoundNote } = useApp();
   const [note, setNote] = useState('');
 
-  const mentionable = [KEPLER_ENTRY, ...people];
+  const mentionable: Mentionable[] = [
+    KEPLER_ENTRY,
+    ...people.map((p) => ({ ...p, kind: 'person' as const })),
+  ];
   const mentionNames = mentionable.map((p) => p.name);
 
   const send = () => {

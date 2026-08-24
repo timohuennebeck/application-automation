@@ -16,6 +16,7 @@ import { DOCUMENT_STEMS } from '../shared/applicant';
 import type { DocumentRow } from '../shared/db-types';
 import type { AgentRunView } from './db-view';
 import { MON_DE3, DOW_DE, dateToISO, dayDiff, todayISO } from '../lib/date';
+import type { Mentionable } from '../lib/mentions';
 import { parseSalary } from '../lib/salary';
 import type { AppState } from './store-context';
 
@@ -45,6 +46,27 @@ export function documentLanguageOf(st: AppState, id: string, kind: DocumentKind)
   const stem = stored?.slice(stored.lastIndexOf('/') + 1).replace(/\.[^.]+$/, '');
   const match = Object.values(DocumentLanguage).find((l) => DOCUMENT_STEMS[l][template] === stem);
   return match ?? languageOf(st, id);
+}
+
+/* The card's two generated documents as mention entries — only the ones that
+   actually have a file, since a mention of a document that was never
+   generated would offer Kepler nothing to read. */
+export function documentEntries(st: AppState, cardId: string): Mentionable[] {
+  const titles: [DocumentKind, string][] = [
+    [DocumentKind.COVER_LETTER, 'Anschreiben'],
+    [DocumentKind.LEBENSLAUF, 'Lebenslauf'],
+  ];
+  return titles
+    .filter(([kind]) => !!documentFor(st, cardId, kind)?.file_path)
+    .map(([kind, name]) => ({
+      key: 'doc:' + kind,
+      name,
+      role: 'Dokument',
+      bg: 'var(--c-f1efe9)',
+      initials: '',
+      kind: 'document' as const,
+      document: kind,
+    }));
 }
 
 /* The card's latest Kepler run, whatever state it ended in. */

@@ -30,7 +30,7 @@ import {
   templateVersionPath,
   listTemplateVersions,
 } from './files.ts';
-import { renderPdf } from './pdf.ts';
+import { queuePdfRender, renderPdf } from './pdf.ts';
 import type { DocumentUpload } from '../src/shared/domain.ts';
 import type { DocumentKind, DocumentLanguage, TemplateKind } from '../src/shared/enums.ts';
 
@@ -153,21 +153,6 @@ ipcMain.handle('documents:pick', async (_e, title: string, type: string) => {
   if (picked) pickedDocumentSources.add(picked);
   return picked;
 });
-
-/* One render per PDF at a time: two hidden Chromium prints must not race onto
-   the same file — the loser's cleanup would delete what the winner just wrote.
-   Later work queues behind the render already running. */
-const pdfRenders = new Map<string, Promise<void>>();
-
-function queuePdfRender(pdfPath: string, work: () => Promise<void>): Promise<void> {
-  const render = (pdfRenders.get(pdfPath) ?? Promise.resolve())
-    .catch(() => {}) /* the earlier caller already reported its own failure */
-    .then(work);
-  pdfRenders.set(pdfPath, render);
-  return render.finally(() => {
-    if (pdfRenders.get(pdfPath) === render) pdfRenders.delete(pdfPath);
-  });
-}
 
 /* Renders the PDF beside a document's HTML and reports rather than throws: the
    HTML is already stored, and losing it because Chromium could not print would

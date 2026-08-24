@@ -6,7 +6,10 @@ import { ipcMain } from 'electron';
 import type { BrowserWindow } from 'electron';
 import type { DatabaseSync } from 'node:sqlite';
 import type { Repo } from '../db/repo.ts';
-import { renderPdf } from '../pdf.ts';
+/* Queued, not the bare renderPdf: Kepler writes the same <document>.pdf the
+   editor's save and the template export write, and the queue is what keeps
+   two prints off one path. */
+import { renderPdfQueued } from '../pdf.ts';
 import type {
   AgentEvent,
   AskRequest,
@@ -65,7 +68,7 @@ export function registerAgentIpc(
         userDataPath,
         scrape: fetchListingText,
         llm: createLlmRunner(sdkInvoke()),
-        renderPdf,
+        renderPdf: renderPdfQueued,
         emit,
       }),
   });
@@ -84,7 +87,7 @@ export function registerAgentIpc(
     repo,
     runs,
     userDataPath,
-    renderPdf,
+    renderPdf: renderPdfQueued,
     llm: createLlmRunner(sdkInvoke()),
   });
 

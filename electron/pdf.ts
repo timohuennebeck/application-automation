@@ -54,3 +54,29 @@ export async function renderPdf(htmlPath: string, pdfPath: string): Promise<void
     win.destroy();
   }
 }
+
+/* One render per PDF at a time: two hidden Chromium prints must not race onto
+   the same file — the loser's cleanup would delete what the winner just wrote.
+   Later work queues behind the render already running.
+
+   It lives here rather than in main.ts because every writer has to share one
+   queue for it to mean anything, and Kepler is a writer too: an agent run, an
+   answer that carries edits, and the editor's debounced save all print the
+   same <document>.pdf. A queue only one of them goes through is not a queue. */
+const pdfRenders = new Map<string, Promise<void>>();
+
+export function queuePdfRender(pdfPath: string, work: () => Promise<void>): Promise<void> {
+  const render = (pdfRenders.get(pdfPath) ?? Promise.resolve())
+    .catch(() => {}) /* the earlier caller already reported its own failure */
+    .then(work);
+  pdfRenders.set(pdfPath, render);
+  return render.finally(() => {
+    if (pdfRenders.get(pdfPath) === render) pdfRenders.delete(pdfPath);
+  });
+}
+
+/* renderPdf's signature, queued — what every caller that has nothing to do
+   inside the slot but print should use. */
+export function renderPdfQueued(htmlPath: string, pdfPath: string): Promise<void> {
+  return queuePdfRender(pdfPath, () => renderPdf(htmlPath, pdfPath));
+}

@@ -469,7 +469,7 @@ describe('a comment that mentions a document', () => {
       .documents.find((d) => d.application_id === appId && d.kind === DocumentKind.COVER_LETTER)!;
     repo.setDocumentFile(row.id, htmlRel, null, 'Standard');
     const first = addComment(appId, '@Kepler ändere das @Anschreiben');
-    const second = addComment(appId, '@Kepler nochmal, bitte');
+    const second = addComment(appId, '@Kepler nochmal das @Anschreiben, bitte');
 
     const a = service.ask({ applicationId: appId, commentId: first.id, openDocument: null });
     const b = service.ask({ applicationId: appId, commentId: second.id, openDocument: null });
@@ -620,6 +620,72 @@ describe('a comment that mentions a document', () => {
     expect(llm.mock.calls[0][0].prompt).not.toContain('Engineering Hiring Team');
   });
 
+  it('does not write a document the comment never mentioned', async () => {
+    /* The schema lets the model name either document whatever it was handed,
+       so a stray edit is one written against bytes Kepler never read — and
+       the open-editor refusal consults the mention list, so nothing else
+       would have stopped it landing under the user's cursor. */
+    const letterOriginal = '<p>Sehr geehrtes Engineering Hiring Team,</p>';
+    const { service, repo, appId } = fixture({
+      answer: {
+        antwort: 'Beides geändert.',
+        edits: [
+          {
+            document: 'LEBENSLAUF',
+            kind: 'replace',
+            find: 'Engineering Hiring Team',
+            replace: 'Frau Maria Haushofer',
+            after: null,
+          },
+        ],
+      },
+    });
+    writeLetter(appId, letterOriginal);
+    writeCv(appId, letterOriginal);
+    const comment = addComment(appId, '@Kepler ändere die Anrede im @Anschreiben');
+
+    const res = await service.ask({ applicationId: appId, commentId: comment.id, openDocument: null });
+
+    expect(res.ok).toBe(true);
+    expect(readCv(appId)).toBe(letterOriginal);
+    expect(readLetter(appId)).toBe(letterOriginal);
+    /* And the reply says a change went missing rather than reading as a
+       clean success over the prose that promised it. */
+    if (res.ok) expect(res.comment.text).toContain('nicht erwähnten Dokument');
+    expect(repo.commentEdits(res.ok ? res.comment.id : 0)).toHaveLength(0);
+  });
+
+  it('refuses the whole set when the editor holds a document the set would write', async () => {
+    /* The mention list gates the refusal, so the filter above is what keeps
+       the two in step: an edit that survives it is one the guard saw. */
+    const letterOriginal = '<p>Sehr geehrtes Engineering Hiring Team,</p>';
+    const { service, appId } = fixture({
+      answer: {
+        antwort: 'Geändert.',
+        edits: [
+          {
+            document: 'COVER_LETTER',
+            kind: 'replace',
+            find: 'Engineering Hiring Team',
+            replace: 'Frau Maria Haushofer',
+            after: null,
+          },
+        ],
+      },
+    });
+    writeLetter(appId, letterOriginal);
+    const comment = addComment(appId, '@Kepler ändere die Anrede im @Anschreiben');
+
+    const res = await service.ask({
+      applicationId: appId,
+      commentId: comment.id,
+      openDocument: DocumentKind.COVER_LETTER,
+    });
+
+    expect(res.ok).toBe(false);
+    expect(readLetter(appId)).toBe(letterOriginal);
+  });
+
   it('says so when a deletion had to be dropped for having no anchor', async () => {
     /* The model named a real passage but no `after` — validateAsk refuses it
        before applyEdits ever sees it, since an unanchored delete could never
@@ -767,7 +833,7 @@ describe('undo', () => {
     /* A second ask, held open by a deferred llm response, builds on that
        edit's result; undo() is queued right behind it. */
     let release!: (v: unknown) => void;
-    const secondComment = addComment(appId, '@Kepler mach daraus eine Doktorin');
+    const secondComment = addComment(appId, '@Kepler mach daraus im @Anschreiben eine Doktorin');
     const svc = createAskService({
       repo,
       runs,

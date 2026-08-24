@@ -67,6 +67,10 @@ export interface AskRequest {
 export type AskResult =
   /* The reply, already written into the thread as a Kepler comment, and the
      edit set it placed — empty when the answer changed nothing. */
-  | { ok: true; comment: CommentRow; edits: CommentEditRow[] }
+  /* `pdfError`: the change itself stands, but Chromium could not re-print
+     the PDF beside it. An undo posts no comment of its own, so this is the
+     only way that half reaches the thread — the forward direction appends
+     the same sentence to the reply's prose instead. */
+  | { ok: true; comment: CommentRow; edits: CommentEditRow[]; pdfError?: string | null }
   /* German reason — shown in the thread as-is. */
   | { ok: false; error: string };

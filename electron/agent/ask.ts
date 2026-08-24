@@ -93,6 +93,10 @@ function fromRows(rows: CommentEditRow[]): DocumentEdit[] {
 function displayReason(failed: DocumentEdit, reason: string | null): string | null {
   if (!reason) return reason;
   const raw = needle(failed);
+  /* String.replace with an empty pattern inserts at index 0 rather than
+     matching nothing, so an edit whose needle is empty would prefix the
+     sentence with the placeholder instead of substituting inside it. */
+  if (!raw) return reason;
   return reason.replace(raw, stripMarkup(raw) || '(kein Text)');
 }
 
@@ -214,11 +218,12 @@ export function createAskService({ repo, runs, llm, userDataPath, renderPdf }: A
        table again to find at most two rows. */
     rows: DocumentRow[],
     edits: DocumentEdit[],
-  ): Promise<{ error: string | null }> => {
+  ): Promise<{ error: string | null; pdfError: string | null }> => {
     const planned: { row: DocumentRow; html: string }[] = [];
     for (const kind of new Set(edits.map((e) => e.document))) {
       const row = rows.find((d) => d.kind === kind);
-      if (!row?.file_path) return { error: `Für ${DOCUMENT_MENTION[kind]} gibt es keine Datei.` };
+      if (!row?.file_path)
+        return { error: `Für ${DOCUMENT_MENTION[kind]} gibt es keine Datei.`, pdfError: null };
       let html: string;
       try {
         html = readFileSync(resolveDocumentPath(userDataPath, row.file_path), 'utf8');
@@ -226,7 +231,7 @@ export function createAskService({ repo, runs, llm, userDataPath, renderPdf }: A
         /* The row points at a file that is gone or moved — a German reason
            the caller can post, not a throw that would reject the whole
            service call (and, for ask(), poison the chain behind it). */
-        return { error: `Die Datei zu ${DOCUMENT_MENTION[kind]} ist nicht mehr da.` };
+        return { error: `Die Datei zu ${DOCUMENT_MENTION[kind]} ist nicht mehr da.`, pdfError: null };
       }
       const res = applyEdits(
         html,
@@ -234,7 +239,7 @@ export function createAskService({ repo, runs, llm, userDataPath, renderPdf }: A
       );
       /* All or nothing across every document, not just within one: the
          request was one request. */
-      if (res.failed) return { error: displayReason(res.failed, res.reason) };
+      if (res.failed) return { error: displayReason(res.failed, res.reason), pdfError: null };
       planned.push({ row, html: res.html });
     }
     /* Every file is written beside its target first, and only once all of them
@@ -268,6 +273,10 @@ export function createAskService({ repo, runs, llm, userDataPath, renderPdf }: A
       for (const tmp of tmpPaths) rmSync(tmp, { force: true });
       throw err;
     }
+    /* The documents are on disk by now, so a print that fails can no longer
+       call the change off — it is reported on top of the change rather than
+       instead of it, the same trade documents:save makes in main.ts. */
+    const pdfFailed: DocumentKind[] = [];
     for (const { row, abs } of staged) {
       const pdfAbs = abs.replace(/\.html?$/i, '.pdf');
       /* Mirrors generateDocument in orchestrator.ts for the same failure:
@@ -282,10 +291,16 @@ export function createAskService({ repo, runs, llm, userDataPath, renderPdf }: A
         console.error('[agent] PDF-Export nach Änderung fehlgeschlagen', err);
         rmSync(pdfAbs, { force: true });
         storedPdf = null;
+        pdfFailed.push(row.kind);
       }
       repo.setDocumentFile(row.id, row.file_path!, storedPdf, row.template_label);
     }
-    return { error: null };
+    return {
+      error: null,
+      pdfError: pdfFailed.length
+        ? `Das PDF zu ${pdfFailed.map((k) => DOCUMENT_MENTION[k]).join(' und ')} ließ sich nicht neu erzeugen.`
+        : null,
+    };
   };
 
   const answer = async (req: AskRequest): Promise<AskResult> => {
@@ -310,19 +325,30 @@ export function createAskService({ repo, runs, llm, userDataPath, renderPdf }: A
     }
 
     const documents: AskDocument[] = [];
+    /* A document the comment named that could not be read. Dropping it from
+       the prompt is right — Kepler must not quote bytes it never saw — but
+       dropping it silently is not: with no document in the prompt the model
+       is never told there was one to change, answers in prose, and the reply
+       reads as an ordinary success over a file nobody touched. */
+    const unreadable: DocumentKind[] = [];
     for (const kind of mentioned) {
       const row = snap.documents.find((d) => d.application_id === req.applicationId && d.kind === kind);
-      if (!row?.file_path) continue;
+      if (!row?.file_path) {
+        unreadable.push(kind);
+        continue;
+      }
       try {
         const html = readFileSync(resolveDocumentPath(userDataPath, row.file_path), 'utf8');
         /* Markup, not the flattened text the other prompts read: what Kepler
            quotes from here is looked for in exactly these bytes. */
         documents.push({ kind, text: documentMarkup(html) });
       } catch {
-        /* Same as no file: the row's path is stale, so the mention is
-           dropped rather than the whole answer failing over it. */
+        unreadable.push(kind);
       }
     }
+    const missingReason = unreadable.length
+      ? `Die Datei zu ${unreadable.map((k) => DOCUMENT_MENTION[k]).join(' und ')} ist nicht mehr da.`
+      : null;
 
     const controller = new AbortController();
     inFlight.set(req.applicationId, controller);
@@ -343,8 +369,18 @@ export function createAskService({ repo, runs, llm, userDataPath, renderPdf }: A
          unanchored deletion, refused before it ever reached applyEdits. That
          reason is appended right away, same as a refusal from writeGroups
          below: either way the thread has to say why something is missing. */
-      const prose = reply.droppedReason ? `${reply.antwort}\n\n${reply.droppedReason}` : reply.antwort;
-      if (!reply.edits.length) {
+      /* Only what the comment actually named may be written. The schema lets
+         the model address either document regardless of which one it was
+         handed, so an edit naming the other one is an edit against bytes it
+         never read — and the open-editor refusal above consulted `mentioned`,
+         so nothing would have stopped it landing under the user's cursor. */
+      const edits = reply.edits.filter((e) => mentioned.includes(e.document));
+      const strayed =
+        reply.edits.length - edits.length
+          ? 'Eine Änderung an einem nicht erwähnten Dokument wurde übersprungen.'
+          : null;
+      const prose = [reply.antwort, reply.droppedReason, strayed, missingReason].filter(Boolean).join('\n\n');
+      if (!edits.length) {
         return {
           ok: true,
           comment: repo.addComment(req.applicationId, Author.KEPLER, prose).comment,
@@ -353,7 +389,7 @@ export function createAskService({ repo, runs, llm, userDataPath, renderPdf }: A
       }
       const written = await writeGroups(
         snap.documents.filter((d) => d.application_id === req.applicationId),
-        reply.edits,
+        edits,
       );
       if (written.error) {
         /* The prose still posts — with the reason appended, so the thread
@@ -365,8 +401,11 @@ export function createAskService({ repo, runs, llm, userDataPath, renderPdf }: A
         ).comment;
         return { ok: true, comment, edits: [] };
       }
-      const comment = repo.addComment(req.applicationId, Author.KEPLER, prose).comment;
-      return { ok: true, comment, edits: repo.addCommentEdits(comment.id, reply.edits) };
+      /* The change stands; a print that failed is said on top of it rather
+         than swallowed — the applicant sends the PDF, not the HTML. */
+      const text = written.pdfError ? `${prose}\n\n${written.pdfError}` : prose;
+      const comment = repo.addComment(req.applicationId, Author.KEPLER, text).comment;
+      return { ok: true, comment, edits: repo.addCommentEdits(comment.id, edits) };
     } catch (err) {
       return { ok: false, error: userMessage(err) };
     } finally {
@@ -403,15 +442,28 @@ export function createAskService({ repo, runs, llm, userDataPath, renderPdf }: A
     commentId: number,
     openDocument: DocumentKind | null,
   ): Promise<AskResult> => {
-    if (!repo.getApplicationWithCompany(applicationId)) {
-      return { ok: false, error: 'Unbekannte Bewerbung.' };
-    }
-    if (runs.activeRun(applicationId)) {
-      return { ok: false, error: 'Kepler arbeitet bereits an dieser Bewerbung.' };
-    }
     const controller = new AbortController();
     inFlight.set(applicationId, controller);
+    /* Inside the try, not before it: enqueue() below documents that neither
+       task ever rejects, and a SQLite failure in one of these reads would
+       break that — poisoning the chain behind it and surfacing as an
+       unhandled rejection rather than a sentence in the thread. */
     try {
+      if (!repo.getApplicationWithCompany(applicationId)) {
+        return { ok: false, error: 'Unbekannte Bewerbung.' };
+      }
+      if (runs.activeRun(applicationId)) {
+        return { ok: false, error: 'Kepler arbeitet bereits an dieser Bewerbung.' };
+      }
+      /* That the comment belongs to this card, which answer() checks and this
+         path did not: the reversed set is applied against the rows of
+         whatever application id came in over IPC, and both cards' documents
+         come from the same Fassungen — the applicant's name and address match
+         in either. A mismatch would rewrite an untouched card's letter and
+         then mark the real set undone. */
+      if (!repo.load().comments.some((c) => c.id === commentId && c.application_id === applicationId)) {
+        return { ok: false, error: 'Kommentar nicht gefunden.' };
+      }
       const stored = repo.commentEdits(commentId).filter((r) => r.undone_at === null);
       if (!stored.length) return { ok: false, error: 'Diese Änderung wurde schon zurückgenommen.' };
 
@@ -434,7 +486,12 @@ export function createAskService({ repo, runs, llm, userDataPath, renderPdf }: A
       );
       if (written.error) return { ok: false, error: written.error };
       repo.markEditsUndone(commentId);
-      return { ok: true, comment: repo.load().comments.find((c) => c.id === commentId)!, edits: [] };
+      /* Re-read rather than asserted: the only await above is the PDF
+         re-render, which is a window wide enough for a db:comments.delete to
+         land, and the renderer is handed this row as a CommentRow. */
+      const comment = repo.load().comments.find((c) => c.id === commentId);
+      if (!comment) return { ok: false, error: 'Kommentar nicht gefunden.' };
+      return { ok: true, comment, edits: [], pdfError: written.pdfError };
     } catch (err) {
       return { ok: false, error: userMessage(err) };
     } finally {

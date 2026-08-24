@@ -5,6 +5,7 @@
 import { VALUE_BUDGET } from './budgets.ts';
 import { modelPlaceholders } from './fill.ts';
 import type { Extraction } from './schemas.ts';
+import { stripMarkup } from '../../src/lib/markup.ts';
 import { APPLICANT_EMAIL, APPLICANT_NAME } from '../../src/shared/applicant.ts';
 import { DocumentKind, DocumentLanguage } from '../../src/shared/enums.ts';
 
@@ -35,7 +36,7 @@ function bullets(items: string[], empty: string): string {
 /* The applicant's facts as the Fassung states them — its text, never its
    markup. Both document prompts and the rewrite ask for exactly this. */
 function cvBlock(cv: string | null): string {
-  return cv ? sealed(documentText(cv)) : '(kein Lebenslauf hinterlegt)';
+  return cv ? sealed(stripMarkup(cv)) : '(kein Lebenslauf hinterlegt)';
 }
 
 export function extractionPrompt(listing: string): string {
@@ -107,7 +108,7 @@ ${clipListing(input.listing)}
 </anzeige>
 
 <vorlage>
-${sealed(documentText(input.template))}
+${sealed(stripMarkup(input.template))}
 </vorlage>
 
 <platzhalter>
@@ -357,68 +358,12 @@ ${clipListing(input.listing)}
 </anzeige>`;
 }
 
-/* What a document SAYS, not how it is styled: style/script and tags gone,
-   the common entities of hand-written templates spelled out, whitespace
-   folded. Block-level tags become line breaks so stations stay apart. */
-const ENTITIES: Record<string, string> = {
-  '&nbsp;': ' ',
-  '&middot;': '·',
-  '&amp;': '&',
-  '&lt;': '<',
-  '&gt;': '>',
-  '&quot;': '"',
-  '&ndash;': '–',
-  '&mdash;': '—',
-};
-
-function documentText(html: string): string {
-  return (
-    html
-      .replace(/<!--[\s\S]*?-->/g, ' ')
-      .replace(/<(style|script)[\s\S]*?<\/\1>/gi, ' ')
-      /* A printed application document has no buttons — this rule needs no
-       knowledge of any particular template, a <button> is app chrome by
-       definition. Accepted gap: [\s\S]*? is unbounded, so a malformed,
-       unclosed <button> swallows everything up to the next </button>
-       anywhere later in the document, or to the end. Left as-is — a
-       <button> is unambiguously chrome, so even the mangled case never
-       eats real prose the model should have judged as content. */
-      .replace(/<button\b[\s\S]*?<\/button>/gi, ' ')
-      /* class="toolbar" and class="edit-hint" are not this module's classes —
-       they name the Fassung editor's own on-screen controls (see the same
-       two classes in src/features/letter/letter-styles.ts, which hides them
-       the same way for the same reason: dead weight in a frame that never
-       prints, here dead weight in front of a model reading what the
-       document says). Dropped by name because, unlike a <button>, nothing
-       about the tag itself says "chrome". The templates are user-authored
-       HTML this codebase doesn't control, so the class attribute is matched
-       double-quoted, single-quoted or bare, and the class value as a token
-       list — (?<![\w-])…(?![\w-]) requires a real token boundary, not just
-       \b, since "-" is a non-word character and would let "toolbar-note" or
-       "sub-toolbar" match a plain \b(?:toolbar|edit-hint)\b and drop real
-       document content. The bare-value branch checks the same boundary
-       rather than the whole token, but needs no scan for other tokens: an
-       unquoted HTML attribute value ends at the first space, so it can only
-       ever hold the one token. */
-      .replace(
-        /<([a-z][a-z0-9]*)\b[^>]*\bclass\s*=\s*(?:"[^"]*(?<![\w-])(?:toolbar|edit-hint)(?![\w-])[^"]*"|'[^']*(?<![\w-])(?:toolbar|edit-hint)(?![\w-])[^']*'|(?<![\w-])(?:toolbar|edit-hint)(?![\w-]))[^>]*>[\s\S]*?<\/\1>/gi,
-        ' ',
-      )
-      .replace(/<\/(p|div|li|h[1-6]|tr|section|article|header|footer)>|<br\s*\/?>/gi, '\n')
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/&[a-z]+;/gi, (e) => ENTITIES[e.toLowerCase()] ?? ' ')
-      .replace(/[ \t]+/g, ' ')
-      .replace(/\s*\n\s*/g, '\n')
-      .trim()
-  );
-}
-
 /* The checks read only the front of the visible text — a raw head window
    would be all stylesheet on a real template. */
 const EXCERPT = 3_000;
 
 export function documentExcerpt(html: string): string {
-  return documentText(html).replace(/\s+/g, ' ').slice(0, EXCERPT);
+  return stripMarkup(html).replace(/\s+/g, ' ').slice(0, EXCERPT);
 }
 
 /* A whole letter with its tags but without its dead weight. Generous, because

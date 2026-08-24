@@ -16,6 +16,7 @@ import { DOCUMENT_STEMS } from '../shared/applicant';
 import type { CommentEditRow, DocumentRow } from '../shared/db-types';
 import type { AgentRunView } from './db-view';
 import { MON_DE3, DOW_DE, dateToISO, dayDiff, todayISO } from '../lib/date';
+import { stripMarkup } from '../lib/markup';
 import type { Mentionable } from '../lib/mentions';
 import { parseSalary } from '../lib/salary';
 import type { AppState } from './store-context';
@@ -80,6 +81,17 @@ export function documentEntries(st: AppState, cardId: string): Mentionable[] {
    re-sorts them. */
 export function editsForComment(st: AppState, commentId: number): CommentEditRow[] {
   return st.commentEdits[String(commentId)] || [];
+}
+
+/* One half of a stored find/replace pair as the document SAYS it, not as
+   Kepler had to quote it: the pair is kept with its markup because that is
+   what applyEdits matches against the file's own bytes (documentMarkup in
+   electron/agent/prompts.ts), but the thread only ever shows what changed. A
+   half that is markup with no words — an image, a bare wrapping tag — has
+   nothing to show; the placeholder says so rather than rendering a blank
+   line that would read as a rendering bug. */
+export function editText(raw: string): string {
+  return stripMarkup(raw) || '(kein Text)';
 }
 
 export interface EditStatus {

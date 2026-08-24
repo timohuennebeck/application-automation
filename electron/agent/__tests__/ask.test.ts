@@ -13,6 +13,29 @@ import { KeplerError } from '../errors.ts';
 import type { LlmRequest } from '../orchestrator.ts';
 import { Author, DocumentKind, DocumentLanguage, RoundState } from '../../../src/shared/enums.ts';
 
+/* A one-shot trap for the "cleans up the tmp file of the write that itself
+   threw" test below: node:fs's ESM exports cannot be spied on directly
+   (their properties are non-configurable), so the only way to make one
+   specific writeFileSync call throw after it has actually landed a file on
+   disk is to mock the module and armed/disarm this from inside a test.
+   Declared with vi.hoisted because vi.mock itself is hoisted above every
+   import in this file, including this one. */
+const tmpTrap = vi.hoisted(() => ({ path: null as string | null }));
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>();
+  return {
+    ...actual,
+    writeFileSync: (...args: Parameters<typeof actual.writeFileSync>) => {
+      const result = actual.writeFileSync(...args);
+      if (tmpTrap.path && args[0] === tmpTrap.path) {
+        tmpTrap.path = null;
+        throw new Error('disk full');
+      }
+      return result;
+    },
+  };
+});
+
 const NOW = new Date('2026-08-16T09:00:00.000Z');
 
 /* A fresh directory per test file, not per test: writeLetter() re-points the
@@ -362,6 +385,37 @@ describe('a comment that mentions a document', () => {
     expect(reply.text).toContain('gibt es nicht');
   });
 
+  it('quotes a refused passage as prose, not the markup it was matched against', async () => {
+    /* The find text has to carry its wrapping tag for applyEdits to match it
+       byte for byte — but the tag never occurs in the file (the paragraph is
+       "empfaenger", not "recipient"), so the refusal quotes it back. The
+       thread reads what the document would have said, not the tag Kepler
+       tried to match. */
+    const { service, repo, appId } = fixture({
+      answer: {
+        antwort: 'Ich ändere das.',
+        edits: [
+          {
+            document: 'COVER_LETTER',
+            kind: 'replace',
+            find: '<p class="recipient">Engineering Hiring Team</p>',
+            replace: '<p class="recipient">Frau Haushofer</p>',
+            after: null,
+          },
+        ],
+      },
+    });
+    writeLetter(appId, '<p class="empfaenger">Engineering Hiring Team</p>');
+    const comment = addComment(appId, '@Kepler ändere das @Anschreiben');
+
+    await service.ask({ applicationId: appId, commentId: comment.id, openDocument: null });
+
+    const reply = repo.load().comments.at(-1)!;
+    expect(reply.text).toContain('Engineering Hiring Team');
+    expect(reply.text).not.toContain('<p');
+    expect(reply.text).not.toContain('class=');
+  });
+
   it('leaves every document untouched when one of several groups cannot be placed', async () => {
     /* The plan-then-write split is the load-bearing line of the design: an
        implementation that wrote each group as it went would pass every other
@@ -564,6 +618,74 @@ describe('a comment that mentions a document', () => {
     await service.ask({ applicationId: appId, commentId: comment.id, openDocument: null });
 
     expect(llm.mock.calls[0][0].prompt).not.toContain('Engineering Hiring Team');
+  });
+
+  it('says so when a deletion had to be dropped for having no anchor', async () => {
+    /* The model named a real passage but no `after` — validateAsk refuses it
+       before applyEdits ever sees it, since an unanchored delete could never
+       be undone. That refusal has to be as visible as one applyEdits itself
+       makes, or the reply reads as a full success with the change quietly
+       gone. */
+    const { service, repo, appId } = fixture({
+      answer: {
+        antwort: 'Erledigt.',
+        edits: [
+          {
+            document: 'COVER_LETTER',
+            kind: 'delete',
+            find: '<p>Meine Gehaltserwartung liegt bei 80.000 EUR brutto p.a.</p>',
+            replace: '',
+            after: null,
+          },
+        ],
+      },
+    });
+    const original = '<p>Meine Gehaltserwartung liegt bei 80.000 EUR brutto p.a.</p>';
+    writeLetter(appId, original);
+    const comment = addComment(appId, '@Kepler streich den Gehaltssatz im @Anschreiben');
+
+    await service.ask({ applicationId: appId, commentId: comment.id, openDocument: null });
+
+    const reply = repo.load().comments.at(-1)!;
+    expect(reply.text).toContain('Erledigt.');
+    expect(reply.text).toMatch(/Löschung/);
+    expect(repo.commentEdits(reply.id)).toHaveLength(0);
+    expect(readLetter(appId)).toBe(original);
+  });
+
+  it('cleans up the tmp file of the write that itself threw', async () => {
+    /* Not the pre-existing-directory trick the sibling test above uses (that
+       blocks writeFileSync outright, so it never creates anything) — here the
+       write actually lands a file on disk and only then throws, the way a
+       full disk would mid-write. Its tmp path was never staged, since staging
+       happens only once writeFileSync returns; the fix has to record the path
+       before the call, not after. */
+    const { service, appId } = fixture({
+      answer: {
+        antwort: 'Ich ändere beides.',
+        edits: [
+          {
+            document: 'COVER_LETTER',
+            kind: 'replace',
+            find: 'Engineering Hiring Team',
+            replace: 'Frau Haushofer',
+            after: null,
+          },
+          { document: 'LEBENSLAUF', kind: 'replace', find: 'Inhalt', replace: 'Neues', after: null },
+        ],
+      },
+    });
+    writeLetter(appId, '<p>Sehr geehrtes Engineering Hiring Team,</p>');
+    writeCv(appId, '<p>Lebenslauf-Inhalt</p>');
+    const cvTmp =
+      documentPaths(ROOT, appId, DocumentKind.LEBENSLAUF, DocumentLanguage.DE).htmlAbs + '.kepler-tmp';
+    tmpTrap.path = cvTmp;
+    const comment = addComment(appId, '@Kepler ändere @Anschreiben und @Lebenslauf');
+
+    const res = await service.ask({ applicationId: appId, commentId: comment.id, openDocument: null });
+
+    expect(res.ok).toBe(false);
+    expect(existsSync(cvTmp)).toBe(false);
   });
 });
 

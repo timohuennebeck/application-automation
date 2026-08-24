@@ -6,7 +6,7 @@ import { Author, AUTHOR_LABEL, EditKind } from '../../shared/enums';
 import type { DocumentKind } from '../../shared/enums';
 import type { CommentEditRow } from '../../shared/db-types';
 import { relTime } from '../../state/db-view';
-import { documentEntries, documentFor, editStatus, editsForComment } from '../../state/selectors';
+import { documentEntries, documentFor, editStatus, editsForComment, editText } from '../../state/selectors';
 import type { EditStatus } from '../../state/selectors';
 import { useApp } from '../../state/store-context';
 import { MentionComposer } from '../../ui/MentionComposer';
@@ -55,7 +55,7 @@ function EditLine({ edit }: { edit: CommentEditRow }) {
     return (
       <div style={EDIT_LINE}>
         <span style={SIGN}>−</span>
-        <span style={OLD}>{edit.find_text}</span>
+        <span style={OLD}>{editText(edit.find_text)}</span>
       </div>
     );
   }
@@ -63,15 +63,15 @@ function EditLine({ edit }: { edit: CommentEditRow }) {
     return (
       <div style={EDIT_LINE}>
         <span style={SIGN}>+</span>
-        <span style={NEW}>{edit.replace_text}</span>
+        <span style={NEW}>{editText(edit.replace_text)}</span>
       </div>
     );
   }
   return (
     <div style={EDIT_LINE}>
-      <span style={OLD}>{edit.find_text}</span>
+      <span style={OLD}>{editText(edit.find_text)}</span>
       <span style={{ color: 'var(--c-b3b0a8)' }}> → </span>
-      <span style={NEW}>{edit.replace_text}</span>
+      <span style={NEW}>{editText(edit.replace_text)}</span>
     </div>
   );
 }

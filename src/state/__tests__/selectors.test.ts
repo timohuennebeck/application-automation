@@ -22,6 +22,7 @@ import {
   activeFilterCount,
   cardSubtitle,
   editStatus,
+  editText,
   interviewChip,
   isSorted,
   keplerHoldReason,
@@ -401,5 +402,24 @@ describe('editStatus', () => {
       },
     } as unknown as AppState;
     expect(editStatus(st, 42)?.title).toBe('Anschreiben und Lebenslauf');
+  });
+});
+
+describe('editText', () => {
+  it('shows a stored pair as the document SAYS it, tags gone', () => {
+    /* The pair is kept with its markup for applyEdits to match against — see
+       documentMarkup in electron/agent/prompts.ts — but the thread reads it
+       as prose, same as a whole document does. */
+    expect(editText('<p class="recipient">Engineering Hiring Team</p>')).toBe('Engineering Hiring Team');
+  });
+
+  it('keeps the words a tag wraps rather than dropping them with the tag', () => {
+    expect(editText('Wir bauen <strong>phase6</strong> gemeinsam.')).toBe('Wir bauen phase6 gemeinsam.');
+  });
+
+  it('falls back to a placeholder for a pair that is markup with no words', () => {
+    /* An edit line for this would otherwise render blank, which reads as a
+       rendering bug rather than the "nothing to show" it actually is. */
+    expect(editText('<img src="x.png">')).toBe('(kein Text)');
   });
 });

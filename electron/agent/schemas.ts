@@ -374,6 +374,14 @@ const EDGE_TAGS = /^(?:\s*<\/?[a-z_][\w-]*[^>]*>)+|(?:<\/?[a-z_][\w-]*[^>]*>\s*)
 export interface AskAnswer {
   antwort: string;
   edits: DocumentEdit[];
+  /* Set when a deletion had to be dropped before ever reaching applyEdits: it
+     names a real passage and would place cleanly, but with no anchor
+     reverseEdits could never put it back, and the undo is all-or-nothing, so
+     it is refused here instead. Dropping it silently would post the reply as
+     a full success with one change quietly missing — this makes it visible
+     the same way a refusal from applyEdits is: appended to the prose. Null
+     when nothing was dropped. */
+  droppedReason: string | null;
 }
 
 /* The prose is required — an answer with edits and no sentence would leave
@@ -385,6 +393,12 @@ export function validateAsk(x: unknown): AskAnswer {
   const antwort = text(typeof r.antwort === 'string' ? r.antwort.replace(EDGE_TAGS, '') : r.antwort);
   if (!antwort) throw new Error('Antwort: leer');
   const edits: DocumentEdit[] = [];
+  /* Only a deletion is dropped for a reason worth telling the user about — it
+     had everything needed to place it, and is refused purely so it stays
+     reversible. An insertion missing `after` has no location at all, exactly
+     like a replacement with nothing to find: those are malformed entries,
+     not near-misses, and stay silent like the drops beside them. */
+  let droppedDeletion = false;
   if (Array.isArray(r.edits)) {
     for (const entry of r.edits) {
       if (typeof entry !== 'object' || entry === null) continue;
@@ -402,9 +416,18 @@ export function validateAsk(x: unknown): AskAnswer {
          and the undo is all-or-nothing, so it would take the whole set with
          it. Dropped here, exactly like a replacement with nothing to find. */
       if (kind !== EditKind.INSERT && !find) continue;
-      if (kind !== EditKind.REPLACE && !after) continue;
+      if (kind !== EditKind.REPLACE && !after) {
+        if (kind === EditKind.DELETE) droppedDeletion = true;
+        continue;
+      }
       edits.push({ document, kind, find, replace, after });
     }
   }
-  return { antwort, edits: edits.slice(0, MAX_EDITS) };
+  return {
+    antwort,
+    edits: edits.slice(0, MAX_EDITS),
+    droppedReason: droppedDeletion
+      ? 'Eine Löschung wurde übersprungen, weil sie sich ohne Bezugsstelle nicht zurücknehmen ließe.'
+      : null,
+  };
 }

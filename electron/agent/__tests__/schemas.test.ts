@@ -341,6 +341,7 @@ describe('validateAsk with edits', () => {
     });
 
     expect(out.edits).toEqual([]);
+    expect(out.droppedReason).toBeNull();
   });
 
   it('drops an insertion with no anchor', () => {
@@ -350,13 +351,19 @@ describe('validateAsk with edits', () => {
     });
 
     expect(out.edits).toEqual([]);
+    /* No anchor means no location at all — a malformed entry, not a
+       near-miss, so it stays as silent as the drops above it. */
+    expect(out.droppedReason).toBeNull();
   });
 
-  it('drops a deletion with no anchor', () => {
+  it('drops a deletion with no anchor, and says so', () => {
     /* reverseEdits turns a deletion into an insertion carrying `after` — with
        no anchor the reversal has an empty needle, applyEdits refuses it, and
        because the undo is all-or-nothing that one entry takes the whole set
-       down with it. The passage would be gone for good. */
+       down with it. The passage would be gone for good. Unlike the drops
+       above, this one had everything needed to place it — dropping it
+       without a word would leave the reply looking like a full success with
+       one change quietly missing. */
     const out = validateAsk({
       antwort: 'x',
       edits: [
@@ -371,6 +378,7 @@ describe('validateAsk with edits', () => {
     });
 
     expect(out.edits).toEqual([]);
+    expect(out.droppedReason).toMatch(/Löschung/);
   });
 
   it('keeps a deletion that names both the passage and its anchor', () => {
@@ -389,6 +397,7 @@ describe('validateAsk with edits', () => {
 
     expect(out.edits).toHaveLength(1);
     expect(out.edits[0]).toMatchObject({ kind: EditKind.DELETE, after: '<p>davor</p>' });
+    expect(out.droppedReason).toBeNull();
   });
 
   it('still rejects an answer with no prose', () => {

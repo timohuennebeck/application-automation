@@ -21,8 +21,10 @@ export interface ApplyResult {
 }
 
 /* The passage an edit is located by: what it replaces or deletes, or the
-   anchor it is inserted after. */
-function needle(edit: DocumentEdit): string {
+   anchor it is inserted after. Exported for ask.ts, which needs the same
+   passage to turn a refusal's raw quote into what the document SAYS before
+   it reaches the thread. */
+export function needle(edit: DocumentEdit): string {
   return edit.kind === EditKind.INSERT ? (edit.after ?? '') : edit.find;
 }
 

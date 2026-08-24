@@ -19,9 +19,10 @@ import type {
   DocumentRow,
   RoundNoteRow,
 } from '../../src/shared/db-types.ts';
+import { stripMarkup } from '../../src/lib/markup.ts';
 import { APPLICANT_NAME } from '../../src/shared/applicant.ts';
 import { Author, AUTHOR_LABEL, DocumentKind, RoundState } from '../../src/shared/enums.ts';
-import { applyEdits, reverseEdits } from './edits.ts';
+import { applyEdits, needle, reverseEdits } from './edits.ts';
 import type { LlmRunner } from './orchestrator.ts';
 import { askPrompt, documentMarkup } from './prompts.ts';
 import type { AskComment, AskDocument, AskInput, AskInterview } from './prompts.ts';
@@ -81,6 +82,18 @@ function fromRows(rows: CommentEditRow[]): DocumentEdit[] {
     replace: r.replace_text,
     after: r.after_text,
   }));
+}
+
+/* applyEdits' refusal quotes the passage exactly as it looked for it in the
+   file — markup included, because that is what has to match. The thread
+   shows what the document SAYS, never how it is marked up, so the quote is
+   stripped back to words before the sentence reaches the user. A quote that
+   turns out to be pure markup (an image, a bare wrapping tag) falls back to
+   the same placeholder an empty edit line shows. */
+function displayReason(failed: DocumentEdit, reason: string | null): string | null {
+  if (!reason) return reason;
+  const raw = needle(failed);
+  return reason.replace(raw, stripMarkup(raw) || '(kein Text)');
 }
 
 const ROUND_STATE_LABEL: Record<RoundState, string> = {
@@ -221,7 +234,7 @@ export function createAskService({ repo, runs, llm, userDataPath, renderPdf }: A
       );
       /* All or nothing across every document, not just within one: the
          request was one request. */
-      if (res.failed) return { error: res.reason };
+      if (res.failed) return { error: displayReason(res.failed, res.reason) };
       planned.push({ row, html: res.html });
     }
     /* Every file is written beside its target first, and only once all of them
@@ -235,16 +248,24 @@ export function createAskService({ repo, runs, llm, userDataPath, renderPdf }: A
        that was already renamed no longer exists, and force makes that a
        no-op. */
     const staged: { row: DocumentRow; abs: string; tmp: string }[] = [];
+    /* Every tmp path this loop is about to write to, recorded before the
+       write that targets it runs — not after. A writeFileSync that creates a
+       partial file and then itself throws (a full disk, say) never reaches
+       the push below, so cleaning up only `staged` would leave exactly that
+       file behind; recording the path first means the catch below can still
+       find it. */
+    const tmpPaths: string[] = [];
     try {
       for (const { row, html } of planned) {
         const abs = resolveDocumentPath(userDataPath, row.file_path!);
         const tmp = abs + '.kepler-tmp';
+        tmpPaths.push(tmp);
         writeFileSync(tmp, html);
         staged.push({ row, abs, tmp });
       }
       for (const { abs, tmp } of staged) renameSync(tmp, abs);
     } catch (err) {
-      for (const { tmp } of staged) rmSync(tmp, { force: true });
+      for (const tmp of tmpPaths) rmSync(tmp, { force: true });
       throw err;
     }
     for (const { row, abs } of staged) {
@@ -318,10 +339,15 @@ export function createAskService({ repo, runs, llm, userDataPath, renderPdf }: A
       if (controller.signal.aborted || !repo.getApplicationWithCompany(req.applicationId)) {
         return { ok: false, error: 'Abgebrochen.' };
       }
+      /* validateAsk may already have had to drop a change of its own — an
+         unanchored deletion, refused before it ever reached applyEdits. That
+         reason is appended right away, same as a refusal from writeGroups
+         below: either way the thread has to say why something is missing. */
+      const prose = reply.droppedReason ? `${reply.antwort}\n\n${reply.droppedReason}` : reply.antwort;
       if (!reply.edits.length) {
         return {
           ok: true,
-          comment: repo.addComment(req.applicationId, Author.KEPLER, reply.antwort).comment,
+          comment: repo.addComment(req.applicationId, Author.KEPLER, prose).comment,
           edits: [],
         };
       }
@@ -335,11 +361,11 @@ export function createAskService({ repo, runs, llm, userDataPath, renderPdf }: A
         const comment = repo.addComment(
           req.applicationId,
           Author.KEPLER,
-          `${reply.antwort}\n\n${written.error}`,
+          `${prose}\n\n${written.error}`,
         ).comment;
         return { ok: true, comment, edits: [] };
       }
-      const comment = repo.addComment(req.applicationId, Author.KEPLER, reply.antwort).comment;
+      const comment = repo.addComment(req.applicationId, Author.KEPLER, prose).comment;
       return { ok: true, comment, edits: repo.addCommentEdits(comment.id, reply.edits) };
     } catch (err) {
       return { ok: false, error: userMessage(err) };

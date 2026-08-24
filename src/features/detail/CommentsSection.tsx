@@ -181,10 +181,13 @@ export function CommentsSection({ cardId }: { cardId: string }) {
      the same call DocumentsSection makes, keyed here by kind instead of path
      so a rewritten file's size never goes stale under an old mention. */
   const [docSizes, setDocSizes] = useState<Partial<Record<DocumentKind, number | null>>>({});
-  const docPaths = docEntries
-    .map((e) => documentFor(st, cardId, e.document!)?.file_path)
-    .filter((p): p is string => !!p);
-  const docSizeKey = docPaths.join(',');
+  const docRows = docEntries.map((e) => documentFor(st, cardId, e.document!));
+  const docPaths = docRows.map((d) => d?.file_path).filter((p): p is string => !!p);
+  /* documentPaths (electron/files.ts) is deterministic — applicationId + kind +
+     language, no timestamp — so a Kepler rewrite keeps the same file_path and
+     only moves updated_at. Fold it into the key, or a rewrite's new size would
+     never be re-fetched for as long as this component stays mounted. */
+  const docSizeKey = docPaths.join(',') + '|' + docRows.map((d) => d?.updated_at).join(',');
   useEffect(() => {
     if (!docPaths.length) return;
     let live = true;

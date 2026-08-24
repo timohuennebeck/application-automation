@@ -95,7 +95,11 @@ function Inline({
       ).map((p, i) => {
         if (!p.mention) return <BoldAndLinks key={i} text={p.t} />;
         const entry = mentionables.find((m) => '@' + m.name === p.t);
-        if (entry?.kind === 'document') {
+        /* splitMentions only matches names drawn from mentionables, so this
+           should always resolve — but a match with no entry degrades to plain
+           text rather than the person chip, which would misrepresent it. */
+        if (!entry) return <BoldAndLinks key={i} text={p.t} />;
+        if (entry.kind === 'document') {
           const size = entry.document != null ? sizeOf?.(entry.document) : null;
           return (
             <span

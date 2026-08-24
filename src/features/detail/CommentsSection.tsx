@@ -45,13 +45,15 @@ const SIGN: CSSProperties = {
   display: 'inline-block',
   width: 11,
 };
+/* Shared by every edit line, so the three shapes stay one size. */
+const EDIT_LINE: CSSProperties = { fontSize: 12.5, lineHeight: 1.6 };
 
 /* One line of Kepler's answer: the pair a replacement shows, or the single
    half a deletion or an insertion has. */
 function EditLine({ edit }: { edit: CommentEditRow }) {
   if (edit.kind === EditKind.DELETE) {
     return (
-      <div style={{ fontSize: 12.5, lineHeight: 1.6 }}>
+      <div style={EDIT_LINE}>
         <span style={SIGN}>−</span>
         <span style={OLD}>{edit.find_text}</span>
       </div>
@@ -59,14 +61,14 @@ function EditLine({ edit }: { edit: CommentEditRow }) {
   }
   if (edit.kind === EditKind.INSERT) {
     return (
-      <div style={{ fontSize: 12.5, lineHeight: 1.6 }}>
+      <div style={EDIT_LINE}>
         <span style={SIGN}>+</span>
         <span style={NEW}>{edit.replace_text}</span>
       </div>
     );
   }
   return (
-    <div style={{ fontSize: 12.5, lineHeight: 1.6 }}>
+    <div style={EDIT_LINE}>
       <span style={OLD}>{edit.find_text}</span>
       <span style={{ color: 'var(--c-b3b0a8)' }}> → </span>
       <span style={NEW}>{edit.replace_text}</span>
@@ -111,14 +113,20 @@ function EditSet({
         />
         {status.applied ? `${status.title} und PDF aktualisiert` : 'Nichts geändert'}
         <span style={{ flex: 1 }} />
-        <div
-          className="icon-btn"
-          title={status.applied ? 'Änderung zurücknehmen' : 'Nochmal versuchen'}
-          style={{ flexShrink: 0, marginTop: -4, marginBottom: -4 }}
-          onClick={onUndo}
-        >
-          <RegenGlyph />
-        </div>
+        {/* Only an applied set has anything to take back — there is no
+           re-apply API, so an already-undone set gets the grey line and no
+           button rather than an icon that would promise a retry it cannot
+           perform. */}
+        {status.applied && (
+          <div
+            className="icon-btn"
+            title="Änderung zurücknehmen"
+            style={{ flexShrink: 0, marginTop: -4, marginBottom: -4 }}
+            onClick={onUndo}
+          >
+            <RegenGlyph />
+          </div>
+        )}
       </div>
     </div>
   );
@@ -326,17 +334,14 @@ export function CommentsSection({ cardId }: { cardId: string }) {
               </div>
             )}
 
+            {/* A refusal (the document moved on since) lands in keplerAsk's
+                error row below — undoEdits sets it, so the icon itself has
+                nothing to catch. */}
             {status && (
               <EditSet
                 edits={editsForComment(st, c.id)}
                 status={status}
-                onUndo={() =>
-                  undoEdits(cardId, c.id).then((err) => {
-                    // The retry icon has nowhere to show a reason; the console
-                    // gets it, same as every other fire-and-forget bridge call.
-                    if (err) console.warn('[comments] undo failed', err);
-                  })
-                }
+                onUndo={() => undoEdits(cardId, c.id)}
               />
             )}
           </ThreadRow>

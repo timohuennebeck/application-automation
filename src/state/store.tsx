@@ -1342,12 +1342,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   /* The retry icon on a reply that carried an edit set: puts the document(s)
-     back and marks the set undone. */
+     back and marks the set undone. A refusal (the document moved on since)
+     is written into keplerAsk, the same error row every other Kepler failure
+     on this card surfaces through — the icon itself has no room for a
+     sentence, and a swallowed refusal would leave the line green over a file
+     that was never touched. */
   const undoEdits = useCallback(
     async (applicationId: string, commentId: number): Promise<string | null> => {
+      const fail = (error: string) => {
+        set((s) => ({ keplerAsk: { ...s.keplerAsk, [applicationId]: { pending: false, error } } }));
+        return error;
+      };
       const res = await window.desktop?.agent.undo(applicationId, commentId);
-      if (!res) return 'Ohne Desktop-Umgebung nicht möglich.';
-      if (!res.ok) return res.error;
+      if (!res) return fail('Ohne Desktop-Umgebung nicht möglich.');
+      if (!res.ok) return fail(res.error);
       /* The undo moved files and rewrote rows on the main side; the
          in-memory view has no way to know what changed, so it re-pulls.
          `resync` is the store's own name for that — see useResync near the
@@ -1355,7 +1363,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       resync();
       return null;
     },
-    [resync],
+    [set, resync],
   );
 
   /* ── Profile facts ──────────────────────────────────────────────────────

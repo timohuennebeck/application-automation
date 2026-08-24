@@ -122,11 +122,10 @@ const DOCUMENT_ROW_RESERVE = 2;
 export function selectMentionMatches(
   candidates: Mentionable[],
   q: string,
-  budget = MENTION_ROW_BUDGET,
 ): { people: Mentionable[]; docs: Mentionable[] } {
   const matches = candidates.filter((m) => m.name.toLowerCase().startsWith(q));
   const docs = matches.filter((m) => m.kind === 'document').slice(0, DOCUMENT_ROW_RESERVE);
-  const people = matches.filter((m) => m.kind === 'person').slice(0, budget - docs.length);
+  const people = matches.filter((m) => m.kind === 'person').slice(0, MENTION_ROW_BUDGET - docs.length);
   return { people, docs };
 }
 

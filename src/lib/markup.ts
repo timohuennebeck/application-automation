@@ -18,7 +18,35 @@ const ENTITIES: Record<string, string> = {
   '&quot;': '"',
   '&ndash;': '–',
   '&mdash;': '—',
+  /* German templates are hand-written HTML, and an author who escapes at all
+     escapes these. Left out, "Zust&auml;ndig" reached the thread as
+     "Zust ndig" — the edit lines this feeds are what the user reads to decide
+     whether to take a change back. */
+  '&auml;': 'ä',
+  '&ouml;': 'ö',
+  '&uuml;': 'ü',
+  '&Auml;': 'Ä',
+  '&Ouml;': 'Ö',
+  '&Uuml;': 'Ü',
+  '&szlig;': 'ß',
+  '&eacute;': 'é',
+  '&hellip;': '…',
+  '&apos;': "'",
+  '&bdquo;': '„',
+  '&ldquo;': '“',
+  '&rdquo;': '”',
+  '&sbquo;': '‚',
+  '&lsquo;': '‘',
+  '&rsquo;': '’',
+  '&shy;': '',
 };
+
+/* Out of range for String.fromCodePoint, or a surrogate half — a malformed
+   entity, left as it was written rather than thrown over. */
+function codePoint(n: number): string | null {
+  if (!Number.isInteger(n) || n < 0 || n > 0x10ffff || (n >= 0xd800 && n <= 0xdfff)) return null;
+  return String.fromCodePoint(n);
+}
 
 export function stripMarkup(html: string): string {
   return (
@@ -55,7 +83,17 @@ export function stripMarkup(html: string): string {
       )
       .replace(/<\/(p|div|li|h[1-6]|tr|section|article|header|footer)>|<br\s*\/?>/gi, '\n')
       .replace(/<[^>]+>/g, ' ')
-      .replace(/&[a-z]+;/gi, (e) => ENTITIES[e.toLowerCase()] ?? ' ')
+      /* Numeric forms too, and an unrecognised entity is left as written
+         rather than becoming a space: swallowing it silently turned
+         "Berlin&#8211;Mitte" into "Berlin Mitte" and "Zust&auml;ndig" into
+         "Zust ndig", which reads as the document's own wording. Named
+         entities are case-sensitive (&Auml; is not &auml;), so the exact
+         spelling is tried before the lenient lowercase fallback. */
+      .replace(/&#(\d+);|&#x([0-9a-f]+);|&([a-z][a-z0-9]*);/gi, (raw, dec, hex, name) => {
+        if (dec !== undefined) return codePoint(Number(dec)) ?? raw;
+        if (hex !== undefined) return codePoint(parseInt(hex, 16)) ?? raw;
+        return ENTITIES[`&${name};`] ?? ENTITIES[`&${String(name).toLowerCase()};`] ?? raw;
+      })
       .replace(/[ \t]+/g, ' ')
       .replace(/\s*\n\s*/g, '\n')
       .trim()

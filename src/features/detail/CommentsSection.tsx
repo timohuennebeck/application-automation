@@ -81,10 +81,16 @@ function EditLine({ edit }: { edit: CommentEditRow }) {
 function EditSet({
   edits,
   status,
+  busy,
   onUndo,
 }: {
   edits: CommentEditRow[];
   status: EditStatus;
+  /* A write is already owed on this card. The status line only turns grey
+     once the resync has pulled the reversed rows back, which is a round trip
+     wide enough to click twice — and the second call finds nothing left to
+     undo and reports "schon zurückgenommen" over an undo that worked. */
+  busy: boolean;
   onUndo: () => void;
 }) {
   return (
@@ -99,7 +105,7 @@ function EditSet({
           gap: 7,
           marginTop: 8,
           fontSize: 11.5,
-          color: status.applied ? 'var(--c-4f8f6a)' : 'var(--c-8b8880)',
+          color: status.applied && status.pdf ? 'var(--c-4f8f6a)' : 'var(--c-8b8880)',
         }}
       >
         <span
@@ -108,16 +114,20 @@ function EditSet({
             height: 5,
             borderRadius: '50%',
             flexShrink: 0,
-            background: status.applied ? 'var(--c-4f8f6a)' : 'var(--c-c9c5bb)',
+            background: status.applied && status.pdf ? 'var(--c-4f8f6a)' : 'var(--c-c9c5bb)',
           }}
         />
-        {status.applied ? `${status.title} und PDF aktualisiert` : 'Nichts geändert'}
+        {!status.applied
+          ? 'Nichts geändert'
+          : status.pdf
+            ? `${status.title} und PDF aktualisiert`
+            : `${status.title} aktualisiert — PDF fehlt`}
         <span style={{ flex: 1 }} />
         {/* Only an applied set has anything to take back — there is no
            re-apply API, so an already-undone set gets the grey line and no
            button rather than an icon that would promise a retry it cannot
            perform. */}
-        {status.applied && (
+        {status.applied && !busy && (
           <div
             className="icon-btn"
             title="Änderung zurücknehmen"
@@ -230,7 +240,7 @@ export function CommentsSection({ cardId }: { cardId: string }) {
         const saveEdit = () => updateComment(cardId, c.id, st.commentEditDraft);
         /* Only a Kepler reply can carry an edit set — editStatus is null for
            every ordinary comment, so nothing renders below those. */
-        const status = c.author === Author.KEPLER ? editStatus(st, c.id) : null;
+        const status = c.author === Author.KEPLER ? editStatus(st, cardId, c.id) : null;
 
         return (
           <ThreadRow
@@ -341,7 +351,8 @@ export function CommentsSection({ cardId }: { cardId: string }) {
               <EditSet
                 edits={editsForComment(st, c.id)}
                 status={status}
-                onUndo={() => undoEdits(cardId, c.id)}
+                busy={!!st.keplerAsk[cardId]?.pending}
+                onUndo={() => void undoEdits(cardId, c.id)}
               />
             )}
           </ThreadRow>

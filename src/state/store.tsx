@@ -22,6 +22,7 @@ import type { PersonView } from './db-view';
 import {
   documentFor,
   documentLanguageOf,
+  DOCUMENT_TITLE,
   keplerHoldReason,
   keplerStartBlocked,
   peopleKeysForCard,
@@ -87,19 +88,16 @@ const SELECT_FACTS = new Set(['Gehalt', 'Erfahrung']);
    from a noun — "hat der Lebenslauf überarbeitet" is what assembling gets you.
    OTHER never reaches the editor, but the record is total so a new kind cannot
    be added without deciding what it is called. */
-const DOCUMENT_PHRASES: Record<DocumentKind, { title: string; revised: string; saved: string }> = {
+const DOCUMENT_PHRASES: Record<DocumentKind, { revised: string; saved: string }> = {
   [DocumentKind.COVER_LETTER]: {
-    title: 'Anschreiben',
     revised: 'hat das Anschreiben überarbeitet',
     saved: 'Das Anschreiben wurde gespeichert',
   },
   [DocumentKind.LEBENSLAUF]: {
-    title: 'Lebenslauf',
     revised: 'hat den Lebenslauf überarbeitet',
     saved: 'Der Lebenslauf wurde gespeichert',
   },
   [DocumentKind.OTHER]: {
-    title: 'Dokument',
     revised: 'hat das Dokument überarbeitet',
     saved: 'Das Dokument wurde gespeichert',
   },
@@ -1159,7 +1157,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (!api) return 'Ohne Desktop-Umgebung nicht möglich.';
       const phrases = DOCUMENT_PHRASES[kind];
       const doc = documentFor(stRef.current, id, kind);
-      if (!doc) return `Kein ${phrases.title} vorhanden.`;
+      if (!doc) return `Kein ${DOCUMENT_TITLE[kind]} vorhanden.`;
       try {
         const { filePath, pdfPath, pdfError } = await api.documents.save(
           id,
@@ -1356,22 +1354,49 @@ export function AppProvider({ children }: { children: ReactNode }) {
      that was never touched. */
   const undoEdits = useCallback(
     async (applicationId: string, commentId: number): Promise<string | null> => {
+      /* `pending` for the whole call, exactly as askKepler sets it: the undo
+         writes the same files through the same service, and DocumentsSection
+         reads this flag to keep the editor shut while a write is owed.
+         Without it the card unlocks mid-undo and a save can flush the
+         pre-undo document back over the reversal. */
+      set((s) => ({ keplerAsk: { ...s.keplerAsk, [applicationId]: { pending: true, error: null } } }));
+      /* The card may be gone by the time this lands, and `pending` may by then
+         belong to a newer ask — writing the row wholesale would clear a lock
+         this call never took. */
+      const settle = (error: string | null) =>
+        set((s) =>
+          s.applications[applicationId]
+            ? { keplerAsk: { ...s.keplerAsk, [applicationId]: { pending: false, error } } }
+            : {},
+        );
       const fail = (error: string) => {
-        set((s) => ({ keplerAsk: { ...s.keplerAsk, [applicationId]: { pending: false, error } } }));
+        settle(error);
         return error;
       };
       /* The undo writes the same file ask() does, so it carries the same view
          of the editor — the main process has none of its own. */
-      const res = await window.desktop?.agent.undo(
-        applicationId,
-        commentId,
-        stRef.current.editorCardId === applicationId ? stRef.current.editorKind : null,
-      );
+      let res;
+      try {
+        res = await window.desktop?.agent.undo(
+          applicationId,
+          commentId,
+          stRef.current.editorCardId === applicationId ? stRef.current.editorKind : null,
+        );
+      } catch (err: unknown) {
+        /* A broken bridge call, not a reason Kepler gave — same split
+           askKepler makes: the thread gets the German line, the console the
+           cause. Without this the rejection is floated by the click handler
+           and the line stays green over a document that was never reverted. */
+        console.error('[agent] undo failed', err);
+        return fail('Kepler konnte die Änderung nicht zurücknehmen.');
+      }
       if (!res) return fail('Ohne Desktop-Umgebung nicht möglich.');
       if (!res.ok) return fail(res.error);
-      /* Same shape askKepler's settle() writes on success — a prior refusal
-         sitting in this row must not outlive the attempt that fixed it. */
-      set((s) => ({ keplerAsk: { ...s.keplerAsk, [applicationId]: { pending: false, error: null } } }));
+      /* The reversal stands even when Chromium could not re-print beside it —
+         reported rather than swallowed, since the applicant sends the PDF.
+         An undo posts no comment of its own, so this row is the only surface
+         it has. */
+      settle(res.pdfError ?? null);
       /* The undo moved files and rewrote rows on the main side; the
          in-memory view has no way to know what changed, so it re-pulls.
          `resync` is the store's own name for that — see useResync near the
@@ -1667,6 +1692,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       saveRound,
       writeField,
       setInterest,
+      setLanguage,
       setAssignee,
       saveSummary,
       addComment,

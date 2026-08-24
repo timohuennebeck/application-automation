@@ -374,34 +374,49 @@ const edit = (over: Partial<CommentEditRow> = {}): CommentEditRow => ({
 });
 
 describe('editStatus', () => {
+  /* The rows the status line reads its PDF half off. A document with no
+     pdf_path is one whose re-print failed after the HTML was written. */
+  const withDocs = (
+    commentEdits: Record<string, unknown>,
+    docs: { kind: DocumentKind; pdf_path: string | null }[] = [
+      { kind: DocumentKind.COVER_LETTER, pdf_path: 'a/anschreiben.pdf' },
+      { kind: DocumentKind.LEBENSLAUF, pdf_path: 'a/lebenslauf.pdf' },
+    ],
+  ) => ({ commentEdits, documentsByApp: { a: docs } }) as unknown as AppState;
+
   it('is null for a reply that carries no edit set — an ordinary comment', () => {
-    const st = { commentEdits: {} } as unknown as AppState;
-    expect(editStatus(st, 42)).toBeNull();
+    expect(editStatus(withDocs({}), 'a', 42)).toBeNull();
   });
 
   it('reads as applied while every row of the set still stands', () => {
-    const st = { commentEdits: { '42': [edit()] } } as unknown as AppState;
-    expect(editStatus(st, 42)).toEqual({ applied: true, title: 'Anschreiben' });
+    expect(editStatus(withDocs({ '42': [edit()] }), 'a', 42)).toEqual({
+      applied: true,
+      title: 'Anschreiben',
+      pdf: true,
+    });
   });
 
   it('reads as unapplied once the whole set has been undone', () => {
-    const st = {
-      commentEdits: { '42': [edit({ undone_at: '2026-01-01T00:00:00.000Z' })] },
-    } as unknown as AppState;
-    expect(editStatus(st, 42)?.applied).toBe(false);
+    const st = withDocs({ '42': [edit({ undone_at: '2026-01-01T00:00:00.000Z' })] });
+    expect(editStatus(st, 'a', 42)?.applied).toBe(false);
   });
 
   it('names every document the all-or-nothing write touched, once each', () => {
-    const st = {
-      commentEdits: {
-        '42': [
-          edit(),
-          edit({ id: 2, kind: EditKind.DELETE }),
-          edit({ id: 3, document: DocumentKind.LEBENSLAUF }),
-        ],
-      },
-    } as unknown as AppState;
-    expect(editStatus(st, 42)?.title).toBe('Anschreiben und Lebenslauf');
+    const st = withDocs({
+      '42': [
+        edit(),
+        edit({ id: 2, kind: EditKind.DELETE }),
+        edit({ id: 3, document: DocumentKind.LEBENSLAUF }),
+      ],
+    });
+    expect(editStatus(st, 'a', 42)?.title).toBe('Anschreiben und Lebenslauf');
+  });
+
+  it('does not report a PDF the failed re-print left behind', () => {
+    /* writeGroups keeps the edited HTML and nulls pdf_path when Chromium
+       could not print. The line has to stop claiming the export. */
+    const st = withDocs({ '42': [edit()] }, [{ kind: DocumentKind.COVER_LETTER, pdf_path: null }]);
+    expect(editStatus(st, 'a', 42)).toEqual({ applied: true, title: 'Anschreiben', pdf: false });
   });
 });
 

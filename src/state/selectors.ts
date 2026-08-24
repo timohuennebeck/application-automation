@@ -98,19 +98,25 @@ export interface EditStatus {
   /* Whether the file still carries the set — false once every row in it has
      been undone. Never a mix: undo reverses the whole set at once. */
   applied: boolean;
-  /* The document(s) the set touched, for "… und PDF aktualisiert" — usually
-     one, but the all-or-nothing write can land across both at once. */
+  /* The document(s) the set touched, for the status line — usually one, but
+     the all-or-nothing write can land across both at once. */
   title: string;
+  /* Whether every document the set touched still has a PDF beside it. A
+     re-print that failed leaves pdf_path null, and the line must not claim an
+     export that is not there: the applicant sends the PDF, not the HTML. */
+  pdf: boolean;
 }
 
 /* Null for an ordinary reply that never carried an edit set — the thread
    shows nothing beyond the text for those. */
-export function editStatus(st: AppState, commentId: number): EditStatus | null {
+export function editStatus(st: AppState, id: string, commentId: number): EditStatus | null {
   const rows = editsForComment(st, commentId);
   if (!rows.length) return null;
+  const kinds = [...new Set(rows.map((r) => r.document))];
   return {
     applied: rows.every((r) => r.undone_at === null),
-    title: [...new Set(rows.map((r) => DOCUMENT_TITLE[r.document]))].join(' und '),
+    title: kinds.map((k) => DOCUMENT_TITLE[k]).join(' und '),
+    pdf: kinds.every((k) => !!documentFor(st, id, k)?.pdf_path),
   };
 }
 

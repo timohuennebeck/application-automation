@@ -549,6 +549,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
                   : s.commentEdits,
               };
             });
+            /* An answer that carried edits rewrote files and rows on the main
+               side, and the merge above only touches the thread: without this
+               `documentsByApp` keeps the pre-edit row, so a PDF that the failed
+               re-render just deleted still shows as a row that opens nothing,
+               and the mention chip's size never moves. Same re-pull undoEdits
+               does, for the same reason. */
+            resync();
           }
           settle(res.ok ? null : res.error);
         })
@@ -559,7 +566,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           settle('Kepler konnte nicht antworten.');
         });
     },
-    [set],
+    [set, resync],
   );
 
   /* A role a card or person is given joins the vocabulary (the repo does the
@@ -1353,7 +1360,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         set((s) => ({ keplerAsk: { ...s.keplerAsk, [applicationId]: { pending: false, error } } }));
         return error;
       };
-      const res = await window.desktop?.agent.undo(applicationId, commentId);
+      /* The undo writes the same file ask() does, so it carries the same view
+         of the editor — the main process has none of its own. */
+      const res = await window.desktop?.agent.undo(
+        applicationId,
+        commentId,
+        stRef.current.editorCardId === applicationId ? stRef.current.editorKind : null,
+      );
       if (!res) return fail('Ohne Desktop-Umgebung nicht möglich.');
       if (!res.ok) return fail(res.error);
       /* Same shape askKepler's settle() writes on success — a prior refusal

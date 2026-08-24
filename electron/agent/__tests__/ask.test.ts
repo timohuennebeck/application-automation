@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -451,6 +451,111 @@ describe('a comment that mentions a document', () => {
     expect(llm).not.toHaveBeenCalled();
   });
 
+  /* The design's driving case, end to end. "Engineering Hiring Team" stands in
+     both the recipient block and the salutation, so the only thing that can
+     tell them apart is the markup around them — a model reading flattened
+     prose could not write a quote that both is unique and matches the file,
+     and the feature refused its own headline request. */
+  it('gives the model markup it can quote a unique passage out of, and places it', async () => {
+    const original =
+      '<!doctype html><html><head><style>body{font-family:Inter}</style></head><body>' +
+      '<p class="recipient">Engineering Hiring Team</p>' +
+      '<p class="salutation">Sehr geehrtes Engineering Hiring Team,</p>' +
+      '<p>ich bewerbe mich auf die ausgeschriebene Stelle.</p>' +
+      '</body></html>';
+    const { service, appId, llm } = fixture({
+      answer: {
+        antwort: 'Eingetragen.',
+        edits: [
+          {
+            document: 'COVER_LETTER',
+            kind: 'replace',
+            find: '<p class="recipient">Engineering Hiring Team</p>',
+            replace: '<p class="recipient">Frau Maria Haushofer</p>',
+            after: null,
+          },
+          {
+            document: 'COVER_LETTER',
+            kind: 'replace',
+            find: '<p class="salutation">Sehr geehrtes Engineering Hiring Team,</p>',
+            replace: '<p class="salutation">Sehr geehrte Frau Haushofer,</p>',
+            after: null,
+          },
+        ],
+      },
+    });
+    writeLetter(appId, original);
+    const comment = addComment(appId, '@Kepler trag Maria Haushofer im @Anschreiben ein');
+
+    const res = await service.ask({ applicationId: appId, commentId: comment.id, openDocument: null });
+
+    /* What the model was given has to be what the file holds, byte for byte —
+       otherwise the quote it writes back cannot match. */
+    const prompt = llm.mock.calls[0][0].prompt;
+    expect(prompt).toContain('<p class="recipient">Engineering Hiring Team</p>');
+    expect(prompt).toContain('<p class="salutation">Sehr geehrtes Engineering Hiring Team,</p>');
+    expect(prompt).not.toContain('font-family');
+
+    expect(res.ok).toBe(true);
+    expect(readLetter(appId)).toBe(
+      '<!doctype html><html><head><style>body{font-family:Inter}</style></head><body>' +
+        '<p class="recipient">Frau Maria Haushofer</p>' +
+        '<p class="salutation">Sehr geehrte Frau Haushofer,</p>' +
+        '<p>ich bewerbe mich auf die ausgeschriebene Stelle.</p>' +
+        '</body></html>',
+    );
+  });
+
+  it('leaves the first document untouched when a later one cannot be written', async () => {
+    /* Not the same failure as a passage that will not place: both groups plan
+       fine, and the write itself throws. Written straight through, the
+       Anschreiben would be changed on disk while the throw carries past the
+       comment and past addCommentEdits — a changed document, a silent thread
+       and no set to undo. Staging every file beside its target and renaming
+       only once all of them exist is what keeps that from happening; the temp
+       suffix is named here because that is the only way to make the second
+       write fail on demand. */
+    const { service, repo, appId } = fixture({
+      answer: {
+        antwort: 'Ich ändere beides.',
+        edits: [
+          {
+            document: 'COVER_LETTER',
+            kind: 'replace',
+            find: 'Engineering Hiring Team',
+            replace: 'Frau Haushofer',
+            after: null,
+          },
+          { document: 'LEBENSLAUF', kind: 'replace', find: 'Inhalt', replace: 'Neues', after: null },
+        ],
+      },
+    });
+    const letterOriginal = '<p>Sehr geehrtes Engineering Hiring Team,</p>';
+    writeLetter(appId, letterOriginal);
+    writeCv(appId, '<p>Lebenslauf-Inhalt</p>');
+    /* A directory where the Lebenslauf's temp file wants to go: writeFileSync
+       throws EISDIR, after the Anschreiben has already been staged. */
+    const cvTmp =
+      documentPaths(ROOT, appId, DocumentKind.LEBENSLAUF, DocumentLanguage.DE).htmlAbs + '.kepler-tmp';
+    mkdirSync(cvTmp, { recursive: true });
+    const comment = addComment(appId, '@Kepler ändere @Anschreiben und @Lebenslauf');
+
+    const res = await service.ask({ applicationId: appId, commentId: comment.id, openDocument: null });
+
+    expect(res.ok).toBe(false);
+    expect(readLetter(appId)).toBe(letterOriginal);
+    /* And nothing half-written left lying beside it. */
+    expect(
+      existsSync(
+        documentPaths(ROOT, appId, DocumentKind.COVER_LETTER, DocumentLanguage.DE).htmlAbs + '.kepler-tmp',
+      ),
+    ).toBe(false);
+    expect(
+      repo.load().comments.filter((c) => c.author === Author.KEPLER && c.text === 'Ich ändere beides.'),
+    ).toHaveLength(0);
+    rmSync(cvTmp, { recursive: true, force: true });
+  });
+
   it('ignores a document that was not mentioned', async () => {
     const { service, appId, llm } = fixture();
     writeLetter(appId, '<p>Sehr geehrtes Engineering Hiring Team,</p>');
@@ -484,7 +589,7 @@ describe('undo', () => {
     await service.ask({ applicationId: appId, commentId: comment.id, openDocument: null });
     const reply = repo.load().comments.at(-1)!;
 
-    await service.undo(appId, reply.id);
+    await service.undo(appId, reply.id, null);
 
     expect(readLetter(appId)).toBe(original);
     expect(repo.commentEdits(reply.id).every((r) => r.undone_at !== null)).toBe(true);
@@ -501,9 +606,9 @@ describe('undo', () => {
     const comment = addComment(appId, '@Kepler ändere das @Anschreiben');
     await service.ask({ applicationId: appId, commentId: comment.id, openDocument: null });
     const reply = repo.load().comments.at(-1)!;
-    await service.undo(appId, reply.id);
+    await service.undo(appId, reply.id, null);
 
-    const again = await service.undo(appId, reply.id);
+    const again = await service.undo(appId, reply.id, null);
 
     expect(again.ok).toBe(false);
   });
@@ -553,7 +658,7 @@ describe('undo', () => {
     });
     const askPending = svc.ask({ applicationId: appId, commentId: secondComment.id, openDocument: null });
     await Promise.resolve();
-    const undoPending = svc.undo(appId, reply.id);
+    const undoPending = svc.undo(appId, reply.id, null);
 
     release({
       antwort: 'Gemacht.',

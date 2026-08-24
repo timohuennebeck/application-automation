@@ -352,6 +352,45 @@ describe('validateAsk with edits', () => {
     expect(out.edits).toEqual([]);
   });
 
+  it('drops a deletion with no anchor', () => {
+    /* reverseEdits turns a deletion into an insertion carrying `after` — with
+       no anchor the reversal has an empty needle, applyEdits refuses it, and
+       because the undo is all-or-nothing that one entry takes the whole set
+       down with it. The passage would be gone for good. */
+    const out = validateAsk({
+      antwort: 'x',
+      edits: [
+        {
+          document: 'COVER_LETTER',
+          kind: 'delete',
+          find: '<p>Meine Gehaltserwartung liegt bei 80.000 EUR brutto p.a.</p>',
+          replace: '',
+          after: null,
+        },
+      ],
+    });
+
+    expect(out.edits).toEqual([]);
+  });
+
+  it('keeps a deletion that names both the passage and its anchor', () => {
+    const out = validateAsk({
+      antwort: 'x',
+      edits: [
+        {
+          document: 'COVER_LETTER',
+          kind: 'delete',
+          find: '<p>weg</p>',
+          replace: '',
+          after: '<p>davor</p>',
+        },
+      ],
+    });
+
+    expect(out.edits).toHaveLength(1);
+    expect(out.edits[0]).toMatchObject({ kind: EditKind.DELETE, after: '<p>davor</p>' });
+  });
+
   it('still rejects an answer with no prose', () => {
     expect(() => validateAsk({ edits: [] })).toThrow();
   });

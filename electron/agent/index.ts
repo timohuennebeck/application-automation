@@ -21,6 +21,7 @@ import { fetchListingText } from './scrape.ts';
 import { createAgentService } from './service.ts';
 import { createVariantsService } from './variants.ts';
 import { createAskService } from './ask.ts';
+import type { DocumentKind } from '../../src/shared/enums.ts';
 
 /* What the rest of the main process needs from Kepler once the channels are
    wired: everything to drop when a card goes away. A run and the rewrites of an
@@ -121,8 +122,10 @@ export function registerAgentIpc(
     });
   });
 
-  ipcMain.handle('agent:undo', (_e, applicationId: string, commentId: number): Promise<AskResult> =>
-    asks.undo(String(applicationId), Number(commentId)),
+  ipcMain.handle(
+    'agent:undo',
+    (_e, applicationId: string, commentId: number, openDocument: DocumentKind | null): Promise<AskResult> =>
+      asks.undo(String(applicationId), Number(commentId), openDocument ?? null),
   );
 
   return {

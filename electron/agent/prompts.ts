@@ -421,6 +421,42 @@ export function documentExcerpt(html: string): string {
   return documentText(html).replace(/\s+/g, ' ').slice(0, EXCERPT);
 }
 
+/* A whole letter with its tags but without its dead weight. Generous, because
+   the model has to be able to quote the end of the document too, and a real
+   letter is about 1 KB of actual markup once the two elisions below have run;
+   the cap only stops a pathological template from taking the call with it. */
+const MARKUP = 40_000;
+
+/* What a MENTIONED document is handed over as — markup, not prose, and that is
+   the whole point. The model has to quote a passage back that edits.ts then
+   looks for in the file's own bytes, and in a real letter the recipient block
+   and the salutation say the same words: only the tags around them tell the
+   two apart. A model reading documentExcerpt could never write a quote that
+   both is unique and matches.
+
+   So everything quotable survives byte for byte, and only what makes raw HTML
+   unreadable goes: the <style>/<script> bodies, and the base64 payload of an
+   embedded image — a real letter is 76 KB of mostly base64, which is the
+   reason documentExcerpt exists in the first place. Both elisions are safe in
+   one direction only, and that is the direction that matters: a quote taken
+   from an elided region cannot be found in the file, so applyEdits refuses it
+   rather than placing it somewhere wrong. */
+export function documentMarkup(html: string): string {
+  return (
+    html
+      .replace(/<(style|script)\b([^>]*)>[\s\S]*?<\/\1>/gi, '<$1$2></$1>')
+      /* Quoted or bare — the templates are user-authored HTML this codebase
+         does not control. The placeholder keeps the attribute well-formed so
+         the model still reads the tag as an image. */
+      .replace(/(\bsrc\s*=\s*)(?:"data:[^"]*"|'data:[^']*'|data:[^\s>]*)/gi, '$1"data:…"')
+      .slice(0, MARKUP)
+      /* A cut landing mid-tag would offer the model half an opening tag as a
+         quotable passage — and half a tag IS a byte-exact prefix of the file,
+         so applyEdits would happily replace it and break the document. */
+      .replace(/<[^>]*$/, '')
+  );
+}
+
 export function checksPrompt(
   extraction: Extraction,
   contacts: string[],
@@ -528,10 +564,12 @@ export interface AskInterview {
   notes: AskComment[];
 }
 
-/* One document the comment mentioned, as what it says. The model reads text,
-   never markup — but it has to quote a passage back exactly, and what it
-   quotes is matched against the file's own bytes. A passage carrying emphasis
-   therefore cannot be changed from the thread; the rules below say so. */
+/* One document the comment mentioned, as documentMarkup left it: the file's
+   own bytes, minus the stylesheet and the base64. Markup rather than prose
+   because the model has to quote a passage back exactly and that quote is
+   matched against those bytes — see documentMarkup for why the flattened text
+   the rest of the prompts use cannot carry a quote that both is unique and
+   matches. */
 export interface AskDocument {
   kind: DocumentKind;
   text: string;
@@ -590,11 +628,15 @@ function interviewBlock(rounds: AskInterview[]): string {
 const editRules = (docs: AskDocument[]) => `
 Die unten stehenden Dokumente sind erwähnt worden. Du darfst sie lesen — und ändern, wenn der Bewerber darum bittet.
 
+Die Dokumente stehen unten als HTML — genau so, wie sie in der Datei stehen. Was du zitierst, wird Zeichen für Zeichen in dieser Datei gesucht; findet es sich dort nicht oder mehrfach, wird gar nichts geändert.
+
 Regeln für Änderungen:
 - Jede Änderung ist ein Eintrag in edits. document ist "COVER_LETTER" oder "LEBENSLAUF", kind ist "replace", "delete" oder "insert".
-- find ist die Stelle im Dokument, wörtlich und Zeichen für Zeichen so, wie sie unten steht. Eine Stelle, die du nicht wörtlich zitieren kannst, änderst du nicht.
-- Die Stelle muss im Dokument genau einmal vorkommen. Kommt sie mehrfach vor, nimm mehr Text drumherum dazu, bis sie eindeutig ist.
-- replace ist der neue Text. Bei "delete" ist replace leer, bei "insert" ist find leer und after die Stelle, hinter der eingefügt wird.
+- find ist die Stelle im Dokument, wörtlich und Zeichen für Zeichen so, wie sie unten steht — mitsamt der Tags, die mitten darin stehen. Eine Stelle, die du nicht wörtlich zitieren kannst, änderst du nicht.
+- Die Stelle muss im Dokument genau einmal vorkommen. Kommt derselbe Text mehrfach vor, nimm die umgebenden Tags dazu, bis das Zitat eindeutig ist — z. B. \`<p class="empfaenger">Engineering Hiring Team</p>\` statt nur "Engineering Hiring Team".
+- replace ist der neue Text und tritt genau an die Stelle des Zitats. Hast du Tags mitzitiert, müssen dieselben Tags auch in replace stehen, sonst zerfällt das Dokument.
+- Bei "delete" ist replace leer, bei "insert" ist find leer. In beiden Fällen ist after die Stelle unmittelbar davor: bei "insert" die, hinter der eingefügt wird, bei "delete" die, hinter der der gelöschte Text stand — ohne sie lässt sich die Löschung nicht wieder zurücknehmen.
+- <style>, <script> und Bilddaten stehen unten nur verkürzt. Daraus zitierst du nichts und änderst du nichts.
 - Ändere nur, worum gebeten wurde, und alles, was davon abhängt: eine neue Empfängerin verlangt auch die passende Anrede, sonst widerspricht sich der Brief.
 - Kann eine der nötigen Stellen nicht eindeutig zitiert werden, gib gar keine edits zurück und sag im Text, welche Stelle das war.
 - Wird nur gefragt und nicht um eine Änderung gebeten, bleibt edits leer.

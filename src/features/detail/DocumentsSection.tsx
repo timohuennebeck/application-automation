@@ -14,8 +14,16 @@ export function DocumentsSection({ cardId }: { cardId: string }) {
   /* PROOFS can still rewrite the Anschreiben while the run is in flight — the
      editor opening it would race that rewrite's write-back and the two PDF
      renders. Gate on the same lock the card's own fields already respect
-     instead of teaching the editor to re-read a file out from under itself. */
-  const locked = agentLocked(st, cardId);
+     instead of teaching the editor to re-read a file out from under itself.
+
+     An ask is the same race stretched over a minute and a half: ask() checks
+     for an open editor once, before the model call, and the write lands when
+     it returns. Opening the letter in between and typing one word would have
+     use-document-save flush the pre-edit document over Kepler's write 700 ms
+     later — with the thread already showing the green "aktualisiert" line
+     over a file that no longer carries the change. So the card stays shut for
+     as long as the answer is owed. */
+  const locked = agentLocked(st, cardId) || !!st.keplerAsk[cardId]?.pending;
   const [error, setError] = useState<string | null>(null);
   /* Sizes by stored path, read from disk rather than stored — a row that lost
      its file would otherwise keep quoting a size that is no longer true. */

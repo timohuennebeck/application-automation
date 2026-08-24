@@ -396,8 +396,13 @@ export function validateAsk(x: unknown): AskAnswer {
       const find = typeof e.find === 'string' ? e.find : '';
       const replace = typeof e.replace === 'string' ? e.replace : '';
       const after = text(e.after);
-      /* Each kind needs the half it is located by. */
-      if (kind === EditKind.INSERT ? !after : !find) continue;
+      /* Each kind needs the half it is located by — and a deletion needs both:
+         `find` to place it, and `after` so reverseEdits has an anchor to put
+         the text back behind. A delete stored without one can never be undone,
+         and the undo is all-or-nothing, so it would take the whole set with
+         it. Dropped here, exactly like a replacement with nothing to find. */
+      if (kind !== EditKind.INSERT && !find) continue;
+      if (kind !== EditKind.REPLACE && !after) continue;
       edits.push({ document, kind, find, replace, after });
     }
   }

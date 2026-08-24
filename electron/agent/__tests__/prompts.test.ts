@@ -5,12 +5,14 @@ import {
   checksPrompt,
   cvPrompt,
   documentExcerpt,
+  documentMarkup,
   extractionPrompt,
   letterPrompt,
   proofsPrompt,
   variantsPrompt,
 } from '../prompts.ts';
-import { DocumentKind, DocumentLanguage } from '../../../src/shared/enums.ts';
+import { applyEdits } from '../edits.ts';
+import { DocumentKind, DocumentLanguage, EditKind } from '../../../src/shared/enums.ts';
 import { APPLICANT_EMAIL, APPLICANT_NAME } from '../../../src/shared/applicant.ts';
 import type { AskInput, DocumentInput, VariantsInput } from '../prompts.ts';
 import { VALUE_BUDGET } from '../budgets.ts';
@@ -259,6 +261,76 @@ describe('documentExcerpt', () => {
     expect(documentExcerpt(noteHtml)).toContain('Bitte reichen Sie die Unterlagen bis Freitag ein.');
     expect(documentExcerpt(subHtml)).toContain('Wir freuen uns auf Ihre Bewerbung.');
     expect(documentExcerpt(hintHtml)).toContain('Vielen Dank für Ihr Interesse an der Position.');
+  });
+});
+
+describe('documentMarkup', () => {
+  /* A letter shaped like a real one: a stylesheet, an embedded logo, and the
+     company name in both the recipient block and the salutation. */
+  const BASE64 = 'iVBORw0KGgoAAAANSUhEUg' + 'A'.repeat(2_000);
+  const LETTER =
+    '<!doctype html><html><head><style>body { font-family: Inter; }</style></head><body>' +
+    `<img class="logo" src="data:image/png;base64,${BASE64}">` +
+    '<p class="recipient">Engineering Hiring Team</p>' +
+    '<p class="salutation">Sehr geehrtes Engineering Hiring Team,</p>' +
+    '<p>Meine Gehaltserwartung liegt bei 80.000 EUR brutto p.a.</p>' +
+    '</body></html>';
+
+  it('keeps the markup byte for byte, and elides only stylesheet and image data', () => {
+    const markup = documentMarkup(LETTER);
+
+    expect(markup).toContain('<p class="recipient">Engineering Hiring Team</p>');
+    expect(markup).toContain('<p class="salutation">Sehr geehrtes Engineering Hiring Team,</p>');
+    expect(markup).not.toContain(BASE64);
+    expect(markup).not.toContain('font-family');
+    /* The tags around the elisions stay, so the model still reads the document
+       as a document rather than as prose with holes in it. */
+    expect(markup).toContain('<img class="logo"');
+    expect(markup).toContain('<style></style>');
+    expect(markup.length).toBeLessThan(500);
+  });
+
+  it('elides a src written with single quotes or none at all', () => {
+    expect(documentMarkup(`<img src='data:image/png;base64,${BASE64}'>`)).not.toContain(BASE64);
+    expect(documentMarkup(`<img src=data:image/png;base64,${BASE64}>`)).not.toContain(BASE64);
+  });
+
+  it('never leaves half an opening tag at the cut', () => {
+    /* Half a tag is a byte-exact prefix of the file, so applyEdits would place
+       a replacement into the middle of it. The cut backs off to the last "&gt;". */
+    const long = '<p>' + 'x'.repeat(39_990) + '</p><p class="recipient">Team</p>';
+
+    /* Without the back-off the cut lands three characters into the second
+       paragraph's opening tag. */
+    expect(documentMarkup(long).endsWith('</p>')).toBe(true);
+    expect(documentMarkup(long)).not.toMatch(/<[^>]*$/);
+  });
+
+  /* The seam neither module test could see on its own: prompts.ts owns what
+     the model reads, edits.ts owns what its quote is matched against. The
+     design's driving case only works if a passage that is unique in the file
+     ONLY together with its tags can be quoted out of the one and placed by
+     the other. */
+  it('lets the model quote a passage that is unique only with its tags', () => {
+    const markup = documentMarkup(LETTER);
+    /* What Kepler can read, and therefore what it can quote back. */
+    const quote = '<p class="recipient">Engineering Hiring Team</p>';
+    expect(markup).toContain(quote);
+
+    const res = applyEdits(LETTER, [
+      {
+        document: DocumentKind.COVER_LETTER,
+        kind: EditKind.REPLACE,
+        find: quote,
+        replace: '<p class="recipient">Frau Maria Haushofer</p>',
+        after: null,
+      },
+    ]);
+
+    expect(res.failed).toBeNull();
+    expect(res.html).toContain('<p class="recipient">Frau Maria Haushofer</p>');
+    /* The salutation is a separate edit, and untouched by this one. */
+    expect(res.html).toContain('<p class="salutation">Sehr geehrtes Engineering Hiring Team,</p>');
   });
 });
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { applyEdits, reverseEdits } from '../edits.ts';
+import { validateAsk } from '../schemas.ts';
 import type { DocumentEdit } from '../../../src/shared/db-types.ts';
 import { DocumentKind, EditKind } from '../../../src/shared/enums.ts';
 
@@ -141,6 +142,36 @@ describe('reverseEdits', () => {
     const back = reverseEdits([edit({ find: 'a', replace: 'b' }), edit({ find: 'b', replace: 'c' })]);
 
     expect(back.map((e) => e.find)).toEqual(['c', 'b']);
+  });
+
+  /* Every other test here hand-fills `after` on a deletion, which is exactly
+     how the missing anchor stayed invisible: nothing on the production path
+     used to require one. This one takes the set the way ask() gets it — out of
+     the validator, from a payload shaped like the model's answer — so a
+     deletion that reaches applyEdits can always be taken back out again. */
+  it('round-trips a deletion whose anchor came through the validator', () => {
+    const { edits } = validateAsk({
+      antwort: 'Die Gehaltserwartung ist raus.',
+      edits: [
+        {
+          document: 'COVER_LETTER',
+          kind: 'delete',
+          find: '<p>Meine Gehaltserwartung liegt bei 80.000 EUR brutto p.a.</p>',
+          replace: '',
+          after: '<p class="salutation">Sehr geehrtes Engineering Hiring Team,</p>',
+        },
+      ],
+    });
+    expect(edits).toHaveLength(1);
+
+    const forward = applyEdits(LETTER, edits);
+    expect(forward.failed).toBeNull();
+    expect(forward.html).not.toContain('Gehaltserwartung');
+
+    const backward = applyEdits(forward.html, reverseEdits(edits));
+
+    expect(backward.failed).toBeNull();
+    expect(backward.html).toBe(LETTER);
   });
 
   it('round-trips a document to its original bytes', () => {

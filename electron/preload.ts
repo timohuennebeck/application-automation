@@ -107,9 +107,10 @@ const api = {
        thread on the main side and comes back as that comment row. */
     ask: (req: AskRequest): Promise<AskResult> => ipcRenderer.invoke('agent:ask', req),
     /* The retry icon on an applied answer: puts the document back and marks
-       the set undone. */
-    undo: (applicationId: string, commentId: number): Promise<AskResult> =>
-      ipcRenderer.invoke('agent:undo', applicationId, commentId),
+       the set undone. Carries the open document for the same reason ask()
+       does — it writes the same file, so it takes the same refusal. */
+    undo: (applicationId: string, commentId: number, openDocument: DocumentKind | null): Promise<AskResult> =>
+      ipcRenderer.invoke('agent:undo', applicationId, commentId, openDocument),
     /* Subscribes to run/step updates; returns the unsubscribe. */
     onEvent: (cb: (e: AgentEvent) => void): (() => void) => {
       const handler = (_e: Electron.IpcRendererEvent, event: AgentEvent) => cb(event);

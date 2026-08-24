@@ -6,7 +6,7 @@
    renderer appends it without a re-pull. Kepler reads the card, and — when the
    comment named one — the document it named; it may change that document, but
    nothing else. */
-import { readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import type { Repo } from '../db/repo.ts';
 import { resolveDocumentPath } from '../files.ts';
 import type { RunStore } from './run-store.ts';
@@ -23,7 +23,7 @@ import { APPLICANT_NAME } from '../../src/shared/applicant.ts';
 import { Author, AUTHOR_LABEL, DocumentKind, RoundState } from '../../src/shared/enums.ts';
 import { applyEdits, reverseEdits } from './edits.ts';
 import type { LlmRunner } from './orchestrator.ts';
-import { askPrompt, documentExcerpt } from './prompts.ts';
+import { askPrompt, documentMarkup } from './prompts.ts';
 import type { AskComment, AskDocument, AskInput, AskInterview } from './prompts.ts';
 import { ASK_SCHEMA, validateAsk } from './schemas.ts';
 import { userMessage } from './errors.ts';
@@ -43,8 +43,9 @@ interface AskDeps {
 export interface AskService {
   ask(req: AskRequest): Promise<AskResult>;
   /* The retry icon on an applied answer: puts the document back and marks the
-     set undone. */
-  undo(applicationId: string, commentId: number): Promise<AskResult>;
+     set undone. `openDocument` is what the editor has open on this card, the
+     same guard ask() carries — the undo writes the same file. */
+  undo(applicationId: string, commentId: number, openDocument: DocumentKind | null): Promise<AskResult>;
   stop(applicationId: string): void;
 }
 
@@ -195,10 +196,12 @@ export function createAskService({ repo, runs, llm, userDataPath, renderPdf }: A
      reverseEdits() of what was stored, but both are one set placed atomically
      against the files on disk. */
   const writeGroups = async (
-    applicationId: string,
+    /* The card's document rows, handed in rather than loaded here: answer()
+       already holds a snapshot, and a second repo.load() would read every
+       table again to find at most two rows. */
+    rows: DocumentRow[],
     edits: DocumentEdit[],
   ): Promise<{ error: string | null }> => {
-    const rows = repo.load().documents.filter((d) => d.application_id === applicationId);
     const planned: { row: DocumentRow; html: string }[] = [];
     for (const kind of new Set(edits.map((e) => e.document))) {
       const row = rows.find((d) => d.kind === kind);
@@ -221,9 +224,30 @@ export function createAskService({ repo, runs, llm, userDataPath, renderPdf }: A
       if (res.failed) return { error: res.reason };
       planned.push({ row, html: res.html });
     }
-    for (const { row, html } of planned) {
-      const abs = resolveDocumentPath(userDataPath, row.file_path!);
-      writeFileSync(abs, html);
+    /* Every file is written beside its target first, and only once all of them
+       are on disk is any of them renamed into place. Writing straight through
+       would break the all-or-nothing rule one layer above applyEdits: a throw
+       from the second document's write leaves the first one changed, and the
+       throw propagates past the comment and past addCommentEdits — a changed
+       Anschreiben, a silent thread, and no stored set to undo. A rename is
+       near-instant, so what is left is a window of microseconds rather than a
+       whole file write. Cleanup after a throw is safe unconditionally: a temp
+       that was already renamed no longer exists, and force makes that a
+       no-op. */
+    const staged: { row: DocumentRow; abs: string; tmp: string }[] = [];
+    try {
+      for (const { row, html } of planned) {
+        const abs = resolveDocumentPath(userDataPath, row.file_path!);
+        const tmp = abs + '.kepler-tmp';
+        writeFileSync(tmp, html);
+        staged.push({ row, abs, tmp });
+      }
+      for (const { abs, tmp } of staged) renameSync(tmp, abs);
+    } catch (err) {
+      for (const { tmp } of staged) rmSync(tmp, { force: true });
+      throw err;
+    }
+    for (const { row, abs } of staged) {
       const pdfAbs = abs.replace(/\.html?$/i, '.pdf');
       /* Mirrors generateDocument in orchestrator.ts for the same failure:
          keep the edited HTML — losing it because Chromium could not print
@@ -270,7 +294,9 @@ export function createAskService({ repo, runs, llm, userDataPath, renderPdf }: A
       if (!row?.file_path) continue;
       try {
         const html = readFileSync(resolveDocumentPath(userDataPath, row.file_path), 'utf8');
-        documents.push({ kind, text: documentExcerpt(html) });
+        /* Markup, not the flattened text the other prompts read: what Kepler
+           quotes from here is looked for in exactly these bytes. */
+        documents.push({ kind, text: documentMarkup(html) });
       } catch {
         /* Same as no file: the row's path is stale, so the mention is
            dropped rather than the whole answer failing over it. */
@@ -299,7 +325,10 @@ export function createAskService({ repo, runs, llm, userDataPath, renderPdf }: A
           edits: [],
         };
       }
-      const written = await writeGroups(req.applicationId, reply.edits);
+      const written = await writeGroups(
+        snap.documents.filter((d) => d.application_id === req.applicationId),
+        reply.edits,
+      );
       if (written.error) {
         /* The prose still posts — with the reason appended, so the thread
            shows why nothing changed rather than a silent no-op. */
@@ -343,7 +372,11 @@ export function createAskService({ repo, runs, llm, userDataPath, renderPdf }: A
      await is the PDF re-render inside writeGroups, and by then the file
      write it belongs to has already happened synchronously — there is
      nothing left to call off, only a later, still-unstarted call. */
-  const undoOne = async (applicationId: string, commentId: number): Promise<AskResult> => {
+  const undoOne = async (
+    applicationId: string,
+    commentId: number,
+    openDocument: DocumentKind | null,
+  ): Promise<AskResult> => {
     if (!repo.getApplicationWithCompany(applicationId)) {
       return { ok: false, error: 'Unbekannte Bewerbung.' };
     }
@@ -356,7 +389,23 @@ export function createAskService({ repo, runs, llm, userDataPath, renderPdf }: A
       const stored = repo.commentEdits(commentId).filter((r) => r.undone_at === null);
       if (!stored.length) return { ok: false, error: 'Diese Änderung wurde schon zurückgenommen.' };
 
-      const written = await writeGroups(applicationId, reverseEdits(fromRows(stored)));
+      /* The same rule the forward direction has: Kepler does not write a file
+         whose other half the user is holding open. Both paths write the same
+         document, so guarding only ask() would leave the editor's flush racing
+         the undo instead of the answer. Checked against the set's own
+         documents — an open Lebenslauf is no reason to refuse taking back a
+         change to the Anschreiben. */
+      if (openDocument && stored.some((r) => r.document === openDocument)) {
+        return {
+          ok: false,
+          error: 'Das Dokument ist gerade im Editor offen. Schließ es, dann nehme ich die Änderung zurück.',
+        };
+      }
+
+      const written = await writeGroups(
+        repo.load().documents.filter((d) => d.application_id === applicationId),
+        reverseEdits(fromRows(stored)),
+      );
       if (written.error) return { ok: false, error: written.error };
       repo.markEditsUndone(commentId);
       return { ok: true, comment: repo.load().comments.find((c) => c.id === commentId)!, edits: [] };
@@ -372,8 +421,8 @@ export function createAskService({ repo, runs, llm, userDataPath, renderPdf }: A
       return enqueue(req.applicationId, () => answer(req));
     },
 
-    undo(applicationId: string, commentId: number): Promise<AskResult> {
-      return enqueue(applicationId, () => undoOne(applicationId, commentId));
+    undo(applicationId: string, commentId: number, openDocument: DocumentKind | null): Promise<AskResult> {
+      return enqueue(applicationId, () => undoOne(applicationId, commentId, openDocument));
     },
 
     /* The card is gone: end the call in the air rather than let it run out its

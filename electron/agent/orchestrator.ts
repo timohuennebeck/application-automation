@@ -797,7 +797,7 @@ function finalComment(postingUrl: string | null, findings: Findings): string {
   const contact = findings.researched
     ? [
         `**${findings.researched.name}**${findings.researched.role ? ` (${findings.researched.role})` : ''} ` +
-          `im Web gefunden und eingetragen — bitte prüf sie${findings.researched.linkedin ? `: ${findings.researched.linkedin}` : '.'}`,
+          `im Web gefunden und eingetragen — bitte prüf den Eintrag${findings.researched.linkedin ? `: ${findings.researched.linkedin}` : '.'}`,
       ]
     : [];
   const bullets = [

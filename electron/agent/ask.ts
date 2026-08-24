@@ -3,18 +3,28 @@
    Beside the pipeline, like the letter rewrite: one call, outside the queue,
    refused while a run holds the card. Unlike the rewrite it writes — the answer
    lands in the thread as a Kepler comment and travels back as that row, so the
-   renderer appends it without a re-pull. Kepler reads only this card: its
-   facts, people, thread, interviews and follow-ups. It answers; it does not
-   touch documents or data. */
+   renderer appends it without a re-pull. Kepler reads the card, and — when the
+   comment named one — the document it named; it may change that document, but
+   nothing else. */
+import { readFileSync, writeFileSync } from 'node:fs';
 import type { Repo } from '../db/repo.ts';
+import { resolveDocumentPath } from '../files.ts';
 import type { RunStore } from './run-store.ts';
 import type { AskRequest, AskResult } from '../../src/shared/agent.ts';
-import type { CommentRow, DbSnapshot, RoundNoteRow } from '../../src/shared/db-types.ts';
+import type {
+  CommentEditRow,
+  CommentRow,
+  DbSnapshot,
+  DocumentEdit,
+  DocumentRow,
+  RoundNoteRow,
+} from '../../src/shared/db-types.ts';
 import { APPLICANT_NAME } from '../../src/shared/applicant.ts';
-import { Author, AUTHOR_LABEL, RoundState } from '../../src/shared/enums.ts';
+import { Author, AUTHOR_LABEL, DocumentKind, RoundState } from '../../src/shared/enums.ts';
+import { applyEdits, reverseEdits } from './edits.ts';
 import type { LlmRunner } from './orchestrator.ts';
-import { askPrompt } from './prompts.ts';
-import type { AskComment, AskInput, AskInterview } from './prompts.ts';
+import { askPrompt, documentExcerpt } from './prompts.ts';
+import type { AskComment, AskDocument, AskInput, AskInterview } from './prompts.ts';
 import { ASK_SCHEMA, validateAsk } from './schemas.ts';
 import { userMessage } from './errors.ts';
 
@@ -26,11 +36,47 @@ interface AskDeps {
   repo: Repo;
   runs: RunStore;
   llm: LlmRunner;
+  userDataPath: string;
+  renderPdf(htmlAbs: string, pdfAbs: string): Promise<void>;
 }
 
 export interface AskService {
   ask(req: AskRequest): Promise<AskResult>;
+  /* The retry icon on an applied answer: puts the document back and marks the
+     set undone. */
+  undo(applicationId: string, commentId: number): Promise<AskResult>;
   stop(applicationId: string): void;
+}
+
+/* What each document is mentioned as. The same strings the picker offers, so
+   what the user clicked is what this finds. */
+const DOCUMENT_MENTION: Record<DocumentKind, string> = {
+  [DocumentKind.COVER_LETTER]: 'Anschreiben',
+  [DocumentKind.LEBENSLAUF]: 'Lebenslauf',
+  [DocumentKind.OTHER]: '',
+};
+
+/* Which documents this comment named. Read from the comment's own text rather
+   than passed in by the renderer: the row is the record of what was asked, so
+   a mention that never reached the text cannot cause a change. */
+function mentionedDocuments(text: string): DocumentKind[] {
+  const found: DocumentKind[] = [];
+  for (const [kind, title] of Object.entries(DOCUMENT_MENTION) as [DocumentKind, string][]) {
+    if (new RegExp('(?<![\\p{L}\\d@])@' + title + '(?![\\p{L}\\d])', 'u').test(text)) found.push(kind);
+  }
+  return found;
+}
+
+/* A stored row back into the shape edits.ts works in. The column names differ
+   because `replace` is a SQLite function name; nothing else does. */
+function fromRows(rows: CommentEditRow[]): DocumentEdit[] {
+  return rows.map((r) => ({
+    document: r.document,
+    kind: r.kind,
+    find: r.find_text,
+    replace: r.replace_text,
+    after: r.after_text,
+  }));
 }
 
 const ROUND_STATE_LABEL: Record<RoundState, string> = {
@@ -59,7 +105,12 @@ function entry(row: CommentRow | RoundNoteRow, asked = false): AskComment {
 
 /* Everything the card knows about itself, gathered from one snapshot so the
    thread, the rounds and the people are read at the same instant. */
-function buildInput(snap: DbSnapshot, applicationId: string, asking: CommentRow): AskInput {
+function buildInput(
+  snap: DbSnapshot,
+  applicationId: string,
+  asking: CommentRow,
+  documents: AskDocument[],
+): AskInput {
   const app = snap.applications.find((a) => a.id === applicationId)!;
   const company = snap.companies.find((c) => c.id === app.company_id);
   const stage = snap.stages.find((s) => s.id === app.stage_id);
@@ -121,16 +172,59 @@ function buildInput(snap: DbSnapshot, applicationId: string, asking: CommentRow)
     interviews,
     followups,
     profileFacts: snap.profileFacts.map((f) => f.text),
+    documents,
   };
 }
 
-export function createAskService({ repo, runs, llm }: AskDeps): AskService {
+export function createAskService({ repo, runs, llm, userDataPath, renderPdf }: AskDeps): AskService {
   /* Questions on one card are answered in the order they were asked — a thread
      reads as a conversation, and two Kepler replies racing each other would
      not. Each card has its own chain, so cards do not wait on each other. */
   const chains = new Map<string, Promise<unknown>>();
   /* The call currently in the air per card — what stop() aborts. */
   const inFlight = new Map<string, AbortController>();
+
+  /* Groups the edits by document, applies each group against that document's
+     HTML, and — only if every group landed — writes the files and re-renders
+     their PDFs. Returns the German reason on the first group that refused,
+     with nothing written. Shared by ask() and undo(): the forward direction
+     applies what the model returned, the backward direction applies
+     reverseEdits() of what was stored, but both are one set placed atomically
+     against the files on disk. */
+  const writeGroups = async (
+    applicationId: string,
+    edits: DocumentEdit[],
+  ): Promise<{ error: string | null }> => {
+    const rows = repo.load().documents.filter((d) => d.application_id === applicationId);
+    const planned: { row: DocumentRow; html: string }[] = [];
+    for (const kind of new Set(edits.map((e) => e.document))) {
+      const row = rows.find((d) => d.kind === kind);
+      if (!row?.file_path) return { error: `Für ${DOCUMENT_MENTION[kind]} gibt es keine Datei.` };
+      const html = readFileSync(resolveDocumentPath(userDataPath, row.file_path), 'utf8');
+      const res = applyEdits(
+        html,
+        edits.filter((e) => e.document === kind),
+      );
+      /* All or nothing across every document, not just within one: the
+         request was one request. */
+      if (res.failed) return { error: res.reason };
+      planned.push({ row, html: res.html });
+    }
+    for (const { row, html } of planned) {
+      const abs = resolveDocumentPath(userDataPath, row.file_path!);
+      writeFileSync(abs, html);
+      const pdfAbs = abs.replace(/\.html?$/i, '.pdf');
+      try {
+        await renderPdf(abs, pdfAbs);
+      } catch (err) {
+        /* Same trade the orchestrator makes: the HTML is the document, and
+           losing it because Chromium could not print would be worse. */
+        console.error('[agent] PDF-Export nach Änderung fehlgeschlagen', err);
+      }
+      repo.setDocumentFile(row.id, row.file_path!, row.pdf_path, row.template_label);
+    }
+    return { error: null };
+  };
 
   const answer = async (req: AskRequest): Promise<AskResult> => {
     if (!repo.getApplicationWithCompany(req.applicationId)) {
@@ -145,11 +239,27 @@ export function createAskService({ repo, runs, llm }: AskDeps): AskService {
     );
     if (!asking) return { ok: false, error: 'Kommentar nicht gefunden.' };
 
+    /* Which documents the comment named, and whether the editor already has
+       one of them open — Kepler must not write under a screen the user is
+       typing in, and that is checked before the model is even asked. */
+    const mentioned = mentionedDocuments(asking.text);
+    if (req.openDocument && mentioned.includes(req.openDocument)) {
+      return { ok: false, error: 'Das Dokument ist gerade im Editor offen. Schließ es, dann ändere ich es.' };
+    }
+
+    const documents: AskDocument[] = [];
+    for (const kind of mentioned) {
+      const row = snap.documents.find((d) => d.application_id === req.applicationId && d.kind === kind);
+      if (!row?.file_path) continue;
+      const html = readFileSync(resolveDocumentPath(userDataPath, row.file_path), 'utf8');
+      documents.push({ kind, title: DOCUMENT_MENTION[kind], text: documentExcerpt(html) });
+    }
+
     const controller = new AbortController();
     inFlight.set(req.applicationId, controller);
     try {
-      const antwort = await llm({
-        prompt: askPrompt(buildInput(snap, req.applicationId, asking)),
+      const reply = await llm({
+        prompt: askPrompt(buildInput(snap, req.applicationId, asking, documents)),
         schema: ASK_SCHEMA,
         validate: validateAsk,
         timeoutMs: ASK_TIMEOUT,
@@ -160,7 +270,26 @@ export function createAskService({ repo, runs, llm }: AskDeps): AskService {
       if (controller.signal.aborted || !repo.getApplicationWithCompany(req.applicationId)) {
         return { ok: false, error: 'Abgebrochen.' };
       }
-      return { ok: true, comment: repo.addComment(req.applicationId, Author.KEPLER, antwort).comment };
+      if (!reply.edits.length) {
+        return {
+          ok: true,
+          comment: repo.addComment(req.applicationId, Author.KEPLER, reply.antwort).comment,
+          edits: [],
+        };
+      }
+      const written = await writeGroups(req.applicationId, reply.edits);
+      if (written.error) {
+        /* The prose still posts — with the reason appended, so the thread
+           shows why nothing changed rather than a silent no-op. */
+        const comment = repo.addComment(
+          req.applicationId,
+          Author.KEPLER,
+          `${reply.antwort}\n\n${written.error}`,
+        ).comment;
+        return { ok: true, comment, edits: [] };
+      }
+      const comment = repo.addComment(req.applicationId, Author.KEPLER, reply.antwort).comment;
+      return { ok: true, comment, edits: repo.addCommentEdits(comment.id, reply.edits) };
     } catch (err) {
       return { ok: false, error: userMessage(err) };
     } finally {
@@ -179,6 +308,26 @@ export function createAskService({ repo, runs, llm }: AskDeps): AskService {
         if (chains.get(req.applicationId) === next) chains.delete(req.applicationId);
       });
       return next;
+    },
+
+    /* The retry icon on an applied answer. The stored pairs turned around are
+       the whole of it — if the document has moved on since, they no longer
+       match and applyEdits refuses, which is the same guard the forward
+       direction has. */
+    async undo(applicationId: string, commentId: number): Promise<AskResult> {
+      if (!repo.getApplicationWithCompany(applicationId)) {
+        return { ok: false, error: 'Unbekannte Bewerbung.' };
+      }
+      if (runs.activeRun(applicationId)) {
+        return { ok: false, error: 'Kepler arbeitet bereits an dieser Bewerbung.' };
+      }
+      const stored = repo.commentEdits(commentId).filter((r) => r.undone_at === null);
+      if (!stored.length) return { ok: false, error: 'Diese Änderung wurde schon zurückgenommen.' };
+
+      const written = await writeGroups(applicationId, reverseEdits(fromRows(stored)));
+      if (written.error) return { ok: false, error: written.error };
+      repo.markEditsUndone(commentId);
+      return { ok: true, comment: repo.load().comments.find((c) => c.id === commentId)!, edits: [] };
     },
 
     /* The card is gone: end the call in the air rather than let it run out its

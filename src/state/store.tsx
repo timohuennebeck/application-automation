@@ -523,7 +523,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         });
       set((s) => ({ keplerAsk: { ...s.keplerAsk, [id]: { pending: true, error: null } } }));
       desktop.agent
-        .ask({ applicationId: id, commentId })
+        /* Which document is open in the editor is not wired up from here yet
+           — a later task teaches the store that. Until then a comment naming
+           an open document reaches the model rather than being refused. */
+        .ask({ applicationId: id, commentId, openDocument: null })
         .then((res) => {
           if (res.ok) {
             set((s) => {

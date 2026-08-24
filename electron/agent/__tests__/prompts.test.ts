@@ -10,7 +10,7 @@ import {
   proofsPrompt,
   variantsPrompt,
 } from '../prompts.ts';
-import { DocumentLanguage } from '../../../src/shared/enums.ts';
+import { DocumentKind, DocumentLanguage } from '../../../src/shared/enums.ts';
 import { APPLICANT_EMAIL, APPLICANT_NAME } from '../../../src/shared/applicant.ts';
 import type { AskInput, DocumentInput, VariantsInput } from '../prompts.ts';
 import { VALUE_BUDGET } from '../budgets.ts';
@@ -405,6 +405,7 @@ describe('askPrompt', () => {
     ],
     followups: ['Nachfassen — 20.08.2026'],
     profileFacts: ['Spricht Spanisch'],
+    documents: [],
   };
 
   it('quotes the question, the card, the thread and the interviews', () => {
@@ -424,14 +425,48 @@ describe('askPrompt', () => {
   it('rules the thread out as a source of facts', () => {
     const p = askPrompt(ASK);
     expect(p).toContain('keine Faktenquelle');
-    expect(p).toContain('empfiehl sie nicht');
   });
 
   it('keeps documents and listing out of the call altogether', () => {
     const p = askPrompt(ASK);
     expect(p).not.toContain('<anschreiben>');
     expect(p).not.toContain('<anzeige>');
-    expect(p).toContain('Anschreiben, Lebenslauf und Stellenanzeige siehst du nicht');
+    expect(p).toContain('Die Stellenanzeige siehst du nicht');
+  });
+
+  it('hands over a mentioned document and drops the “you cannot see them” rule', () => {
+    const prompt = askPrompt({
+      ...ASK,
+      documents: [
+        {
+          kind: DocumentKind.COVER_LETTER,
+          title: 'Anschreiben',
+          text: 'Sehr geehrtes Engineering Hiring Team,',
+        },
+      ],
+    });
+
+    expect(prompt).toContain('Sehr geehrtes Engineering Hiring Team');
+    expect(prompt).not.toContain('Anschreiben, Lebenslauf und Stellenanzeige siehst du nicht');
+    expect(prompt).not.toContain('empfiehl sie nicht');
+  });
+
+  it('tells the model how a change has to be worded', () => {
+    const prompt = askPrompt({
+      ...ASK,
+      documents: [{ kind: DocumentKind.COVER_LETTER, title: 'Anschreiben', text: 'Text' }],
+    });
+
+    /* The passage has to be quoted exactly, or applyEdits refuses it. */
+    expect(prompt).toContain('wörtlich');
+    expect(prompt).toContain('edits');
+  });
+
+  it('says nothing about editing when no document was mentioned', () => {
+    const prompt = askPrompt({ ...ASK, documents: [] });
+
+    expect(prompt).not.toContain('edits');
+    expect(prompt).toContain('<karte>');
   });
 
   it('keeps only the tail of a long thread and clips a pasted question', () => {

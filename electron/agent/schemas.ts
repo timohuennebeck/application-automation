@@ -7,7 +7,8 @@ import { FACT_OPTIONS } from '../../src/data/config.ts';
 import { sanitizeInline } from '../../src/lib/inline-html.ts';
 import { normalizeSalaryText } from '../../src/lib/salary.ts';
 import { isHttpUrl } from '../../src/lib/url.ts';
-import { DocumentKind, DocumentLanguage } from '../../src/shared/enums.ts';
+import type { DocumentEdit } from '../../src/shared/db-types.ts';
+import { DocumentKind, DocumentLanguage, EditKind } from '../../src/shared/enums.ts';
 
 /* How many ways to say a passage the rewrite step asks for. Fixed, because the
    popover is built for three rows — a fourth would be generated and dropped. */
@@ -174,12 +175,38 @@ export const PROOFS_SCHEMA = {
   required: ['unsupported'],
 } as const;
 
-/* Kepler's answer to a comment that addressed it. */
+/* More than a handful of changes in one comment is not an answer, it is a
+   rewrite — and a rewrite belongs in the editor, where each passage can be
+   looked at. */
+export const MAX_EDITS = 8;
+
+/* Kepler's answer to a comment that addressed it, and the changes it made to
+   a mentioned document. Most answers carry no edits at all — the array is
+   required so a model that changed nothing says so explicitly rather than
+   leaving the caller to guess from an absent field. */
 export const ASK_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  properties: { antwort: { type: 'string' } },
-  required: ['antwort'],
+  properties: {
+    antwort: { type: 'string' },
+    edits: {
+      type: 'array',
+      maxItems: MAX_EDITS,
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          document: { type: 'string', enum: [DocumentKind.LEBENSLAUF, DocumentKind.COVER_LETTER] },
+          kind: { type: 'string', enum: [EditKind.REPLACE, EditKind.DELETE, EditKind.INSERT] },
+          find: { type: 'string' },
+          replace: { type: 'string' },
+          after: nullableString,
+        },
+        required: ['document', 'kind', 'find', 'replace', 'after'],
+      },
+    },
+  },
+  required: ['antwort', 'edits'],
 } as const;
 
 export const VARIANTS_SCHEMA = {
@@ -344,9 +371,35 @@ export function validateVariants(x: unknown): string[] {
    ("…Sag Bescheid.</antwort></invoke>"), and that is not part of what it said. */
 const EDGE_TAGS = /^(?:\s*<\/?[a-z_][\w-]*[^>]*>)+|(?:<\/?[a-z_][\w-]*[^>]*>\s*)+$/gi;
 
-export function validateAsk(x: unknown): string {
+export interface AskAnswer {
+  antwort: string;
+  edits: DocumentEdit[];
+}
+
+/* The prose is required — an answer with edits and no sentence would leave
+   the thread showing changes nobody explained. The edits are filtered rather
+   than rejected: one malformed entry should not cost the whole reply, and
+   applyEdits refuses anything that still slips through. */
+export function validateAsk(x: unknown): AskAnswer {
   const r = asRecord(x, 'Antwort');
-  const t = text(typeof r.antwort === 'string' ? r.antwort.replace(EDGE_TAGS, '') : r.antwort);
-  if (!t) throw new Error('Antwort: leer');
-  return t;
+  const antwort = text(typeof r.antwort === 'string' ? r.antwort.replace(EDGE_TAGS, '') : r.antwort);
+  if (!antwort) throw new Error('Antwort: leer');
+  const edits: DocumentEdit[] = [];
+  if (Array.isArray(r.edits)) {
+    for (const entry of r.edits) {
+      if (typeof entry !== 'object' || entry === null) continue;
+      const e = entry as Record<string, unknown>;
+      const document = text(e.document);
+      const kind = text(e.kind);
+      if (document !== DocumentKind.LEBENSLAUF && document !== DocumentKind.COVER_LETTER) continue;
+      if (kind !== EditKind.REPLACE && kind !== EditKind.DELETE && kind !== EditKind.INSERT) continue;
+      const find = typeof e.find === 'string' ? e.find : '';
+      const replace = typeof e.replace === 'string' ? e.replace : '';
+      const after = text(e.after);
+      /* Each kind needs the half it is located by. */
+      if (kind === EditKind.INSERT ? !after : !find) continue;
+      edits.push({ document, kind, find, replace, after });
+    }
+  }
+  return { antwort, edits: edits.slice(0, MAX_EDITS) };
 }

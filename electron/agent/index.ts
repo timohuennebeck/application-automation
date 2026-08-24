@@ -79,7 +79,13 @@ export function registerAgentIpc(
   });
 
   /* Same reasoning: a comment's answer is one call beside the queue. */
-  const asks = createAskService({ repo, runs, llm: createLlmRunner(sdkInvoke()) });
+  const asks = createAskService({
+    repo,
+    runs,
+    userDataPath,
+    renderPdf,
+    llm: createLlmRunner(sdkInvoke()),
+  });
 
   ipcMain.handle('agent:start', (_e, applicationId: string) => service.start(String(applicationId)));
   ipcMain.handle('agent:retry', (_e, applicationId: string) => service.retry(String(applicationId)));
@@ -108,8 +114,16 @@ export function registerAgentIpc(
     if (!req || typeof req !== 'object') {
       return Promise.resolve({ ok: false, error: 'Ungültige Anfrage.' });
     }
-    return asks.ask({ applicationId: String(req.applicationId), commentId: Number(req.commentId) });
+    return asks.ask({
+      applicationId: String(req.applicationId),
+      commentId: Number(req.commentId),
+      openDocument: req.openDocument ?? null,
+    });
   });
+
+  ipcMain.handle('agent:undo', (_e, applicationId: string, commentId: number): Promise<AskResult> =>
+    asks.undo(String(applicationId), Number(commentId)),
+  );
 
   return {
     abandon(applicationId: string): void {

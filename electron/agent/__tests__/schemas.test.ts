@@ -9,7 +9,7 @@ import {
   validateProofs,
   MAX_UNSUPPORTED,
 } from '../schemas.ts';
-import { DocumentKind } from '../../../src/shared/enums.ts';
+import { DocumentKind, EditKind } from '../../../src/shared/enums.ts';
 
 const FULL = {
   role: 'Senior Designer',
@@ -276,14 +276,83 @@ describe('rewrite suggestions', () => {
 
 describe('validateAsk', () => {
   it('returns the trimmed answer and rejects an empty one', () => {
-    expect(validateAsk({ antwort: '  Kurz gesagt: ja.  ' })).toBe('Kurz gesagt: ja.');
+    expect(validateAsk({ antwort: '  Kurz gesagt: ja.  ' }).antwort).toBe('Kurz gesagt: ja.');
     expect(() => validateAsk({ antwort: '   ' })).toThrow(/leer/);
     /* The closing tags the model sometimes appends are not the answer. */
-    expect(validateAsk({ antwort: 'Sag Bescheid.</antwort>\n</invoke>' })).toBe('Sag Bescheid.');
-    expect(validateAsk({ antwort: '<antwort>@Timo hallo</antwort>' })).toBe('@Timo hallo');
+    expect(validateAsk({ antwort: 'Sag Bescheid.</antwort>\n</invoke>' }).antwort).toBe('Sag Bescheid.');
+    expect(validateAsk({ antwort: '<antwort>@Timo hallo</antwort>' }).antwort).toBe('@Timo hallo');
     /* Inline markup the thread cannot render is left alone for the prompt to police, not stripped mid-text. */
-    expect(validateAsk({ antwort: 'a <b>x</b> b' })).toBe('a <b>x</b> b');
+    expect(validateAsk({ antwort: 'a <b>x</b> b' }).antwort).toBe('a <b>x</b> b');
     expect(() => validateAsk({})).toThrow();
     expect(() => validateAsk(null)).toThrow(/kein Objekt/);
+  });
+});
+
+describe('validateAsk with edits', () => {
+  it('reads the answer and its edits', () => {
+    const out = validateAsk({
+      antwort: 'Eingetragen.',
+      edits: [
+        {
+          document: 'COVER_LETTER',
+          kind: 'replace',
+          find: 'Engineering Hiring Team',
+          replace: 'Frau Maria Haushofer',
+          after: null,
+        },
+      ],
+    });
+
+    expect(out.antwort).toBe('Eingetragen.');
+    expect(out.edits).toHaveLength(1);
+    expect(out.edits[0]).toMatchObject({ kind: EditKind.REPLACE, find: 'Engineering Hiring Team' });
+  });
+
+  it('treats a missing edits list as a plain answer', () => {
+    /* Most questions change nothing; an answer without edits is the common
+       case and must not be rejected. */
+    expect(validateAsk({ antwort: 'Steht so im Brief.' }).edits).toEqual([]);
+  });
+
+  it('drops an edit naming a document the app does not have', () => {
+    const out = validateAsk({
+      antwort: 'x',
+      edits: [{ document: 'GLOSSAR', kind: 'replace', find: 'a', replace: 'b', after: null }],
+    });
+
+    expect(out.edits).toEqual([]);
+  });
+
+  it('drops an edit whose kind it does not know', () => {
+    const out = validateAsk({
+      antwort: 'x',
+      edits: [{ document: 'COVER_LETTER', kind: 'verschieben', find: 'a', replace: 'b', after: null }],
+    });
+
+    expect(out.edits).toEqual([]);
+  });
+
+  it('drops a replacement with nothing to find', () => {
+    /* An empty needle matches everywhere and nowhere; applyEdits would refuse
+       it, but it should never get that far. */
+    const out = validateAsk({
+      antwort: 'x',
+      edits: [{ document: 'COVER_LETTER', kind: 'replace', find: '', replace: 'b', after: null }],
+    });
+
+    expect(out.edits).toEqual([]);
+  });
+
+  it('drops an insertion with no anchor', () => {
+    const out = validateAsk({
+      antwort: 'x',
+      edits: [{ document: 'COVER_LETTER', kind: 'insert', find: '', replace: 'b', after: '' }],
+    });
+
+    expect(out.edits).toEqual([]);
+  });
+
+  it('still rejects an answer with no prose', () => {
+    expect(() => validateAsk({ edits: [] })).toThrow();
   });
 });

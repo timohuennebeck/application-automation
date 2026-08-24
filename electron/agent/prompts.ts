@@ -6,7 +6,7 @@ import { VALUE_BUDGET } from './budgets.ts';
 import { modelPlaceholders } from './fill.ts';
 import type { Extraction } from './schemas.ts';
 import { APPLICANT_EMAIL, APPLICANT_NAME } from '../../src/shared/applicant.ts';
-import { DocumentLanguage } from '../../src/shared/enums.ts';
+import { DocumentKind, DocumentLanguage } from '../../src/shared/enums.ts';
 
 /* Listings are pages, not books — everything past this is boilerplate, and
    the calls stay affordable. */
@@ -528,9 +528,19 @@ export interface AskInterview {
   notes: AskComment[];
 }
 
-/* Everything Kepler sees when a comment addresses it: the card itself, never
-   its documents or the listing — it answers questions about the application,
-   it does not review texts. */
+/* One document the comment mentioned, as what it says. The model reads text,
+   never markup — but it has to quote a passage back exactly, and what it
+   quotes is matched against the file's own bytes. A passage carrying emphasis
+   therefore cannot be changed from the thread; the rules below say so. */
+export interface AskDocument {
+  kind: DocumentKind;
+  title: string;
+  text: string;
+}
+
+/* Everything Kepler sees when a comment addresses it: the card itself, and —
+   only when the comment named one — the document it named. It never sees the
+   listing; it answers questions about the application, not the posting. */
 export interface AskInput {
   company: string;
   role: string;
@@ -543,6 +553,8 @@ export interface AskInput {
   interviews: AskInterview[];
   followups: string[];
   profileFacts: string[];
+  /* Empty when the comment mentioned no document. */
+  documents: AskDocument[];
 }
 
 /* Comment threads are short; this only guards against a pasted mail. */
@@ -573,6 +585,24 @@ function interviewBlock(rounds: AskInterview[]): string {
     .join('\n\n');
 }
 
+/* The rules that only exist once a document is on the table. Kept out of the
+   prompt entirely otherwise: a model told how to edit will look for something
+   to edit. */
+const editRules = (docs: AskDocument[]) => `
+Die unten stehenden Dokumente sind erwähnt worden. Du darfst sie lesen — und ändern, wenn der Bewerber darum bittet.
+
+Regeln für Änderungen:
+- Jede Änderung ist ein Eintrag in edits. document ist "COVER_LETTER" oder "LEBENSLAUF", kind ist "replace", "delete" oder "insert".
+- find ist die Stelle im Dokument, wörtlich und Zeichen für Zeichen so, wie sie unten steht. Eine Stelle, die du nicht wörtlich zitieren kannst, änderst du nicht.
+- Die Stelle muss im Dokument genau einmal vorkommen. Kommt sie mehrfach vor, nimm mehr Text drumherum dazu, bis sie eindeutig ist.
+- replace ist der neue Text. Bei "delete" ist replace leer, bei "insert" ist find leer und after die Stelle, hinter der eingefügt wird.
+- Ändere nur, worum gebeten wurde, und alles, was davon abhängt: eine neue Empfängerin verlangt auch die passende Anrede, sonst widerspricht sich der Brief.
+- Kann eine der nötigen Stellen nicht eindeutig zitiert werden, gib gar keine edits zurück und sag im Text, welche Stelle das war.
+- Wird nur gefragt und nicht um eine Änderung gebeten, bleibt edits leer.
+
+${docs.map((d) => `<${d.kind === DocumentKind.COVER_LETTER ? 'anschreiben' : 'lebenslauf-dokument'}>\n${sealed(d.text)}\n</${d.kind === DocumentKind.COVER_LETTER ? 'anschreiben' : 'lebenslauf-dokument'}>`).join('\n\n')}
+`;
+
 export function askPrompt(input: AskInput): string {
   const asked = input.comments.find((c) => c.asked);
   return `Du bist Kepler, der Assistent einer Bewerbungs-App. Der Bewerber hat dich in einem Kommentar zur Bewerbung als "${input.role}" bei ${input.company} angesprochen. Antworte ihm als Kommentar in demselben Thread.
@@ -581,10 +611,10 @@ Regeln:
 - Antworte auf Deutsch, per Du, knapp und konkret — ein Kommentar, kein Aufsatz.
 - Form: erste Zeile eine kurze Anrede mit der Erwähnung @${input.askedBy} (z. B. "Hallo @${input.askedBy}!"), dann eine Leerzeile, dann die Antwort in kurzen Absätzen — zwischen Absätzen immer eine Leerzeile —, zum Schluss nach einer Leerzeile ein kurzer Satz, ob noch etwas offen ist oder was du als Nächstes tun kannst. Keine Unterschrift.
 - Alles, was du weißt, steht in den Blöcken unten. Erfinde nichts; sag lieber, dass etwas nicht hinterlegt ist.
-- Der Kommentar-Thread ist Gesprächsverlauf, keine Faktenquelle: Was frühere Kepler-Antworten dort behaupten, kann veraltet sein — Fakten zur Karte nimmst du nur aus <karte>, <personen>, <interviews>, <aufgaben> und <profil>. Es gibt keine Erwähnungen wie @Stelle, @Anschreiben oder @Lebenslauf; empfiehl sie nicht.
+- Der Kommentar-Thread ist Gesprächsverlauf, keine Faktenquelle: Was frühere Kepler-Antworten dort behaupten, kann veraltet sein — Fakten zur Karte nimmst du nur aus <karte>, <personen>, <interviews>, <aufgaben> und <profil>.
 - Als Auszeichnung sind nur **fett** und Aufzählungen mit "- " am Zeilenanfang erlaubt. Keine Überschriften, kein HTML, keine Links im Markdown-Format.
 - Gib nur den Text des Kommentars zurück — keine Tags, kein JSON drumherum.
-- Du liest nur — du änderst keine Dokumente und keine Daten der Karte. Anschreiben, Lebenslauf und Stellenanzeige siehst du nicht; sag das, wenn eine Frage darauf zielt.
+- Du änderst keine Daten der Karte. Die Stellenanzeige siehst du nicht; sag das, wenn eine Frage darauf zielt.
 
 <frage>
 ${sealed((asked?.text ?? '').slice(0, MAX_COMMENT))}
@@ -613,5 +643,5 @@ ${bullets(input.followups, '(keine offenen Aufgaben)')}
 <profil>
 ${bullets(input.profileFacts, '(keine Angaben)')}
 </profil>
-`;
+${input.documents.length ? editRules(input.documents) : ''}`;
 }

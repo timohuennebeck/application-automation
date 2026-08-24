@@ -1,6 +1,7 @@
 /* The main→renderer contract for Kepler runs. Events ride the agent:event
    push channel; agent:start answers with AgentStartResult. */
-import type { AgentRunRow, AgentStepRow, CommentRow } from './db-types.ts';
+import type { AgentRunRow, AgentStepRow, CommentEditRow, CommentRow } from './db-types.ts';
+import type { DocumentKind } from './enums.ts';
 
 export interface AgentEvent {
   /* The run as it now stands — always present, every event. */
@@ -57,10 +58,15 @@ export type VariantsResult =
 export interface AskRequest {
   applicationId: string;
   commentId: number;
+  /* The document the editor currently has open on this card, or null. The
+     main process has no view of renderer state, and Kepler must not swap a
+     file out from under a screen the user is typing in. */
+  openDocument: DocumentKind | null;
 }
 
 export type AskResult =
-  /* The reply, already written into the thread as a Kepler comment. */
-  | { ok: true; comment: CommentRow }
+  /* The reply, already written into the thread as a Kepler comment, and the
+     edit set it placed — empty when the answer changed nothing. */
+  | { ok: true; comment: CommentRow; edits: CommentEditRow[] }
   /* German reason — shown in the thread as-is. */
   | { ok: false; error: string };

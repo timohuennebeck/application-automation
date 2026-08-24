@@ -106,6 +106,10 @@ const api = {
     /* Answers a comment that addressed Kepler. The reply is written into the
        thread on the main side and comes back as that comment row. */
     ask: (req: AskRequest): Promise<AskResult> => ipcRenderer.invoke('agent:ask', req),
+    /* The retry icon on an applied answer: puts the document back and marks
+       the set undone. */
+    undo: (applicationId: string, commentId: number): Promise<AskResult> =>
+      ipcRenderer.invoke('agent:undo', applicationId, commentId),
     /* Subscribes to run/step updates; returns the unsubscribe. */
     onEvent: (cb: (e: AgentEvent) => void): (() => void) => {
       const handler = (_e: Electron.IpcRendererEvent, event: AgentEvent) => cb(event);

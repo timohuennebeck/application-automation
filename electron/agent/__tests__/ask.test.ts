@@ -1,15 +1,24 @@
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DatabaseSync } from 'node:sqlite';
 import { openDb } from '../../db/open.ts';
 import { seedIfEmpty } from '../../db/seed.ts';
 import { createRepo, type Repo } from '../../db/repo.ts';
+import { documentPaths } from '../../files.ts';
 import { createRunStore, type RunStore } from '../run-store.ts';
 import { createAskService } from '../ask.ts';
 import { KeplerError } from '../errors.ts';
 import type { LlmRequest } from '../orchestrator.ts';
-import { Author, RoundState } from '../../../src/shared/enums.ts';
+import { Author, DocumentKind, DocumentLanguage, RoundState } from '../../../src/shared/enums.ts';
 
 const NOW = new Date('2026-08-16T09:00:00.000Z');
+
+/* A fresh directory per test file, not per test: writeLetter() re-points the
+   row at the same path every time, so a stale file from an earlier test never
+   leaks in. */
+const ROOT = mkdtempSync(path.join(tmpdir(), 'bew-ask-'));
 
 let db: DatabaseSync;
 let repo: Repo;
@@ -32,12 +41,30 @@ const createApp = () =>
 
 const ask = (id: string, text: string) => repo.addComment(id, Author.DU, text).comment.id;
 
+/* A generated Anschreiben on disk with its row pointed at it — the shape
+   ask() reads and writes. */
+function writeLetter(appId: string, html: string): void {
+  const { htmlAbs, htmlRel } = documentPaths(ROOT, appId, DocumentKind.COVER_LETTER, DocumentLanguage.DE);
+  mkdirSync(path.dirname(htmlAbs), { recursive: true });
+  writeFileSync(htmlAbs, html);
+  const row = repo
+    .load()
+    .documents.find((d) => d.application_id === appId && d.kind === DocumentKind.COVER_LETTER)!;
+  repo.setDocumentFile(row.id, htmlRel, null, 'Standard');
+}
+
+const readLetter = (appId: string) =>
+  readFileSync(documentPaths(ROOT, appId, DocumentKind.COVER_LETTER, DocumentLanguage.DE).htmlAbs, 'utf8');
+
 /* Stands in for the SDK call: hands back whatever the validator makes of
    `answer`, so the service's own behaviour is what is under test. */
+const renderPdf = vi.fn(async () => undefined);
 const service = (answer: unknown, onPrompt?: (p: string) => void) =>
   createAskService({
     repo,
     runs,
+    userDataPath: ROOT,
+    renderPdf,
     llm: (async (req: LlmRequest<unknown>) => {
       onPrompt?.(req.prompt);
       return req.validate(answer);
@@ -50,7 +77,7 @@ describe('ask service', () => {
   it('writes the answer into the thread as a Kepler comment and hands it back', async () => {
     const id = createApp();
     const commentId = ask(id, '@Kepler wie stehen wir?');
-    const res = await service(ANSWER).ask({ applicationId: id, commentId });
+    const res = await service(ANSWER).ask({ applicationId: id, commentId, openDocument: null });
     expect(res.ok).toBe(true);
     if (!res.ok) return;
     expect(res.comment.author).toBe(Author.KEPLER);
@@ -81,7 +108,7 @@ describe('ask service', () => {
     const commentId = ask(id, '@Kepler fass die Interviews zusammen');
 
     let prompt = '';
-    await service(ANSWER, (p) => (prompt = p)).ask({ applicationId: id, commentId });
+    await service(ANSWER, (p) => (prompt = p)).ask({ applicationId: id, commentId, openDocument: null });
     expect(prompt).toContain('"Senior Frontend Developer" bei Personio SE');
     expect(prompt).toContain('@Timo');
     expect(prompt).toContain('- Anna Weber — Recruiterin');
@@ -100,13 +127,15 @@ describe('ask service', () => {
     const svc = createAskService({
       repo,
       runs,
+      userDataPath: ROOT,
+      renderPdf,
       llm: llm as unknown as Parameters<typeof createAskService>[0]['llm'],
     });
-    expect(await svc.ask({ applicationId: 'BEW-999', commentId: 1 })).toEqual({
+    expect(await svc.ask({ applicationId: 'BEW-999', commentId: 1, openDocument: null })).toEqual({
       ok: false,
       error: 'Unbekannte Bewerbung.',
     });
-    expect(await svc.ask({ applicationId: id, commentId: 999_999 })).toEqual({
+    expect(await svc.ask({ applicationId: id, commentId: 999_999, openDocument: null })).toEqual({
       ok: false,
       error: 'Kommentar nicht gefunden.',
     });
@@ -117,7 +146,7 @@ describe('ask service', () => {
     const id = createApp();
     const commentId = ask(id, '@Kepler?');
     runs.createRun(id, 'Kepler wartet…', [{ key: 'FETCH', label: 'Anzeige holen' }]);
-    expect(await service(ANSWER).ask({ applicationId: id, commentId })).toEqual({
+    expect(await service(ANSWER).ask({ applicationId: id, commentId, openDocument: null })).toEqual({
       ok: false,
       error: 'Kepler arbeitet bereits an dieser Bewerbung.',
     });
@@ -131,14 +160,16 @@ describe('ask service', () => {
     const svc = createAskService({
       repo,
       runs,
+      userDataPath: ROOT,
+      renderPdf,
       llm: (async (req: LlmRequest<unknown>) =>
         req.validate(await new Promise((r) => releases.push(r)))) as Parameters<
         typeof createAskService
       >[0]['llm'],
     });
 
-    const a = svc.ask({ applicationId: id, commentId: first });
-    const b = svc.ask({ applicationId: id, commentId: second });
+    const a = svc.ask({ applicationId: id, commentId: first, openDocument: null });
+    const b = svc.ask({ applicationId: id, commentId: second, openDocument: null });
     await Promise.resolve();
     /* The second waits for the first — only one call is in the air. */
     expect(releases).toHaveLength(1);
@@ -161,6 +192,8 @@ describe('ask service', () => {
     const svc = createAskService({
       repo,
       runs,
+      userDataPath: ROOT,
+      renderPdf,
       llm: (async (req: LlmRequest<unknown>) => {
         signals.push(req.signal!);
         return new Promise((_resolve, reject) => {
@@ -169,7 +202,7 @@ describe('ask service', () => {
       }) as Parameters<typeof createAskService>[0]['llm'],
     });
 
-    const pending = svc.ask({ applicationId: id, commentId: first });
+    const pending = svc.ask({ applicationId: id, commentId: first, openDocument: null });
     await Promise.resolve();
     expect(signals).toHaveLength(1);
     svc.stop(id);
@@ -177,7 +210,9 @@ describe('ask service', () => {
     expect(
       repo.load().comments.filter((c) => c.application_id === id && c.author === Author.KEPLER),
     ).toHaveLength(1);
-    expect((await service(ANSWER).ask({ applicationId: id, commentId: first })).ok).toBe(true);
+    expect((await service(ANSWER).ask({ applicationId: id, commentId: first, openDocument: null })).ok).toBe(
+      true,
+    );
   });
 
   it('writes nothing when the card went away while the model was thinking', async () => {
@@ -187,12 +222,14 @@ describe('ask service', () => {
     const svc = createAskService({
       repo,
       runs,
+      userDataPath: ROOT,
+      renderPdf,
       llm: (async (req: LlmRequest<unknown>) =>
         req.validate(await new Promise((r) => (release = r)))) as Parameters<
         typeof createAskService
       >[0]['llm'],
     });
-    const pending = svc.ask({ applicationId: id, commentId });
+    const pending = svc.ask({ applicationId: id, commentId, openDocument: null });
     await Promise.resolve();
     repo.deleteApplication(id);
     release(ANSWER);
@@ -200,3 +237,154 @@ describe('ask service', () => {
     expect(repo.load().comments.some((c) => c.application_id === id)).toBe(false);
   });
 });
+
+describe('a comment that mentions a document', () => {
+  it('hands the document text to the model', async () => {
+    const { service, appId, llm } = fixture();
+    writeLetter(appId, '<p>Sehr geehrtes Engineering Hiring Team,</p>');
+    const comment = addComment(appId, '@Kepler was steht im @Anschreiben?');
+
+    await service.ask({ applicationId: appId, commentId: comment.id, openDocument: null });
+
+    expect(llm.mock.calls[0][0].prompt).toContain('Engineering Hiring Team');
+  });
+
+  it('applies the edits, re-renders the PDF and stores the set', async () => {
+    const { service, repo, appId, renderPdf } = fixture({
+      answer: {
+        antwort: 'Eingetragen.',
+        edits: [
+          {
+            document: 'COVER_LETTER',
+            kind: 'replace',
+            find: 'Engineering Hiring Team',
+            replace: 'Frau Maria Haushofer',
+            after: null,
+          },
+        ],
+      },
+    });
+    writeLetter(appId, '<p>Sehr geehrtes Engineering Hiring Team,</p>');
+    const comment = addComment(appId, '@Kepler trag Maria ins @Anschreiben ein');
+
+    const res = await service.ask({ applicationId: appId, commentId: comment.id, openDocument: null });
+
+    expect(res.ok).toBe(true);
+    expect(readLetter(appId)).toContain('Frau Maria Haushofer');
+    expect(renderPdf).toHaveBeenCalled();
+    const reply = repo.load().comments.at(-1)!;
+    expect(repo.commentEdits(reply.id)).toHaveLength(1);
+  });
+
+  it('changes nothing when a passage cannot be placed', async () => {
+    const { service, repo, appId } = fixture({
+      answer: {
+        antwort: 'Ich ändere das.',
+        edits: [
+          { document: 'COVER_LETTER', kind: 'replace', find: 'gibt es nicht', replace: 'X', after: null },
+        ],
+      },
+    });
+    const original = '<p>Sehr geehrtes Engineering Hiring Team,</p>';
+    writeLetter(appId, original);
+    const comment = addComment(appId, '@Kepler ändere das @Anschreiben');
+
+    await service.ask({ applicationId: appId, commentId: comment.id, openDocument: null });
+
+    expect(readLetter(appId)).toBe(original);
+    const reply = repo.load().comments.at(-1)!;
+    expect(repo.commentEdits(reply.id)).toHaveLength(0);
+    expect(reply.text).toContain('gibt es nicht');
+  });
+
+  it('refuses while the document is open in the editor, without calling the model', async () => {
+    const { service, appId, llm } = fixture();
+    writeLetter(appId, '<p>Text</p>');
+    const comment = addComment(appId, '@Kepler kürze das @Anschreiben');
+
+    const res = await service.ask({
+      applicationId: appId,
+      commentId: comment.id,
+      openDocument: DocumentKind.COVER_LETTER,
+    });
+
+    expect(res.ok).toBe(false);
+    expect(llm).not.toHaveBeenCalled();
+  });
+
+  it('ignores a document that was not mentioned', async () => {
+    const { service, appId, llm } = fixture();
+    writeLetter(appId, '<p>Sehr geehrtes Engineering Hiring Team,</p>');
+    const comment = addComment(appId, '@Kepler wie ist der Stand?');
+
+    await service.ask({ applicationId: appId, commentId: comment.id, openDocument: null });
+
+    expect(llm.mock.calls[0][0].prompt).not.toContain('Engineering Hiring Team');
+  });
+});
+
+describe('undo', () => {
+  it('puts the document back and marks the set undone', async () => {
+    const { service, repo, appId } = fixture({
+      answer: {
+        antwort: 'Eingetragen.',
+        edits: [
+          {
+            document: 'COVER_LETTER',
+            kind: 'replace',
+            find: 'Engineering Hiring Team',
+            replace: 'Frau Maria Haushofer',
+            after: null,
+          },
+        ],
+      },
+    });
+    const original = '<p>Sehr geehrtes Engineering Hiring Team,</p>';
+    writeLetter(appId, original);
+    const comment = addComment(appId, '@Kepler trag Maria ins @Anschreiben ein');
+    await service.ask({ applicationId: appId, commentId: comment.id, openDocument: null });
+    const reply = repo.load().comments.at(-1)!;
+
+    await service.undo(appId, reply.id);
+
+    expect(readLetter(appId)).toBe(original);
+    expect(repo.commentEdits(reply.id).every((r) => r.undone_at !== null)).toBe(true);
+  });
+
+  it('refuses to undo a set twice', async () => {
+    const { service, repo, appId } = fixture({
+      answer: {
+        antwort: 'Eingetragen.',
+        edits: [{ document: 'COVER_LETTER', kind: 'replace', find: 'alt', replace: 'neu', after: null }],
+      },
+    });
+    writeLetter(appId, '<p>alt</p>');
+    const comment = addComment(appId, '@Kepler ändere das @Anschreiben');
+    await service.ask({ applicationId: appId, commentId: comment.id, openDocument: null });
+    const reply = repo.load().comments.at(-1)!;
+    await service.undo(appId, reply.id);
+
+    const again = await service.undo(appId, reply.id);
+
+    expect(again.ok).toBe(false);
+  });
+});
+
+/* A ready-to-use app, service and comment helper for the mention/undo tests
+   below — those need a document on disk and a service they can inspect the
+   calls of, which the plain `service()` fixture above does not expose. */
+function fixture(opts: { answer?: unknown } = {}) {
+  const appId = createApp();
+  const llm = vi.fn(async (req: LlmRequest<unknown>) => req.validate(opts.answer ?? ANSWER));
+  const renderPdf = vi.fn(async () => undefined);
+  const svc = createAskService({
+    repo,
+    runs,
+    userDataPath: ROOT,
+    renderPdf,
+    llm: llm as unknown as Parameters<typeof createAskService>[0]['llm'],
+  });
+  return { service: svc, repo, appId, llm, renderPdf };
+}
+
+const addComment = (appId: string, text: string) => repo.addComment(appId, Author.DU, text).comment;

@@ -94,13 +94,20 @@ write-without-asking feature should not be clever: a passage carrying `&amp;`
 simply does not match, and is refused like any other miss. Kepler writes without asking, so the placement rule has to be strict —
 the wrong paragraph rewritten silently is the failure that matters.
 
-**A passage carrying markup cannot be matched.** Kepler reads the document
-through `documentExcerpt`, which strips tags, so it returns plain text; a
-passage that contains `<strong>phase6</strong>` in the file will not be found
-as plain text and the set is refused. That is a real limitation, not an
-oversight: the proof-point cells of the letter are exactly where emphasis
-lives, and they are also where the editor's own passage rewriting already
-works. The refusal message points there.
+**A passage carrying markup can be matched.** A mentioned document reaches the
+model as `documentMarkup`, not `documentExcerpt` — the file's own bytes, only
+the stylesheet and any embedded image stripped, every other tag left
+standing. Kepler can therefore quote `<strong>phase6</strong>` exactly as it
+stands in the file, and `edits.ts` finds it because both sides now agree on
+what "the document" is. This is also what makes the design's driving case
+work at all: "Engineering Hiring Team" sits in both the recipient block and
+the salutation, and only the tag around each tells them apart — a model
+reading flattened text could never write a quote that is both unique and
+exact, and the prompt tells it to fold in the surrounding tag rather than
+give up. `documentExcerpt` still flattens the text for the checks and proofs
+steps, which read a document's prose to catch a mismatch or an unsupported
+claim and never place anything back into the file — there is no quote to
+match there, so there is nothing markup would buy.
 
 ## When it refuses
 

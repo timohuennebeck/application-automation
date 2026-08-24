@@ -332,16 +332,19 @@ describe('validateAsk with edits', () => {
     expect(out.edits).toEqual([]);
   });
 
-  it('drops a replacement with nothing to find', () => {
+  it('drops a replacement with nothing to find, and says so', () => {
     /* An empty needle matches everywhere and nowhere; applyEdits would refuse
-       it, but it should never get that far. */
+       it, but it should never get that far. The prose the model wrote already
+       promised the change, so the drop has to reach the thread. */
     const out = validateAsk({
       antwort: 'x',
       edits: [{ document: 'COVER_LETTER', kind: 'replace', find: '', replace: 'b', after: null }],
     });
 
     expect(out.edits).toEqual([]);
-    expect(out.droppedReason).toBeNull();
+    expect(out.droppedReason).toBe(
+      'Eine Änderung wurde übersprungen, weil sie sich nicht eindeutig zuordnen ließ.',
+    );
   });
 
   it('drops an insertion with no anchor', () => {
@@ -351,9 +354,27 @@ describe('validateAsk with edits', () => {
     });
 
     expect(out.edits).toEqual([]);
-    /* No anchor means no location at all — a malformed entry, not a
-       near-miss, so it stays as silent as the drops above it. */
-    expect(out.droppedReason).toBeNull();
+    /* No anchor means no location at all. The entry is malformed rather than
+       a near-miss, so it gets the generic count sentence rather than the
+       deletion's specific one — but it is still said. */
+    expect(out.droppedReason).toBe(
+      'Eine Änderung wurde übersprungen, weil sie sich nicht eindeutig zuordnen ließ.',
+    );
+  });
+
+  it('refuses a change that would write nothing', () => {
+    /* applyEdits would place the empty string and report success, and
+       reverseEdits would then turn it into a needle of '' that occurrences()
+       can never find — taking the whole set's undo with it. */
+    const out = validateAsk({
+      antwort: 'x',
+      edits: [{ document: 'COVER_LETTER', kind: 'replace', find: 'a', replace: '', after: null }],
+    });
+
+    expect(out.edits).toEqual([]);
+    expect(out.droppedReason).toBe(
+      'Eine Änderung wurde übersprungen, weil sie sich nicht eindeutig zuordnen ließ.',
+    );
   });
 
   it('drops a deletion with no anchor, and says so', () => {

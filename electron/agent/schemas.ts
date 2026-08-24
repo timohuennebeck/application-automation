@@ -178,7 +178,7 @@ export const PROOFS_SCHEMA = {
 /* More than a handful of changes in one comment is not an answer, it is a
    rewrite — and a rewrite belongs in the editor, where each passage can be
    looked at. */
-export const MAX_EDITS = 8;
+const MAX_EDITS = 8;
 
 /* Kepler's answer to a comment that addressed it, and the changes it made to
    a mentioned document. Most answers carry no edits at all — the array is
@@ -377,11 +377,26 @@ export interface AskAnswer {
   /* Set when a deletion had to be dropped before ever reaching applyEdits: it
      names a real passage and would place cleanly, but with no anchor
      reverseEdits could never put it back, and the undo is all-or-nothing, so
-     it is refused here instead. Dropping it silently would post the reply as
-     a full success with one change quietly missing — this makes it visible
-     the same way a refusal from applyEdits is: appended to the prose. Null
+     it is refused here instead. Dropping anything silently would post the
+     reply as a full success with a change quietly missing, while the model's
+     own prose still describes it — so every refused entry lands here and is
+     appended to the prose, the same way a refusal from applyEdits is. Null
      when nothing was dropped. */
   droppedReason: string | null;
+}
+
+/* What to append to the prose when entries were refused. The deletion keeps
+   its own sentence while it is the only drop — it is the one refusal that
+   names a cause the user could act on; past that a count says more than
+   listing four shapes of malformed. */
+function droppedReason(dropped: number, onlyDeletion: boolean): string | null {
+  if (!dropped) return null;
+  if (dropped === 1 && onlyDeletion) {
+    return 'Eine Löschung wurde übersprungen, weil sie sich ohne Bezugsstelle nicht zurücknehmen ließe.';
+  }
+  return dropped === 1
+    ? 'Eine Änderung wurde übersprungen, weil sie sich nicht eindeutig zuordnen ließ.'
+    : `${dropped} Änderungen wurden übersprungen, weil sie sich nicht eindeutig zuordnen ließen.`;
 }
 
 /* The prose is required — an answer with edits and no sentence would leave
@@ -393,20 +408,32 @@ export function validateAsk(x: unknown): AskAnswer {
   const antwort = text(typeof r.antwort === 'string' ? r.antwort.replace(EDGE_TAGS, '') : r.antwort);
   if (!antwort) throw new Error('Antwort: leer');
   const edits: DocumentEdit[] = [];
-  /* Only a deletion is dropped for a reason worth telling the user about — it
-     had everything needed to place it, and is refused purely so it stays
-     reversible. An insertion missing `after` has no location at all, exactly
-     like a replacement with nothing to find: those are malformed entries,
-     not near-misses, and stay silent like the drops beside them. */
+  /* A deletion is the one drop with a cause worth naming: it had everything
+     needed to place it, and is refused purely so it stays reversible. The
+     rest are malformed entries rather than near-misses — they get counted
+     instead of described, but none of them stays silent. */
   let droppedDeletion = false;
+  /* Every entry this loop refuses, however it was malformed. The prose the
+     model wrote already promised all of them, so a drop nobody mentions
+     leaves the thread describing a change that never happened. */
+  let dropped = 0;
   if (Array.isArray(r.edits)) {
     for (const entry of r.edits) {
-      if (typeof entry !== 'object' || entry === null) continue;
+      if (typeof entry !== 'object' || entry === null) {
+        dropped++;
+        continue;
+      }
       const e = entry as Record<string, unknown>;
       const document = text(e.document);
       const kind = text(e.kind);
-      if (document !== DocumentKind.LEBENSLAUF && document !== DocumentKind.COVER_LETTER) continue;
-      if (kind !== EditKind.REPLACE && kind !== EditKind.DELETE && kind !== EditKind.INSERT) continue;
+      if (document !== DocumentKind.LEBENSLAUF && document !== DocumentKind.COVER_LETTER) {
+        dropped++;
+        continue;
+      }
+      if (kind !== EditKind.REPLACE && kind !== EditKind.DELETE && kind !== EditKind.INSERT) {
+        dropped++;
+        continue;
+      }
       const find = typeof e.find === 'string' ? e.find : '';
       const replace = typeof e.replace === 'string' ? e.replace : '';
       const after = text(e.after);
@@ -415,19 +442,30 @@ export function validateAsk(x: unknown): AskAnswer {
          the text back behind. A delete stored without one can never be undone,
          and the undo is all-or-nothing, so it would take the whole set with
          it. Dropped here, exactly like a replacement with nothing to find. */
-      if (kind !== EditKind.INSERT && !find) continue;
+      if (kind !== EditKind.INSERT && !find) {
+        dropped++;
+        continue;
+      }
       if (kind !== EditKind.REPLACE && !after) {
         if (kind === EditKind.DELETE) droppedDeletion = true;
+        dropped++;
+        continue;
+      }
+      /* A change that writes nothing is not a change: applyEdits places the
+         empty string, reports success, and reverseEdits then turns it into a
+         needle of '' that occurrences() can never find — taking the whole
+         set's undo with it, since the undo is all-or-nothing. An emptying
+         change has to be expressed as an anchored deletion. */
+      if (kind !== EditKind.DELETE && !replace) {
+        dropped++;
         continue;
       }
       edits.push({ document, kind, find, replace, after });
     }
   }
-  return {
-    antwort,
-    edits: edits.slice(0, MAX_EDITS),
-    droppedReason: droppedDeletion
-      ? 'Eine Löschung wurde übersprungen, weil sie sich ohne Bezugsstelle nicht zurücknehmen ließe.'
-      : null,
-  };
+  const kept = edits.slice(0, MAX_EDITS);
+  /* Truncation is a drop like any other — silently keeping the first eight
+     would report a nine-change answer as fully applied. */
+  dropped += edits.length - kept.length;
+  return { antwort, edits: kept, droppedReason: droppedReason(dropped, droppedDeletion) };
 }

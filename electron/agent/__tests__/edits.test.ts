@@ -110,6 +110,38 @@ describe('applyEdits', () => {
   it('leaves the document byte-identical when handed no edits', () => {
     expect(applyEdits(LETTER, []).html).toBe(LETTER);
   });
+
+  it('refuses a deletion whose anchor is not the bytes right before it', () => {
+    /* The anchor is only ever read by reverseEdits, months later. One that
+       resolves but is not adjacent puts the passage back somewhere it never
+       stood — inside the salutation paragraph here, nesting a <p> in a <p>.
+       Caught while the document still says what the edit was written
+       against, rather than silently on the way back. */
+    const res = applyEdits(LETTER, [
+      edit({
+        kind: EditKind.DELETE,
+        find: '<p>Meine Gehaltserwartung liegt bei 80.000 EUR brutto p.a.</p>',
+        after: 'Sehr geehrtes Engineering Hiring Team,',
+      }),
+    ]);
+
+    expect(res.html).toBe(LETTER);
+    expect(res.failed).not.toBeNull();
+    expect(res.reason).toContain('steht nicht direkt hinter');
+  });
+
+  it('refuses a deletion whose anchor occurs more than once', () => {
+    const res = applyEdits(LETTER, [
+      edit({
+        kind: EditKind.DELETE,
+        find: '<p>Meine Gehaltserwartung liegt bei 80.000 EUR brutto p.a.</p>',
+        after: 'Engineering Hiring Team',
+      }),
+    ]);
+
+    expect(res.html).toBe(LETTER);
+    expect(res.failed).not.toBeNull();
+  });
 });
 
 describe('reverseEdits', () => {

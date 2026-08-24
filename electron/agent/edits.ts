@@ -60,6 +60,19 @@ export function applyEdits(html: string, edits: DocumentEdit[]): ApplyResult {
       return { html, failed: edit, reason: `„${text}“ steht mehrfach im Dokument.` };
     }
     const at = next.indexOf(text);
+    /* A deletion is placed by `find` alone, so nothing here would otherwise
+       ever look at `after` — it is read for the first time months later, by
+       reverseEdits, as the anchor the text goes back behind. An anchor that
+       is not the bytes immediately before `find` still resolves then, and the
+       passage comes back somewhere it never stood: a nested <p>, a sentence
+       inside the salutation. Checked here, where the document still says what
+       the edit was written against, so the reversal cannot be wrong later. */
+    if (edit.kind === EditKind.DELETE && edit.after !== null) {
+      const anchor = edit.after;
+      if (occurrences(next, anchor) !== 1 || next.indexOf(anchor) + anchor.length !== at) {
+        return { html, failed: edit, reason: `„${text}“ steht nicht direkt hinter „${anchor}“.` };
+      }
+    }
     if (edit.kind === EditKind.INSERT) {
       next = next.slice(0, at + text.length) + edit.replace + next.slice(at + text.length);
     } else {

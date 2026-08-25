@@ -167,6 +167,9 @@ export interface AppState {
   /* The language the application is conducted in; null leaves the decision
      to Kepler, which reads it off the posting. */
   jobLanguage: DocumentLanguage | null;
+  /* Who the new card is handed to. Kepler here means the run starts the
+     moment the card exists, rather than on a later assignment at the card. */
+  jobAssignee: Assignee | null;
   /* Whether the posting is given as a link; off means jobText carries the
      listing pasted by hand. */
   jobHasUrl: boolean;

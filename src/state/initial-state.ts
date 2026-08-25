@@ -2,7 +2,7 @@
    returns to. Split out of store.tsx so the provider reads as wiring rather
    than as one long literal. */
 import { COLUMNS, SortDir, SortKey, STAGE_IDS } from '../data/config';
-import { DocumentKind, RoundState } from '../shared/enums';
+import { Assignee, DocumentKind, DocumentLanguage, RoundState } from '../shared/enums';
 import type { RoundView } from './db-view';
 import type { AppState, BoardFilter } from './store-context';
 
@@ -14,11 +14,17 @@ export const EMPTY_FILTER: BoardFilter = {
 };
 
 /* The create dialog's inputs. Kept as one object so "Erstelle mehrere" can
-   reset the whole form after each card without listing the fields twice. */
+   reset the whole form after each card without listing the fields twice.
+
+   The chips start on the answer nearly every posting gets — Kepler on the
+   card, found on LinkedIn, applied to in English — so the common case is a
+   pasted link and ⌘↵. Each is still one click away from something else, and
+   clearing one hands the decision back to Kepler. */
 export const EMPTY_DRAFT = {
   jobUrl: '',
-  jobChannel: '',
-  jobLanguage: null,
+  jobChannel: 'LinkedIn',
+  jobLanguage: DocumentLanguage.EN,
+  jobAssignee: Assignee.KEPLER,
   jobHasUrl: true,
   jobText: '',
   /* The channel dropdown lives in AppState.dropdown like every other select. */
@@ -104,6 +110,14 @@ export const emptyRound = (title: string): RoundView => ({
   people: [],
   notes: [],
 });
+
+/* The create dialog, dismissed. Closing it discards the draft rather than
+   parking it: the chips carry defaults now, and a dialog that reopened on the
+   last run's answers would show them as if they had been chosen for this one. */
+export const CLOSED_MODAL = {
+  modalOpen: false,
+  ...EMPTY_DRAFT,
+} satisfies Partial<AppState>;
 
 /* Every editor bound to one card. Cleared whenever the open card changes or
    goes away, so a dialog can never save onto the wrong application. */

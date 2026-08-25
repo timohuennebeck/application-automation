@@ -38,7 +38,14 @@ import { mentionsKepler } from '../lib/mentions';
 import { initials } from '../lib/text';
 import { parsePosting } from '../features/create/parse-posting';
 import { CLOSED_PROFILE, Ctx, StateCtx } from './store-context';
-import { CLOSED_EDITORS, EMPTY_DRAFT, EMPTY_FILTER, emptyRound, initialState } from './initial-state';
+import {
+  CLOSED_EDITORS,
+  CLOSED_MODAL,
+  EMPTY_DRAFT,
+  EMPTY_FILTER,
+  emptyRound,
+  initialState,
+} from './initial-state';
 import { db, useResync } from './store-deps';
 
 /* The board filter bar reaches for this through the store, which is where it
@@ -79,6 +86,10 @@ const COMPANY_FIELD: Record<string, 'sector' | 'headcount' | 'homepage' | 'email
   Email: 'email',
   Telefon: 'phone',
 };
+/* Where Kepler's work shows on the board: taking a card puts it here, whether
+   that happens in the create dialog or later at the card itself. */
+const IN_PROGRESS_COL = 1;
+
 const DATE_COLUMNS = new Set(['Beworben am']);
 /* Cleared facts that should default to the select kind. */
 const SELECT_FACTS = new Set(['Gehalt', 'Erfahrung']);
@@ -589,6 +600,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // With pasted text there is no URL to guess from, so the card starts on
     // the generic placeholders and Kepler names it from the text later.
     const { role, company } = parsePosting(url);
+    /* Kepler picked in the dialog owns the card from the start: it lands in
+       In Bearbeitung and the run begins, exactly as assigning it at the card
+       would (setAssignee). Done here rather than through setAssignee because
+       stRef still holds the state from before the create resolved. */
+    const toKepler = s.jobAssignee === Assignee.KEPLER;
+    const col = toKepler ? IN_PROGRESS_COL : 0;
     // Keep the dialog open for the next card, but always start it empty.
     set((s2) => ({ modalOpen: s2.multiple, ...EMPTY_DRAFT }));
     persist(
@@ -602,18 +619,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
           language: s.jobLanguage,
         })
         .then((res) => {
+          const id = res.application.id;
+          const application = toKepler
+            ? { ...res.application, assignee: Assignee.KEPLER, stage_id: STAGE_IDS[IN_PROGRESS_COL] }
+            : res.application;
           set((s2) => ({
             applications: {
               ...s2.applications,
               ...Object.fromEntries(res.applications.map((a) => [a.id, a])),
-              [res.application.id]: res.application,
+              [id]: application,
             },
             companies: { ...s2.companies, [res.company.id]: res.company },
-            board: s2.board.map((c, i) => (i === 0 ? [res.application.id, ...c] : c)),
-            linksByApp: { ...s2.linksByApp, [res.application.id]: res.people },
+            board: s2.board.map((c, i) => (i === col ? [id, ...c] : c)),
+            linksByApp: { ...s2.linksByApp, [id]: res.people },
             roundsState: {
               ...s2.roundsState,
-              [res.application.id]: res.rounds.map((r) => ({
+              [id]: res.rounds.map((r) => ({
                 dbId: r.id,
                 state: r.state,
                 title: r.title,
@@ -626,19 +647,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 notes: [],
               })),
             },
-            followupsByApp: { ...s2.followupsByApp, [res.application.id]: res.followups },
-            documentsByApp: { ...s2.documentsByApp, [res.application.id]: res.documents },
-            commentsByApp: { ...s2.commentsByApp, [res.application.id]: res.comments ?? [] },
-            factsByApp: { ...s2.factsByApp, [res.application.id]: [] },
-            activitiesByApp: { ...s2.activitiesByApp, [res.application.id]: [] },
+            followupsByApp: { ...s2.followupsByApp, [id]: res.followups },
+            documentsByApp: { ...s2.documentsByApp, [id]: res.documents },
+            commentsByApp: { ...s2.commentsByApp, [id]: res.comments ?? [] },
+            factsByApp: { ...s2.factsByApp, [id]: [] },
+            activitiesByApp: { ...s2.activitiesByApp, [id]: [] },
           }));
           /* The repo puts the role into the vocabulary on its side; without
              this the dropdown cannot offer it until the next app start. */
           rememberRole(res.application.role);
-          // The card exists, unassigned — Kepler starts once it is assigned.
+          /* Without Kepler the card just sits there, unassigned, and a run
+             starts whenever it is assigned at the card. */
+          if (!toKepler) return;
+          persist(db()?.applications.update(id, { assignee: Assignee.KEPLER }));
+          persist(db()?.applications.move(id, STAGE_IDS[IN_PROGRESS_COL], 0));
+          logAct(id, 'hat Kepler als Bearbeiter eingesetzt');
+          startAgent(id);
         }),
     );
-  }, [set, rememberRole]);
+  }, [logAct, persist, set, rememberRole, startAgent]);
 
   /* Drops the application from the board and discards everything stored under
      its id; the DB cascade removes the rows. */
@@ -1223,8 +1250,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return;
       }
       logAct(id, 'hat Kepler als Bearbeiter eingesetzt');
-      const IN_PROGRESS = 1;
-      if (s.board.findIndex((c) => c.includes(id)) === 0) moveCard(id, IN_PROGRESS, null);
+      if (s.board.findIndex((c) => c.includes(id)) === 0) moveCard(id, IN_PROGRESS_COL, null);
       startAgent(id);
     },
     [logAct, moveCard, persist, set, startAgent],
@@ -1520,7 +1546,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
            through here as well would clear the card underneath it, so leaving
            the letter later would land on the board instead of the detail view
            it was opened from. */
-        else if (!s.editorCardId) set({ modalOpen: false, openCardId: null });
+        else if (!s.editorCardId) set({ ...CLOSED_MODAL, openCardId: null });
         return;
       }
       if (!(e.metaKey || e.ctrlKey)) return;

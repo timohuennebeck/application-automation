@@ -1,8 +1,10 @@
 import { CHANNEL_BG, CHANNEL_OPTIONS } from '../../data/config';
-import { DocumentLanguage, LANGUAGE_TITLES } from '../../shared/enums';
+import { Assignee, DocumentLanguage, LANGUAGE_TITLES } from '../../shared/enums';
+import { CLOSED_MODAL } from '../../state/initial-state';
 import { useApp } from '../../state/store-context';
+import { AssigneeLabel } from '../../ui/AssigneeLabel';
 import { FieldChip } from '../../ui/FieldChip';
-import { FieldHint, FieldLabel, ModalShell, SubmitButton } from '../../ui/ModalShell';
+import { FieldHint, ModalShell, SubmitButton } from '../../ui/ModalShell';
 import { MenuItem } from '../../ui/MenuItem';
 import { Popover, PopoverAnchor } from '../../ui/Popover';
 import { SelectPopover } from '../../ui/SelectPopover';
@@ -11,25 +13,39 @@ import { Avatar, KeplerAvatar } from '../../ui/icons';
 import { isHttpUrl } from '../../lib/url';
 import { DIALOG_INPUT } from '../../ui/styles';
 
-/* The dialog's channel dropdown shares AppState.dropdown with every other
-   select, so the global outside-click handler closes it like the rest. */
+/* The dialog's dropdowns share AppState.dropdown with every other select, so
+   the global outside-click handler closes them like the rest. */
 const CHANNEL_DD = 'jobChannel';
 const LANGUAGE_DD = 'jobLanguage';
+const ASSIGNEE_DD = 'jobAssignee';
 
-/* ⌘C dialog: paste a posting URL — or, without one, the listing text itself —
-   and pick the channel the posting was found on. */
+/* Nobody first, then everyone who can own a card — Kepler is the only one. */
+const ASSIGNEE_OPTIONS: (Assignee | null)[] = [null, Assignee.KEPLER];
+
+const CHANNEL_HINT = 'Auf welcher Plattform die Stelle gefunden wurde. Ohne Auswahl ergänzt Kepler sie.';
+const LANGUAGE_HINT =
+  'Die Sprache von Lebenslauf und Anschreiben. Ohne Auswahl nimmt Kepler die Sprache der Stellenanzeige.';
+
+/* ⌘C dialog: paste a posting URL — or, without one, the listing text itself.
+   Everything else about the card is optional and sits in one row of chips
+   above the footer, the way the board's own property rows read. */
 export function NewApplicationModal() {
   const { st, set, createCard } = useApp();
-  const close = () => set({ modalOpen: false });
+  const close = () => set(CLOSED_MODAL);
   /* A posting link has to be a full web address; anything else is text. */
   const valid = st.jobHasUrl ? isHttpUrl(st.jobUrl) : !!st.jobText.trim();
   const channelOpen = st.dropdown === CHANNEL_DD;
   const languageOpen = st.dropdown === LANGUAGE_DD;
+  const assigneeOpen = st.dropdown === ASSIGNEE_DD;
+  const toKepler = st.jobAssignee === Assignee.KEPLER;
+  /* One dropdown key toggles like the next; spelled out once. */
+  const toggle = (key: string) => () => set((s) => ({ dropdown: s.dropdown === key ? null : key }));
 
   return (
     <ModalShell
       onClose={close}
-      overflowVisible={channelOpen || languageOpen}
+      overflowVisible={channelOpen || languageOpen || assigneeOpen}
+      footerGap={6}
       header={
         <div
           style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: 14, color: 'var(--c-5f5c56)' }}
@@ -74,13 +90,11 @@ export function NewApplicationModal() {
         </>
       }
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <Switch
-          on={st.jobHasUrl}
-          label="Link zur Stellenanzeige vorhanden"
-          onClick={() => set((s) => ({ jobHasUrl: !s.jobHasUrl }))}
-        />
-      </div>
+      <Switch
+        on={st.jobHasUrl}
+        label="Link zur Stellenanzeige vorhanden"
+        onClick={() => set((s) => ({ jobHasUrl: !s.jobHasUrl }))}
+      />
 
       {st.jobHasUrl ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -97,117 +111,149 @@ export function NewApplicationModal() {
           </FieldHint>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <textarea
-            value={st.jobText}
-            autoFocus
-            rows={6}
-            placeholder="Stellenanzeige hier einfügen…"
-            onChange={(e) => set({ jobText: e.target.value })}
-            style={{
-              fontSize: 13.5,
-              color: 'var(--c-1b1a17)',
-              lineHeight: 1.55,
-              fontFamily: 'inherit',
-              border: 'none',
-              outline: 'none',
-              resize: 'vertical',
-              background: 'transparent',
-              padding: 0,
-              width: '100%',
-              minWidth: 0,
-              boxSizing: 'border-box',
-            }}
-          />
-          <FieldHint>
-            Text der Stellenanzeigenbeschreibung einfügen. Kepler liest Titel, Unternehmen und
-            Kernanforderungen daraus aus.
-          </FieldHint>
-        </div>
+        /* The empty box plus its one-line placeholder is the whole instruction;
+           what Kepler reads out of the text is explained at the chips below. */
+        <textarea
+          value={st.jobText}
+          autoFocus
+          rows={6}
+          placeholder="Stellenanzeige hier einfügen…"
+          onChange={(e) => set({ jobText: e.target.value })}
+          style={{
+            fontSize: 13.5,
+            color: 'var(--c-1b1a17)',
+            lineHeight: 1.55,
+            fontFamily: 'inherit',
+            border: 'none',
+            outline: 'none',
+            resize: 'vertical',
+            background: 'transparent',
+            padding: 0,
+            width: '100%',
+            minWidth: 0,
+            boxSizing: 'border-box',
+          }}
+        />
       )}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 4 }}>
-        <FieldLabel>Plattform</FieldLabel>
-        <PopoverAnchor style={{ width: 'fit-content' }}>
-          <FieldChip
-            open={channelOpen}
-            empty={!st.jobChannel}
-            chevron
-            gap={7}
-            style={{ padding: '3px 7px' }}
-            onClick={() => set((s) => ({ dropdown: s.dropdown === CHANNEL_DD ? null : CHANNEL_DD }))}
-            onClear={st.jobChannel ? () => set({ jobChannel: '', dropdown: null }) : undefined}
-            clearTitle="Plattform entfernen"
-          >
-            {st.jobChannel ? (
-              <>
-                <Avatar bg={CHANNEL_BG[st.jobChannel]} size={16} fontSize={8}>
-                  {st.jobChannel.charAt(0)}
-                </Avatar>
-                <span>{st.jobChannel}</span>
-              </>
-            ) : (
-              <span style={{ color: 'var(--c-a5a29a)' }}>Eintrag auswählen</span>
-            )}
-          </FieldChip>
-          {channelOpen && (
-            <SelectPopover
-              options={CHANNEL_OPTIONS}
-              value={st.jobChannel}
-              searchable
-              top={28}
-              minWidth={200}
-              zIndex={70}
-              onPick={(c) => set({ jobChannel: c, dropdown: null })}
-              onClose={() => set({ dropdown: null })}
-              renderRow={(c) => (
-                <>
-                  <Avatar bg={CHANNEL_BG[c]} size={16} fontSize={8}>
-                    {c.charAt(0)}
-                  </Avatar>
-                  <span style={{ whiteSpace: 'nowrap' }}>{c}</span>
-                  <span style={{ flex: '1 1 auto' }} />
-                </>
-              )}
-            />
-          )}
-        </PopoverAnchor>
-        <FieldHint>Falls du hier nichts auswählst, ergänzt Kepler die Plattform automatisch.</FieldHint>
-      </div>
+      {/* What Kepler will do with the card, and the three optional properties
+          it would otherwise fill in itself. The notice states the consequence
+          of the Bearbeiter chip right next to it, so picking Kepler needs no
+          second explanation. */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 4 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <KeplerAvatar size={20} fontSize={10} />
+          <FieldHint>
+            {toKepler
+              ? 'Kepler übernimmt die Bewerbung sofort und beginnt mit der Stellenanzeige.'
+              : 'Kepler übernimmt, sobald die Bewerbung ihm zugewiesen wird.'}
+          </FieldHint>
+        </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 4 }}>
-        <FieldLabel>Sprache</FieldLabel>
-        <PopoverAnchor style={{ width: 'fit-content' }}>
-          <FieldChip
-            open={languageOpen}
-            empty={!st.jobLanguage}
-            chevron
-            gap={7}
-            style={{ padding: '3px 7px' }}
-            onClick={() => set((s) => ({ dropdown: s.dropdown === LANGUAGE_DD ? null : LANGUAGE_DD }))}
-            onClear={st.jobLanguage ? () => set({ jobLanguage: null, dropdown: null }) : undefined}
-            clearTitle="Kepler entscheiden lassen"
-          >
-            <span>{st.jobLanguage ? LANGUAGE_TITLES[st.jobLanguage] : 'Kepler entscheidet'}</span>
-          </FieldChip>
-          {languageOpen && (
-            <Popover minWidth={160} zIndex={70}>
-              {Object.values(DocumentLanguage).map((l) => (
-                <MenuItem
-                  key={l}
-                  selected={l === st.jobLanguage}
-                  onClick={() => set({ jobLanguage: l, dropdown: null })}
-                >
-                  <span style={{ whiteSpace: 'nowrap' }}>{LANGUAGE_TITLES[l]}</span>
-                </MenuItem>
-              ))}
-            </Popover>
-          )}
-        </PopoverAnchor>
-        <FieldHint>
-          Die Sprache von Lebenslauf und Anschreiben. Falls du hier nichts auswählst, nimmt Kepler die Sprache
-          der Stellenanzeige.
-        </FieldHint>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <PopoverAnchor>
+            <FieldChip
+              open={assigneeOpen}
+              empty={!toKepler}
+              chevron
+              gap={7}
+              style={{ padding: '3px 7px' }}
+              onClick={toggle(ASSIGNEE_DD)}
+              onClear={toKepler ? () => set({ jobAssignee: null, dropdown: null }) : undefined}
+              clearTitle="Bearbeiter entfernen"
+            >
+              <AssigneeLabel assignee={st.jobAssignee} emptyLabel="Bearbeiter" />
+            </FieldChip>
+            {assigneeOpen && (
+              <Popover up minWidth={190} zIndex={70}>
+                {ASSIGNEE_OPTIONS.map((a) => (
+                  <MenuItem
+                    key={a ?? 'none'}
+                    selected={a === st.jobAssignee}
+                    onClick={() => set({ jobAssignee: a, dropdown: null })}
+                  >
+                    <AssigneeLabel assignee={a} />
+                  </MenuItem>
+                ))}
+              </Popover>
+            )}
+          </PopoverAnchor>
+
+          <PopoverAnchor>
+            <FieldChip
+              open={channelOpen}
+              empty={!st.jobChannel}
+              chevron
+              gap={7}
+              title={CHANNEL_HINT}
+              style={{ padding: '3px 7px' }}
+              onClick={toggle(CHANNEL_DD)}
+              onClear={st.jobChannel ? () => set({ jobChannel: '', dropdown: null }) : undefined}
+              clearTitle="Plattform entfernen"
+            >
+              {st.jobChannel ? (
+                <>
+                  <Avatar bg={CHANNEL_BG[st.jobChannel]} size={16} fontSize={8}>
+                    {st.jobChannel.charAt(0)}
+                  </Avatar>
+                  <span>{st.jobChannel}</span>
+                </>
+              ) : (
+                <span>Plattform</span>
+              )}
+            </FieldChip>
+            {channelOpen && (
+              <SelectPopover
+                options={CHANNEL_OPTIONS}
+                value={st.jobChannel}
+                searchable
+                openUp
+                minWidth={200}
+                zIndex={70}
+                onPick={(c) => set({ jobChannel: c, dropdown: null })}
+                onClose={() => set({ dropdown: null })}
+                renderRow={(c) => (
+                  <>
+                    <Avatar bg={CHANNEL_BG[c]} size={16} fontSize={8}>
+                      {c.charAt(0)}
+                    </Avatar>
+                    <span style={{ whiteSpace: 'nowrap' }}>{c}</span>
+                    <span style={{ flex: '1 1 auto' }} />
+                  </>
+                )}
+              />
+            )}
+          </PopoverAnchor>
+
+          <PopoverAnchor>
+            <FieldChip
+              open={languageOpen}
+              empty={!st.jobLanguage}
+              chevron
+              gap={7}
+              title={LANGUAGE_HINT}
+              style={{ padding: '3px 7px' }}
+              onClick={toggle(LANGUAGE_DD)}
+              onClear={st.jobLanguage ? () => set({ jobLanguage: null, dropdown: null }) : undefined}
+              clearTitle="Kepler entscheiden lassen"
+            >
+              <span>{st.jobLanguage ? LANGUAGE_TITLES[st.jobLanguage] : 'Sprache'}</span>
+            </FieldChip>
+            {languageOpen && (
+              <Popover up minWidth={160} zIndex={70}>
+                {Object.values(DocumentLanguage).map((l) => (
+                  <MenuItem
+                    key={l}
+                    selected={l === st.jobLanguage}
+                    onClick={() => set({ jobLanguage: l, dropdown: null })}
+                  >
+                    <span style={{ whiteSpace: 'nowrap' }}>{LANGUAGE_TITLES[l]}</span>
+                  </MenuItem>
+                ))}
+              </Popover>
+            )}
+          </PopoverAnchor>
+        </div>
       </div>
     </ModalShell>
   );

@@ -231,7 +231,16 @@ export const ASK_SCHEMA = {
       },
     },
   },
-  required: ['antwort', 'edits'],
+  /* `edits` is deliberately not required. The CLI enforces this schema before
+     validateAsk ever sees the answer, and it rejects a StructuredOutput call
+     that misses a required key — at the cost of a turn each time. Asked a
+     plain question about a document, the model answers with `antwort` alone
+     and no edits key at all, which is exactly right and exactly what the
+     prompt asks for ("Wird nur gefragt …, bleibt edits leer"); it was rejected
+     three times over and the step died as error_max_turns with a correct
+     answer in hand. validateAsk already reads a missing list as no edits, so
+     requiring the key here bought nothing and cost the whole call. */
+  required: ['antwort'],
 } as const;
 
 export const VARIANTS_SCHEMA = {

@@ -7,6 +7,7 @@ import {
   validateVariants,
   validateAsk,
   validateProofs,
+  ASK_SCHEMA,
   MAX_UNSUPPORTED,
 } from '../schemas.ts';
 import { DocumentKind, EditKind } from '../../../src/shared/enums.ts';
@@ -437,5 +438,19 @@ describe('validateAsk with edits', () => {
 
   it('still rejects an answer with no prose', () => {
     expect(() => validateAsk({ edits: [] })).toThrow();
+  });
+
+  /* The schema is what the CLI enforces before validateAsk ever runs, so a key
+     required there that the validator does not actually need is not a stricter
+     check — it is an answer the model never gets to give. Asking a question
+     about a document sent three StructuredOutput calls, each rejected for the
+     missing `edits`, each costing a turn, and the step died as
+     error_max_turns with the model having answered correctly every time. */
+  it('requires of the model only what validateAsk cannot do without', () => {
+    const plainAnswer = { antwort: 'Steht so im Brief.' };
+    expect(validateAsk(plainAnswer).edits).toEqual([]);
+    for (const key of ASK_SCHEMA.required) {
+      expect(plainAnswer).toHaveProperty(key);
+    }
   });
 });

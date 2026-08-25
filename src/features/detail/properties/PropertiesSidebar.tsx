@@ -11,13 +11,14 @@ import {
 } from '../../../shared/enums';
 import { isoToDate } from '../../../lib/date';
 import { useApp } from '../../../state/store-context';
+import { AssigneeLabel } from '../../../ui/AssigneeLabel';
 import { FieldChip } from '../../../ui/FieldChip';
 import { FieldRow } from '../../../ui/FieldRow';
 import { FIELD_GLYPH_SLOT, FieldGlyph } from '../../../ui/field-glyphs';
 import { MenuItem } from '../../../ui/MenuItem';
 import { Popover, PopoverAnchor } from '../../../ui/Popover';
 import { Section } from '../../../ui/Section';
-import { Avatar, ColumnIcon, KeplerAvatar, PriorityBars } from '../../../ui/icons';
+import { ColumnIcon, PriorityBars } from '../../../ui/icons';
 import { ContactPicker } from '../../people/ContactPicker';
 import { FactField, type FactView } from './FactField';
 
@@ -57,24 +58,6 @@ function PropertyRow({ label, children }: { label: string; children: ReactNode }
 
 /* Nobody first, then everyone who can own a card — Kepler is the only one. */
 const ASSIGNEE_OPTIONS: (Assignee | null)[] = [null, Assignee.KEPLER];
-
-/* Avatar + name for the Bearbeiter chip and its menu entries. */
-function AssigneeLabel({ assignee }: { assignee: Assignee | null }) {
-  return (
-    <>
-      {assignee === Assignee.KEPLER ? (
-        <KeplerAvatar size={16} fontSize={8} />
-      ) : (
-        <Avatar bg="var(--c-b3b0a8)" size={16}>
-          –
-        </Avatar>
-      )}
-      <span style={{ flex: '1 1 auto', whiteSpace: 'nowrap' }}>
-        {assignee === Assignee.KEPLER ? 'Kepler' : 'Kein Bearbeiter ausgewählt'}
-      </span>
-    </>
-  );
-}
 
 interface PropertiesSidebarProps {
   cardId: string;

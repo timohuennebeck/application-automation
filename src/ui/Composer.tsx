@@ -1,5 +1,9 @@
 import type { KeyboardEvent, ReactNode, Ref } from 'react';
 import { formatBytes } from '../lib/bytes';
+import type { Mentionable } from '../lib/mentions';
+import type { DocumentKind } from '../shared/enums';
+import { MentionBox } from './MentionBox';
+import type { MentionBoxHandle } from './MentionBox';
 import { PaperclipGlyph } from './icons';
 import { SEND_CIRCLE } from './styles';
 
@@ -9,8 +13,16 @@ export interface PendingAttachment {
   size: number;
 }
 
+/* The composer holds a MentionBox and reaches it through the box's own handle;
+   the popover above talks to one thing, not two. */
+export type ComposerHandle = MentionBoxHandle;
+
 /* The bordered "Kommentar schreiben…" box, shared by the card comment thread
-   and the per-interview note thread. `children` hosts the mention popover. */
+   and the per-interview note thread. `children` hosts the mention popover.
+
+   Everything about typing — chips, caret, undo — belongs to MentionBox, which
+   the comment editor uses too. What is left here is the chrome around it: the
+   staged attachments, the hint, the paperclip and the send button. */
 export function Composer({
   value,
   onChange,
@@ -23,14 +35,16 @@ export function Composer({
   attachments,
   onRemoveAttachment,
   onOpenAttachment,
+  mentionables,
+  sizeOf,
+  onCaretChange,
 }: {
   value: string;
-  onChange: (v: string) => void;
-  onKeyDown?: (e: KeyboardEvent<HTMLTextAreaElement>) => void;
+  onChange: (v: string, caret: number) => void;
+  onKeyDown?: (e: KeyboardEvent<HTMLDivElement>) => void;
   onSend: () => void;
   placeholder?: string;
-  /* Needed by the mention popover to read and restore the caret. */
-  ref?: Ref<HTMLTextAreaElement>;
+  ref?: Ref<ComposerHandle>;
   children?: ReactNode;
   /* Enables the paperclip. Threads without attachment storage (interview
      notes) leave it unset and get no button at all. */
@@ -39,6 +53,9 @@ export function Composer({
   onRemoveAttachment?: (index: number) => void;
   /* Makes a staged chip clickable, e.g. to preview the file before sending. */
   onOpenAttachment?: (index: number) => void;
+  mentionables?: Mentionable[];
+  sizeOf?: (kind: DocumentKind) => number | null;
+  onCaretChange?: (caret: number) => void;
 }) {
   const ready = !!value.trim() || !!attachments?.length;
   return (
@@ -53,26 +70,15 @@ export function Composer({
       }}
     >
       {children}
-      <textarea
+      <MentionBox
         ref={ref}
         value={value}
-        placeholder={placeholder}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={onChange}
         onKeyDown={onKeyDown}
-        onSelect={() => onChange(value)}
-        style={{
-          fontSize: 12.5,
-          color: 'var(--c-28261f)',
-          lineHeight: 1.55,
-          border: 'none',
-          outline: 'none',
-          resize: 'none',
-          background: 'transparent',
-          minHeight: 36,
-          width: '100%',
-          boxSizing: 'border-box',
-          padding: 0,
-        }}
+        placeholder={placeholder}
+        mentionables={mentionables}
+        sizeOf={sizeOf}
+        onCaretChange={onCaretChange}
       />
       {!!attachments?.length && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>

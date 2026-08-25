@@ -567,6 +567,24 @@ textarea::placeholder {
   color: var(--c-a8a49b);
 }
 
+/* The comment box paints mentions as chips, so it is a contenteditable and has
+   no ::placeholder of its own — :empty holds only while it has no nodes at
+   all, which is exactly when a textarea would be showing one. */
+.composer-box:empty::before {
+  content: attr(data-placeholder);
+  color: var(--c-a8a49b);
+  pointer-events: none;
+}
+.composer-box {
+  caret-color: var(--c-28261f);
+}
+/* A chip is one thing, and clicking it should put the caret beside it rather
+   than start a drag of the element itself. */
+.composer-box [data-mention] {
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
 /* Board horizontal scrollbar */
 .board-scroll {
   scrollbar-width: thin;

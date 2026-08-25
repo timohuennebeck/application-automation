@@ -73,6 +73,82 @@ function BoldAndLinks({ text }: { text: string }) {
   );
 }
 
+/* One resolved mention, as a chip. A document ("@Anschreiben") takes the
+   attachment look — paperclip, name, size; a person ("@Marek Hübner") the blue
+   pill. Exported because the composer paints the mentions being typed with
+   this same component: what the draft shows and what the posted comment shows
+   are then the same look for the same reason, rather than two styles that
+   agree until one of them is edited. */
+export function MentionChip({
+  entry,
+  sizeOf,
+  onOpenDocument,
+}: {
+  entry: Mentionable;
+  sizeOf?: (kind: DocumentKind) => number | null;
+  onOpenDocument?: (kind: DocumentKind) => void;
+}) {
+  if (entry.kind === 'document') {
+    const size = entry.document != null ? sizeOf?.(entry.document) : null;
+    return (
+      <span
+        className="attachment-chip"
+        title={entry.name}
+        /* The attachment chip is built to stand alone in a row under the
+           composer. In running text it keeps the colour, the paperclip and the
+           radius, but has to earn its place on a line it did not set the
+           height of — which is what the three values below are for.
+
+           lineHeight is its own rather than the line's: inheriting meant the
+           chip grew with whatever it sat in — 20.6px inside the composer's
+           1.55 — so a line gained ~1.8px the moment a document was mentioned
+           and tagging one nudged the whole thread. Raising the surrounding
+           line-height does not help, because the chip scales with it.
+
+           That leaves a 17px box, and the padding splits it: a 15px glyph in
+           1px of padding filled it edge to edge and read as clipped, so the
+           glyph gives 2px back and the padding takes them. Same 17px box —
+           it still fits the line with room to spare and still moves nothing. */
+        style={{
+          display: 'inline-flex',
+          /* The paperclip is shorter than the label; left to stretch it would
+             sit against the top edge instead of beside the text. */
+          alignItems: 'center',
+          gap: 4,
+          padding: '2px 5px',
+          verticalAlign: -2,
+          lineHeight: 1,
+        }}
+        onClick={() => entry.document != null && onOpenDocument?.(entry.document)}
+      >
+        <PaperclipGlyph size={13} />
+        <span style={{ fontSize: 12, color: 'var(--c-1b1a17)', whiteSpace: 'nowrap' }}>{entry.name}</span>
+        {size != null && (
+          <span style={{ fontSize: 11, color: 'var(--c-a5a29a)', whiteSpace: 'nowrap' }}>
+            {formatBytes(size)}
+          </span>
+        )}
+      </span>
+    );
+  }
+  return (
+    <span
+      style={{
+        color: 'var(--c-3f6ea8)',
+        fontWeight: 600,
+        background: 'var(--c-e9eff8)',
+        padding: '1px 6px',
+        borderRadius: 4,
+        display: 'inline-block',
+        lineHeight: 1.35,
+        verticalAlign: 'baseline',
+      }}
+    >
+      {'@' + entry.name}
+    </span>
+  );
+}
+
 /* One line's content: mention chips, bold spans, link pills. A mention is
    looked up in `mentionables` to tell a document ("@Anschreiben") from a
    person ("@Marek Hübner") — only the former gets the attachment look. */
@@ -99,53 +175,7 @@ function Inline({
            should always resolve — but a match with no entry degrades to plain
            text rather than the person chip, which would misrepresent it. */
         if (!entry) return <BoldAndLinks key={i} text={p.t} />;
-        if (entry.kind === 'document') {
-          const size = entry.document != null ? sizeOf?.(entry.document) : null;
-          return (
-            <span
-              key={i}
-              className="attachment-chip"
-              title={entry.name}
-              style={{
-                display: 'inline-flex',
-                gap: 4,
-                padding: '1px 5px',
-                verticalAlign: -2,
-                /* The attachment chip is built to stand alone in a row under the
-                   composer. In running text it needs less padding, or it breaks
-                   the line it sits in — same colour, same paperclip, same radius. */
-              }}
-              onClick={() => onOpenDocument?.(entry.document!)}
-            >
-              <PaperclipGlyph />
-              <span style={{ fontSize: 12, color: 'var(--c-1b1a17)', whiteSpace: 'nowrap' }}>
-                {entry.name}
-              </span>
-              {size != null && (
-                <span style={{ fontSize: 11, color: 'var(--c-a5a29a)', whiteSpace: 'nowrap' }}>
-                  {formatBytes(size)}
-                </span>
-              )}
-            </span>
-          );
-        }
-        return (
-          <span
-            key={i}
-            style={{
-              color: 'var(--c-3f6ea8)',
-              fontWeight: 600,
-              background: 'var(--c-e9eff8)',
-              padding: '1px 6px',
-              borderRadius: 4,
-              display: 'inline-block',
-              lineHeight: 1.35,
-              verticalAlign: 'baseline',
-            }}
-          >
-            {p.t}
-          </span>
-        );
+        return <MentionChip key={i} entry={entry} sizeOf={sizeOf} onOpenDocument={onOpenDocument} />;
       })}
     </>
   );

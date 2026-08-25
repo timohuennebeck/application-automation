@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { KEPLER_ENTRY, USER_ENTRY } from '../../lib/mentions';
 import type { Mentionable } from '../../lib/mentions';
@@ -9,6 +9,8 @@ import { relTime } from '../../state/db-view';
 import { documentEntries, documentFor, editStatus, editsForComment, editText } from '../../state/selectors';
 import type { EditStatus } from '../../state/selectors';
 import { useApp } from '../../state/store-context';
+import { MentionBox } from '../../ui/MentionBox';
+import type { MentionBoxHandle } from '../../ui/MentionBox';
 import { MentionComposer } from '../../ui/MentionComposer';
 import { MentionText } from '../../ui/MentionText';
 import { MenuItem } from '../../ui/MenuItem';
@@ -17,6 +19,7 @@ import { Section } from '../../ui/Section';
 import { AttachmentChip } from '../../ui/AttachmentChip';
 import { Avatar, DotsGlyph, RegenGlyph } from '../../ui/icons';
 import { SHIMMER_BG } from '../../ui/styles';
+import { useMentionPicker } from '../../ui/useMentionPicker';
 
 /* The old half of a replacement or a deletion. The rule follows the text
    rather than sitting a shade lighter — a lighter rule read as a printing
@@ -230,6 +233,27 @@ export function CommentsSection({ cardId }: { cardId: string }) {
   const comments = st.commentsByApp[cardId] || [];
   const ask = st.keplerAsk[cardId];
 
+  /* Editing a comment runs the same @-mention popover writing one does, so the
+     picker has to be a hook of this component rather than of the row being
+     edited — only one comment is ever open at a time, and the row it belongs
+     to comes back out of `commentEditing`. */
+  const editingComment = comments.find((c) => cardId + ':' + c.id === st.commentEditing);
+  const editBoxRef = useRef<MentionBoxHandle>(null);
+  const editPicker = useMentionPicker({
+    value: st.commentEditDraft,
+    onChange: (v) => set({ commentEditDraft: v }),
+    onKeyDown: (e) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        set({ commentEditing: null });
+      } else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && editingComment) {
+        updateComment(cardId, editingComment.id, st.commentEditDraft);
+      }
+    },
+    mentionables: mentionable,
+    boxRef: editBoxRef,
+  });
+
   return (
     <Section sectionKey="comments" title="Kommentare" count={comments.length} gap={14}>
       {comments.map((c) => {
@@ -284,31 +308,33 @@ export function CommentsSection({ cardId }: { cardId: string }) {
           >
             {editing ? (
               <>
-                <textarea
-                  value={st.commentEditDraft}
-                  autoFocus
-                  onChange={(e) => set({ commentEditDraft: e.target.value })}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Escape') {
-                      e.stopPropagation();
-                      set({ commentEditing: null });
-                    } else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) saveEdit();
-                  }}
-                  style={{
-                    fontSize: 12.5,
-                    color: 'var(--c-28261f)',
-                    lineHeight: 1.6,
-                    background: 'var(--c-fff)',
-                    border: '1px solid var(--c-cfccc3)',
-                    borderRadius: 6,
-                    padding: '7px 9px',
-                    outline: 'none',
-                    resize: 'vertical',
-                    minHeight: 52,
-                    width: '100%',
-                    boxSizing: 'border-box',
-                  }}
-                />
+                {/* The same box the composer writes in, so a mention keeps
+                    its chip while the comment is being corrected instead of
+                    falling back to the raw "@Anschreiben" a textarea shows —
+                    and, through the picker, offers the same list when a new
+                    "@" is typed here. Relative, because that list anchors to
+                    the nearest positioned ancestor. */}
+                <div style={{ position: 'relative' }}>
+                  {editPicker.popover}
+                  <MentionBox
+                    ref={editBoxRef}
+                    value={st.commentEditDraft}
+                    autoFocus
+                    mentionables={mentionable}
+                    sizeOf={sizeOfDocument}
+                    onChange={editPicker.onChange}
+                    onKeyDown={editPicker.onKeyDown}
+                    onCaretChange={editPicker.onCaretChange}
+                    style={{
+                      lineHeight: 1.6,
+                      background: 'var(--c-fff)',
+                      border: '1px solid var(--c-cfccc3)',
+                      borderRadius: 6,
+                      padding: '7px 9px',
+                      minHeight: 52,
+                    }}
+                  />
+                </div>
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 2 }}>
                   <div className="btn-plain" onClick={() => set({ commentEditing: null })}>
                     Cancel
@@ -395,6 +421,7 @@ export function CommentsSection({ cardId }: { cardId: string }) {
         onRemoveAttachment={removeCommentAttachment}
         onOpenAttachment={openStagedAttachment}
         people={mentionable}
+        sizeOf={sizeOfDocument}
         onKeyDown={(e) => {
           if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
             e.preventDefault();

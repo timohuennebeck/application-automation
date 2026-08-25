@@ -463,9 +463,9 @@ export function TrashGlyph({ size = 12 }: { size?: number }) {
   );
 }
 
-export function PaperclipGlyph() {
+export function PaperclipGlyph({ size = 15 }: { size?: number }) {
   return (
-    <svg width="15" height="15" viewBox="0 0 16 16" style={{ flexShrink: 0 }}>
+    <svg width={size} height={size} viewBox="0 0 16 16" style={{ flexShrink: 0 }}>
       <path
         d="M10.6 4.1 L5.6 9.1 a1.7 1.7 0 0 0 2.4 2.4 l5.2-5.2 a3 3 0 0 0-4.2-4.2 L3.5 7.6 a4.3 4.3 0 0 0 6.1 6.1 l4.2-4.2"
         fill="none"

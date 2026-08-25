@@ -18,6 +18,9 @@ const VARIANT: Record<PopoverVariant, CSSProperties> = {
 interface PopoverProps {
   variant?: PopoverVariant;
   top?: number;
+  /* Opens above the anchor instead of below it — for chips near the bottom of
+     a dialog, where the room under them is outside the dialog's card. */
+  up?: boolean;
   left?: number;
   right?: number;
   width?: number | string;
@@ -36,6 +39,7 @@ interface PopoverProps {
 export function Popover({
   variant = PopoverVariant.MENU,
   top = 26,
+  up,
   left,
   right,
   width,
@@ -67,6 +71,7 @@ export function Popover({
         ...VARIANT[variant],
         ...(padding !== undefined ? { padding } : null),
         ...(stack ? { display: 'flex', flexDirection: 'column', gap: 1 } : null),
+        ...(up ? { top: 'auto', bottom: 'calc(100% + 2px)' } : null),
         ...style,
       }}
     >

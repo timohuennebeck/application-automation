@@ -6,6 +6,7 @@ export function ModalShell({
   onClose,
   header,
   footer,
+  footerGap = 16,
   overflowVisible,
   children,
 }: {
@@ -13,6 +14,10 @@ export function ModalShell({
   header: ReactNode;
   /* Omitted by dialogs that save as you go and have nothing to confirm. */
   footer?: ReactNode;
+  /* Space under the last body row, on top of the footer's own 12. Dialogs
+     whose body ends in controls (the create dialog's chip row) sit closer to
+     the footer than ones ending in a field. */
+  footerGap?: number;
   /* Set while a popover is open inside the body: the scroll container would
      clip it at its bottom edge, where the footer then appears to cover it. */
   overflowVisible?: boolean;
@@ -45,7 +50,7 @@ export function ModalShell({
         <div
           className="no-scrollbar"
           style={{
-            padding: '20px 24px 16px',
+            padding: `20px 24px ${footerGap}px`,
             display: 'flex',
             flexDirection: 'column',
             gap: 16,

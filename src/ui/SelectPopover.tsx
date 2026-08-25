@@ -30,6 +30,9 @@ interface SelectPopoverProps {
   onClose(): void;
   minWidth?: number;
   top?: number;
+  /* Forces the list above the chip instead of measuring for it — for chips in
+     a dialog's bottom row, where the room below is outside the dialog. */
+  openUp?: boolean;
   zIndex?: number;
   /* Row content for one option; plain text when omitted. */
   renderRow?(value: string): ReactNode;
@@ -47,13 +50,14 @@ export function SelectPopover({
   onClose,
   minWidth = 170,
   top,
+  openUp,
   zIndex,
   renderRow,
   creatable,
 }: SelectPopoverProps) {
   const listRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLDivElement>(null);
-  const [drop, setDrop] = useState({ up: false, maxHeight: LIST_MAX_HEIGHT });
+  const [drop, setDrop] = useState({ up: !!openUp, maxHeight: LIST_MAX_HEIGHT });
 
   const [query, setQuery] = useState('');
   /* Row the arrow keys are on; they start from the current value, like a
@@ -84,8 +88,9 @@ export function SelectPopover({
     const wanted = Math.min(list.scrollHeight, LIST_MAX_HEIGHT);
     const below = window.innerHeight - a.bottom - VIEWPORT_MARGIN - chrome;
     const above = a.top - VIEWPORT_MARGIN - chrome;
-    const up = below < wanted && above > below;
+    const up = openUp ?? (below < wanted && above > below);
     setDrop({ up, maxHeight: Math.max(LIST_MIN_HEIGHT, Math.min(wanted, up ? above : below)) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /* Bring the current value into view once the list has its final height —
@@ -120,13 +125,7 @@ export function SelectPopover({
   };
 
   return (
-    <Popover
-      minWidth={minWidth}
-      top={top}
-      zIndex={zIndex}
-      revealOnMount
-      style={drop.up ? { top: 'auto', bottom: 'calc(100% + 2px)' } : undefined}
-    >
+    <Popover minWidth={minWidth} top={top} up={drop.up} zIndex={zIndex} revealOnMount>
       {searchable && (
         <SearchRow
           containerRef={searchRef}

@@ -17,6 +17,7 @@ import {
 } from '../shared/enums';
 import type { DocumentLanguage } from '../shared/enums';
 import type { ActivityRow, DocumentRow, FollowupRow, PersonWithCompany } from '../shared/db-types';
+import { readColumnOpen } from './column-prefs';
 import { indexSnapshot, roundInput, personView } from './db-view';
 import type { PersonView } from './db-view';
 import {
@@ -1504,7 +1505,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (ids.length) persist(db()?.profileFacts.reorder(ids));
   }, [persist]);
 
-  // Restore the persisted theme and section collapse state.
+  // Restore the persisted theme, section and board column collapse state.
   useEffect(() => {
     let saved: string | null = null;
     try {
@@ -1521,6 +1522,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch {
       /* ignore */
     }
+    set({ colOpen: readColumnOpen() });
   }, [set]);
 
   useEffect(() => {

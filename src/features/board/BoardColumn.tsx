@@ -1,5 +1,6 @@
 import type { ColumnDef } from '../../data/config';
 import { visibleCards } from '../../state/selectors';
+import { writeColumnOpen } from '../../state/column-prefs';
 import { useApp } from '../../state/store-context';
 import { CollapseGlyph, ColumnIcon } from '../../ui/icons';
 import { ApplicationCard } from './ApplicationCard';
@@ -22,6 +23,7 @@ export function BoardColumn({ col, ci }: { col: ColumnDef; ci: number }) {
     set((s) => {
       const next = s.colOpen.slice();
       next[ci] = !next[ci];
+      writeColumnOpen(next);
       return { colOpen: next };
     });
 

@@ -47,6 +47,19 @@ interface SelectPopoverProps {
   creatable?: boolean;
 }
 
+/* The horizontal extent a popover must stay within: the closest ancestor that
+   clips or scrolls its overflow, or the window when nothing does. */
+function scrollBounds(el: Element): { left: number; right: number } {
+  for (let node = el.parentElement; node; node = node.parentElement) {
+    const { overflowX, overflowY } = getComputedStyle(node);
+    if (overflowX !== 'visible' || overflowY !== 'visible') {
+      const r = node.getBoundingClientRect();
+      return { left: r.left, right: r.right };
+    }
+  }
+  return { left: 0, right: window.innerWidth };
+}
+
 export function SelectPopover({
   options,
   value,
@@ -96,11 +109,15 @@ export function SelectPopover({
     const above = a.top - VIEWPORT_MARGIN - chrome;
     const up = openUp ?? (below < wanted && above > below);
     /* The list is wider than its chip and hangs off the chip's left edge, so
-       a chip in the right-hand sidebar would push it past the window. Slide
-       it left by exactly the overhang — never past the window's left edge. */
+       a chip near the right of its surface would push it out. The boundary is
+       the nearest scrolling ancestor, not the window: the sidebar clips at
+       its own edge (and would scroll sideways to the overhang rather than
+       show it). Slide the list left by exactly the overhang, never past the
+       boundary's left edge. */
+    const bounds = scrollBounds(anchor);
     const p = popRef.current?.getBoundingClientRect();
-    const overhang = p ? p.right - (window.innerWidth - VIEWPORT_MARGIN) : 0;
-    const left = p ? -Math.max(0, Math.min(overhang, p.left - VIEWPORT_MARGIN)) : 0;
+    const overhang = p ? p.right - (bounds.right - VIEWPORT_MARGIN) : 0;
+    const left = p ? -Math.max(0, Math.min(overhang, p.left - bounds.left - VIEWPORT_MARGIN)) : 0;
     setDrop({ up, maxHeight: Math.max(LIST_MIN_HEIGHT, Math.min(wanted, up ? above : below)), left });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

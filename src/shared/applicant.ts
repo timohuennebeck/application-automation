@@ -12,6 +12,10 @@ const APPLICANT_FILE_STEM = 'Timo_Huennebeck';
    Kept next to the stem so the two spellings cannot drift apart. */
 export const APPLICANT_NAME = 'Timo Hünnebeck';
 
+/* How the app addresses its user — the create dialog asks a question by first
+   name. Derived from the full name so a rename happens in one place. */
+export const APPLICANT_FIRST_NAME = APPLICANT_NAME.split(' ')[0];
+
 /* The address the documents carry. It does not read like the name, which is
    why the validation pass kept reporting it: an address and a name that do not
    match is exactly the kind of thing that check is for. It is stated here so

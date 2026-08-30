@@ -60,6 +60,16 @@ function scrollBounds(el: Element): { left: number; right: number } {
   return { left: 0, right: window.innerWidth };
 }
 
+/* Scroll the list just enough to show row `i` — the list only, see the
+   selection effect below for why scrollIntoView is not an option. */
+function revealRow(list: HTMLDivElement | null, i: number): void {
+  const row = list?.children[i];
+  if (!list || !(row instanceof HTMLElement)) return;
+  if (row.offsetTop < list.scrollTop) list.scrollTop = row.offsetTop;
+  else if (row.offsetTop + row.offsetHeight > list.scrollTop + list.clientHeight)
+    list.scrollTop = row.offsetTop + row.offsetHeight - list.clientHeight;
+}
+
 export function SelectPopover({
   options,
   value,
@@ -124,10 +134,15 @@ export function SelectPopover({
 
   /* Bring the current value into view once the list has its final height —
      and only then. Re-running on later renders (a parent re-rendering while
-     the user scrolls) would yank the list back to the selection. */
+     the user scrolls) would yank the list back to the selection. Set
+     scrollTop by hand rather than scrollIntoView: that scrolls every
+     ancestor too, and on mount — before the list has slid into view — it
+     dragged the whole sidebar sideways to a row that hung out of it. */
   useLayoutEffect(() => {
-    const index = options.indexOf(value);
-    if (index >= 0) listRef.current?.children[index]?.scrollIntoView({ block: 'center' });
+    const list = listRef.current;
+    const row = list?.children[options.indexOf(value)];
+    if (list && row instanceof HTMLElement)
+      list.scrollTop = row.offsetTop - (list.clientHeight - row.offsetHeight) / 2;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [drop]);
 
@@ -149,7 +164,7 @@ export function SelectPopover({
       e.preventDefault();
       const next = cycleActive(active, rows, e.key);
       setActive(next);
-      listRef.current?.children[next]?.scrollIntoView({ block: 'nearest' });
+      revealRow(listRef.current, next);
     }
   };
 
@@ -182,6 +197,9 @@ export function SelectPopover({
         tabIndex={-1}
         onKeyDown={searchable ? undefined : navKeys}
         style={{
+          /* Positioned so the rows' offsetTop is measured from the list, not
+             from the popover above the search row. */
+          position: 'relative',
           maxHeight: drop.maxHeight,
           overflowY: 'auto',
           display: 'flex',

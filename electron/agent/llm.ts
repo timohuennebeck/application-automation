@@ -135,6 +135,11 @@ export function sdkInvoke(): ModelInvoke {
           /* See cli-path.ts — the SDK's own lookup lands inside app.asar. */
           pathToClaudeCodeExecutable: claudeCliPath(),
           model: model ?? MODEL,
+          /* Pinned rather than inherited: the CLI's default effort is "high"
+             today, but every step here — extraction, letter, rating — is
+             quality-sensitive and cheap in tokens, so a quieter default
+             arriving with a CLI update must not silently lower it. */
+          effort: 'high',
           maxTurns,
           /* `tools` is the restriction ([] = no built-in tools at all);
              `allowedTools` only pre-approves what exists, so with no

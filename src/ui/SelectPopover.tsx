@@ -134,7 +134,7 @@ export function SelectPopover({
   /* Without a search input the list itself takes focus, so the arrow keys,
      Enter and Escape land somewhere. */
   useLayoutEffect(() => {
-    if (!searchable) listRef.current?.focus();
+    if (!searchable) listRef.current?.focus({ preventScroll: true });
   }, [searchable]);
 
   /* Shared by the search input and the bare list: arrows move the highlight,

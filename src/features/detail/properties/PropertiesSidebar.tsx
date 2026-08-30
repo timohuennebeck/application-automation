@@ -133,6 +133,9 @@ export function PropertiesSidebar({ cardId, role, company, columnIndex }: Proper
         flexShrink: 0,
         marginLeft: 'auto',
         overflowY: 'auto',
+        /* Never sideways: a popover that is measured too wide must be fixed
+           where it opens, not by scrolling the whole column over to it. */
+        overflowX: 'hidden',
         padding: '12px 22px 28px',
         boxSizing: 'border-box',
         display: 'flex',

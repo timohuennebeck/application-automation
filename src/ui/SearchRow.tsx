@@ -2,7 +2,7 @@
    by the select popovers and the people picker so the two boxes can never
    drift apart visually. The list below — and what Enter does to it — stays
    the caller's. */
-import type { KeyboardEvent, Ref } from 'react';
+import { useLayoutEffect, useRef, type KeyboardEvent, type Ref } from 'react';
 import { SearchGlyph } from './icons';
 
 /* One arrow-key step through `rows` entries, wrapping at both ends. */
@@ -24,12 +24,19 @@ export function SearchRow({
   /* The select popover measures the row's height for its drop-up math. */
   containerRef?: Ref<HTMLDivElement>;
 }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  /* Not `autoFocus`: that focuses at mount, before the popover has measured
+     and moved itself into view, and focusing an element that still hangs
+     out of a scrolling sidebar drags the sidebar sideways to it. */
+  useLayoutEffect(() => {
+    inputRef.current?.focus({ preventScroll: true });
+  }, []);
   return (
     <div ref={containerRef} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 8px 7px' }}>
       <SearchGlyph />
       <input
+        ref={inputRef}
         value={value}
-        autoFocus
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={onKeyDown}

@@ -12,7 +12,6 @@ import { SelectPopover } from '../../ui/SelectPopover';
 import { Switch } from '../../ui/Switch';
 import { Avatar, KeplerAvatar } from '../../ui/icons';
 import { isHttpUrl } from '../../lib/url';
-import { APPLICANT_FIRST_NAME } from '../../shared/applicant';
 import { DIALOG_INPUT } from '../../ui/styles';
 
 /* The bare text boxes of the dialog: no border, no padding — the placeholder
@@ -149,7 +148,7 @@ export function NewApplicationModal() {
         <textarea
           value={st.jobInterestReason}
           rows={2}
-          placeholder={`${APPLICANT_FIRST_NAME}, was spricht dich bei dieser Stelle an – Product, Team? (optional)`}
+          placeholder="Und… was spricht dich bei dieser Stelle an – Product, Team? (optional)"
           onChange={(e) => set({ jobInterestReason: e.target.value })}
           style={PLAIN_TEXTAREA}
         />

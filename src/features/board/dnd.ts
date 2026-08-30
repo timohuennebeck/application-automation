@@ -133,5 +133,8 @@ export function endDrag(store: AppStore) {
   clearGhost(store);
   store.dragPosRef.current = null;
   store.swapLockRef.current = null;
-  store.set({ dragId: null, overCol: null });
+  /* Persists the slot the card landed in (and clears dragId/overCol). The
+     drop and the following dragend both come through here; the second call
+     finds no dragId and does nothing. */
+  store.commitDrag();
 }

@@ -174,6 +174,8 @@ export interface AppState {
      listing pasted by hand. */
   jobHasUrl: boolean;
   jobText: string;
+  /* Why this position in particular — free text the letter generation reads. */
+  jobInterestReason: string;
   /* Key of the single open dropdown, or null. */
   dropdown: string | null;
   /* Key of the single field being inline-edited, or null. */
@@ -241,6 +243,9 @@ export interface AppStore {
   /* The name of the card's company; '' when the card is unknown. */
   companyOfCard: (id: string) => string;
   moveCard: (id: string, toCol: number, toIdx: number | null, live?: boolean) => void;
+  /* Ends a drag and persists where the card landed — the live moves during
+     the drag never write. */
+  commitDrag: () => void;
   openCard: (id: string) => void;
   createCard: () => void;
   /* Hands a card to Kepler; progress arrives over the agent event channel. */
@@ -314,6 +319,7 @@ export interface AppStore {
   commitProfileOrder: () => void;
   cancelEditRef: { current: boolean };
   dragPosRef: { current: { col: number; y: number } | null };
+  dragOriginRef: { current: { col: number; idx: number } | null };
   swapLockRef: { current: { col: number; dir: number; y: number } | null };
   ghostRef: { current: HTMLElement | null };
 }

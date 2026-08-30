@@ -6,7 +6,6 @@ import { VALUE_BUDGET } from './budgets.ts';
 import { modelPlaceholders } from './fill.ts';
 import type { Extraction } from './schemas.ts';
 import { stripMarkup } from '../../src/lib/markup.ts';
-import { APPLICANT_EMAIL, APPLICANT_NAME } from '../../src/shared/applicant.ts';
 import { DocumentKind, DocumentLanguage } from '../../src/shared/enums.ts';
 
 /* Listings are pages, not books — everything past this is boilerplate, and
@@ -17,7 +16,7 @@ const MAX_LISTING = 30_000;
    contains a literal </anzeige> would otherwise break out of its block. */
 function sealed(text: string): string {
   return text.replace(
-    /<\/(anzeige|vorlage|platzhalter|profil|kontakte|lebenslauf-dokument|lebenslauf|anschreiben|brief|stelle|hinweis|karte|personen|kommentare|interviews|aufgaben|frage)>/gi,
+    /<\/(anzeige|vorlage|platzhalter|profil|kontakte|lebenslauf-dokument|lebenslauf|anschreiben|brief|stelle|hinweis|karte|personen|kommentare|interviews|aufgaben|frage|motivation)>/gi,
     '',
   );
 }
@@ -50,7 +49,6 @@ Regeln:
 - standort: Stadt (z. B. "Berlin"), null wenn unklar oder nur remote.
 - gehalt: die genannte Spanne, kompakt in ganzen Tausendern (z. B. "70–85k €" — niemals Dezimalzahlen wie "87.7"), null wenn keine genannt ist.
 - erfahrung: geforderte Berufserfahrung in Jahren, eingeordnet in die vorgegebenen Stufen.
-- people: alle in der Anzeige namentlich genannten Ansprechpersonen (Recruiter, Hiring Manager) mit dem, was dasteht.
 - language: die Sprache, in der die Anzeige überwiegend geschrieben ist — "de" oder "en". Eine deutsche Anzeige mit englischen Fachbegriffen oder englischem Titel ist "de"; null nur bei einer anderen Sprache.
 - textKind: was der Text überhaupt ist — "posting" für eine Stellenanzeige, "cookie_notice" für einen Cookie-Hinweis, "error_page" für eine Fehlerseite, "login_wall" für eine Anmeldeseite, "other" für alles andere (Artikel, Startseite, leere Seite). Null nur, wenn du dich nicht entscheiden kannst.
 - Unbekanntes ist null, niemals ein Platzhalter.
@@ -60,27 +58,18 @@ ${clipListing(listing)}
 </anzeige>`;
 }
 
-export function contactPrompt(company: string, website: string | null, role: string): string {
-  return `Du bist Kepler, der Assistent einer Bewerbungs-App. Für eine Bewerbung als "${role}" bei ${company}${website ? ` (${website})` : ''} nennt die Stellenanzeige keine Ansprechperson.
-
-Suche im Web nach einer passenden realen Ansprechperson für diese Bewerbung: Recruiter, Talent Acquisition oder die zuständige Führungskraft bei ${company}. Nutze öffentliche Quellen (Team-Seiten, Impressum, LinkedIn-Profile in Suchergebnissen).
-
-Regeln:
-- Nur eine Person, und nur wenn du sie einer öffentlichen Quelle klar zuordnen kannst.
-- role ist die Funktion der Person, linkedin die Profil-URL falls gefunden.
-- Erfinde nichts. Findest du niemanden Belastbares, ist person null.`;
-}
-
 export interface DocumentInput {
   template: string;
   listing: string;
   extraction: Extraction;
   profileFacts: string[];
-  /* Contacts linked to the card — from the listing or researched by the
-     contact step — as "Name (Rolle)" lines. The letter is addressed to the
-     first one; nothing else in the app knows a person the listing did not
-     name. */
+  /* Contacts the user linked to the card, as "Name (Rolle)" lines. The
+     letter is addressed to the first one. */
   contacts: string[];
+  /* What the user typed into the create dialog's "Warum interessant" field —
+     their own reason for wanting exactly this position. Null when they left
+     it empty. */
+  interestReason: string | null;
   /* HTML of the selected CV Fassung — the applicant's facts live there, so
      the letter reads them instead of a second copy that would drift. Null
      when no CV is uploaded. */
@@ -269,7 +258,11 @@ ${OUTPUT_RULES}
 - Fülle jeden Platzhalter nach dem Verzeichnis unten. Platzhalter, die im Verzeichnis fehlen, füllst du sinngemäß nach ihrem Namen.
 - Alle Fakten über den Bewerber kommen aus <lebenslauf> (Stationen, Projekte, Stack, Sprachen, Zertifikate) und <profil> (ergänzende Angaben, die der Lebenslauf nicht hat — sie gelten als verbindlich); die Konditionen aus <konditionen>; alles über die Stelle und das Unternehmen aus <anzeige> und <kontakte>. Erfinde nichts — keine Zahlen, keine Adressen, keine Namen.
 - Wähle aus dem Lebenslauf die Belege, die zur Anzeige passen — Ergebnis vor Tätigkeit, konkret vor allgemein.
-- Beziehe dich konkret auf die Stelle und das Unternehmen; kein generischer Text.
+- Beziehe dich konkret auf die Stelle und das Unternehmen; kein generischer Text.${
+    input.interestReason
+      ? '\n- In <motivation> steht, warum der Bewerber selbst an genau dieser Stelle interessiert ist. Lass dieses Motiv in den Einstieg einfließen (Hook und Produktbezug), in eigenen Worten und in der Sprache des Briefs — es liefert die Richtung, nicht den Wortlaut, und es rechtfertigt keine neuen Fakten über den Bewerber.'
+      : ''
+  }
 - ${TEXT[input.language].languageRule}
 
 Verzeichnis der Platzhalter:
@@ -286,7 +279,15 @@ ${cvBlock(input.cv)}
 <kontakte>
 ${bullets(input.contacts, '(keine bekannt)')}
 </kontakte>
-
+${
+  input.interestReason
+    ? `
+<motivation>
+${sealed(input.interestReason)}
+</motivation>
+`
+    : ''
+}
 ${documentContext(input)}`;
 }
 
@@ -403,45 +404,37 @@ export function documentMarkup(html: string): string {
   );
 }
 
-export function checksPrompt(
-  extraction: Extraction,
-  contacts: string[],
-  cvHtml: string,
-  letterHtml: string,
-): string {
-  return `Du bist Kepler, der Assistent einer Bewerbungs-App. Prüfe die erfassten Daten und die Textauszüge der zwei generierten Dokumente auf offensichtliche Fehler.
+/* What the Opus rating call reads: the finished letter beside the posting it
+   answers. It sees the CV's text too, so "kein Beleg für X" feedback is
+   grounded rather than guessed. */
+export interface RatingInput {
+  letter: string;
+  cv: string | null;
+  listing: string;
+  company: string;
+  role: string;
+}
 
-Prüfe:
-- Passen Rolle und Unternehmen in den Dokumenten zu den erfassten Daten?
-- Datumsformate (${TEXT[extraction.language ?? DocumentLanguage.DE].dateFormat}), Gehaltsformat, plausible URLs und E-Mail-Adressen des Unternehmens?
-- Widersprüche zwischen den Angaben?
+export function ratingPrompt(input: RatingInput): string {
+  return `Du bist ein erfahrener Tech-Recruiter und bewertest ein fertiges Anschreiben für die Stelle "${sealed(input.role)}" bei ${sealed(input.company)}. Lies die Stellenanzeige und das Anschreiben, dann urteile streng, wie ein Hiring Manager mit 15 Sekunden Zeit.
 
-Die Kontaktdaten des Bewerbers stehen in <bewerber> und sind richtig, so wie sie dort stehen. Sie sind nie ein Hinweis — auch dann nicht, wenn die Adresse anders aussieht, als der Name vermuten ließe.
-
-<kontakte> sind die der Karte hinterlegten Ansprechpersonen — auch wenn <daten> selbst keine Personen führt (etwa weil eine Person erst nach der Extraktion recherchiert und verknüpft wurde). Nennt ein Dokument dort eine Person, die in <kontakte> steht, ist das korrekt und kein Widerspruch.
-
-issues: höchstens die drei wichtigsten echten Probleme, je EIN kurzer Satz (unter 15 Wörter), ohne Herleitung oder Zitate; hebe den Kern jedes Hinweises mit **fett** hervor (z. B. "**Gehaltsangabe** widerspricht der Anzeige."). Leer, wenn alles stimmig ist.
-
-<bewerber>
-Name: ${APPLICANT_NAME}
-E-Mail: ${APPLICANT_EMAIL}
-</bewerber>
-
-<daten>
-${JSON.stringify(extraction, null, 1)}
-</daten>
-
-<kontakte>
-${bullets(contacts, '(keine bekannt)')}
-</kontakte>
-
-<lebenslauf>
-${documentExcerpt(cvHtml)}
-</lebenslauf>
+Regeln:
+- score: 0–10. 9–10 heißt: sofort einladen, nichts mehr anfassen. 7–8: gut, mit kleinen Schwächen. Darunter: die Schwächen kosten die Einladung.
+- improvements: die konkreten Änderungen, die den Brief messbar besser machen würden — je EIN Satz, präzise genug, dass jemand sie umsetzen kann, wichtigste zuerst. Höchstens fünf; nur was den Score wirklich hebt. Bei 9 oder 10 bleibt die Liste leer.
+- Bewerte Passung zur Anzeige, Konkretheit der Belege, Scannbarkeit und Ton. Erfinde keine Anforderungen, die die Anzeige nicht stellt, und verlange keine Fakten, die der Lebenslauf nicht hergibt.
+- Sprache der improvements: Deutsch, auch wenn der Brief englisch ist.
 
 <anschreiben>
-${documentExcerpt(letterHtml)}
-</anschreiben>`;
+${documentExcerpt(input.letter)}
+</anschreiben>
+
+<lebenslauf>
+${cvBlock(input.cv)}
+</lebenslauf>
+
+<anzeige>
+${clipListing(input.listing)}
+</anzeige>`;
 }
 
 /* What the proofs step reads. The documents arrive as the HTML that was just

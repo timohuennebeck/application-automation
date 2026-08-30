@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
-  validateContact,
   validateFill,
   validateExtraction,
-  validateChecks,
+  validateRating,
   validateVariants,
   validateAsk,
   validateProofs,
   ASK_SCHEMA,
+  MAX_IMPROVEMENTS,
   MAX_UNSUPPORTED,
 } from '../schemas.ts';
 import { DocumentKind, EditKind } from '../../../src/shared/enums.ts';
@@ -26,7 +26,6 @@ const FULL = {
   standort: 'Berlin',
   gehalt: '70–85k €',
   erfahrung: '5–8',
-  people: [{ name: 'Lena Vogt', role: 'Recruiterin', email: null, phone: null, linkedin: null }],
 };
 
 describe('validateExtraction', () => {
@@ -35,7 +34,6 @@ describe('validateExtraction', () => {
     expect(ex.company.name).toBe('Helios Energie');
     expect(ex.company.sector).toBe('Energie');
     expect(ex.erfahrung).toBe('5–8');
-    expect(ex.people).toHaveLength(1);
   });
 
   it('nulls values outside the closed sets instead of storing them', () => {
@@ -63,11 +61,10 @@ describe('validateExtraction', () => {
     expect(validateExtraction(FULL).textKind).toBeNull();
   });
 
-  it('tolerates missing fields and drops nameless people', () => {
-    const ex = validateExtraction({ people: [{ name: '' }, { role: 'HR' }, { name: ' Jo Peters ' }] });
+  it('tolerates missing fields', () => {
+    const ex = validateExtraction({});
     expect(ex.role).toBeNull();
     expect(ex.company.name).toBeNull();
-    expect(ex.people.map((p) => p.name)).toEqual(['Jo Peters']);
   });
 
   /* The posting's language decides which template side a run reads. Anything
@@ -82,14 +79,6 @@ describe('validateExtraction', () => {
 
   it('rejects something that is not an object at all', () => {
     expect(() => validateExtraction('kein json')).toThrow();
-  });
-});
-
-describe('validateContact', () => {
-  it('accepts a found person and an empty-handed null alike', () => {
-    expect(validateContact({ person: { name: 'Mia Falk', role: 'Talent Lead' } })?.name).toBe('Mia Falk');
-    expect(validateContact({ person: null })).toBeNull();
-    expect(validateContact({ person: { name: '  ' } })).toBeNull();
   });
 });
 
@@ -162,10 +151,25 @@ describe('validateFill', () => {
   });
 });
 
-describe('validateChecks', () => {
-  it('keeps the issue list, dropping blank entries', () => {
-    expect(validateChecks({ issues: [' Gehalt ohne Währung ', ''] })).toEqual(['Gehalt ohne Währung']);
-    expect(validateChecks({ issues: [] })).toEqual([]);
+describe('validateRating', () => {
+  it('passes a rating through, dropping blank improvement lines', () => {
+    expect(validateRating({ score: 7, improvements: [' Hook konkreter fassen ', ''] })).toEqual({
+      score: 7,
+      improvements: ['Hook konkreter fassen'],
+    });
+  });
+
+  /* The letter is already on disk and correct — a squabble over the mark must
+     not fail the step, so the validator clamps instead of throwing. */
+  it('clamps the score into 0–10 and tolerates a missing list', () => {
+    expect(validateRating({ score: 14 })).toEqual({ score: 10, improvements: [] });
+    expect(validateRating({ score: -2, improvements: [] }).score).toBe(0);
+    expect(validateRating({}).score).toBe(0);
+  });
+
+  it('caps the improvements at the schema’s limit', () => {
+    const many = Array.from({ length: 9 }, (_, i) => 'Punkt ' + i);
+    expect(validateRating({ score: 4, improvements: many }).improvements).toHaveLength(MAX_IMPROVEMENTS);
   });
 });
 

@@ -9,7 +9,8 @@ import { KeplerError } from './errors.ts';
 import type { LlmRequest, LlmRunner } from './orchestrator.ts';
 
 /* Alias, not a dated id — quality/cost fits every step, and the subscription
-   plans include it. */
+   plans include it. A step that needs a different model (the Opus 5 letter
+   rating) names its own on the request. */
 const MODEL = 'sonnet';
 const DEFAULT_TIMEOUT = 120_000;
 
@@ -19,6 +20,8 @@ interface ModelCall {
   tools: string[];
   maxTurns: number;
   timeoutMs: number;
+  /* Overrides the default model for this one call. */
+  model?: string;
   /* The run's stop signal; the call is aborted the moment it fires. */
   signal?: AbortSignal;
 }
@@ -42,6 +45,7 @@ export function createLlmRunner(invoke: ModelInvoke): LlmRunner {
          dying at its first step. */
       maxTurns: req.maxTurns ?? 3,
       timeoutMs: req.timeoutMs ?? DEFAULT_TIMEOUT,
+      model: req.model,
       signal: req.signal,
     };
     /* What to complain about in the second ask, or null when the step never
@@ -100,7 +104,7 @@ export function classify(err: unknown, timedOut: boolean): KeplerError {
 }
 
 export function sdkInvoke(): ModelInvoke {
-  return async ({ prompt, schema, tools, maxTurns, timeoutMs, signal }) => {
+  return async ({ prompt, schema, tools, maxTurns, timeoutMs, model, signal }) => {
     const controller = new AbortController();
     let timedOut = false;
     const timer = setTimeout(() => {
@@ -130,7 +134,7 @@ export function sdkInvoke(): ModelInvoke {
         options: {
           /* See cli-path.ts — the SDK's own lookup lands inside app.asar. */
           pathToClaudeCodeExecutable: claudeCliPath(),
-          model: MODEL,
+          model: model ?? MODEL,
           maxTurns,
           /* `tools` is the restriction ([] = no built-in tools at all);
              `allowedTools` only pre-approves what exists, so with no

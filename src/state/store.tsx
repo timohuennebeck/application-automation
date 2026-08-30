@@ -73,9 +73,13 @@ const agentCall = (p?: Promise<AgentStartResult>) =>
     .catch((err) => console.error('[agent]', err));
 
 /* Sidebar labels that live on the applications row. */
-const APP_FIELD: Record<string, 'channel' | 'applied_via' | 'applied_at' | 'posting_url'> = {
+const APP_FIELD: Record<
+  string,
+  'channel' | 'applied_via' | 'applied_at' | 'posting_url' | 'interest_reason'
+> = {
   Plattform: 'channel',
   Stellenanzeige: 'posting_url',
+  'Warum interessant': 'interest_reason',
   'Beworben via': 'applied_via',
   'Beworben am': 'applied_at',
 };
@@ -124,6 +128,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const cancelEditRef = useRef(false);
   const dragPosRef = useRef<{ col: number; y: number } | null>(null);
+  /* Where the dragged card sat when the drag began — commitDrag writes only
+     when the drop landed somewhere else. */
+  const dragOriginRef = useRef<{ col: number; idx: number } | null>(null);
   const swapLockRef = useRef<{ col: number; dir: number; y: number } | null>(null);
   const ghostRef = useRef<HTMLElement | null>(null);
   /* Serializes db:rounds.set per card so a second edit never races the first
@@ -469,6 +476,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [persist, set],
   );
 
+  /* Ends a drag: the live moves only rearranged the in-memory board, so the
+     drop is the one write. Without it the stage change never reaches the
+     database, and the next resync — Kepler's refresh events fire several per
+     run — snaps the card back to wherever the applications row still has it. */
+  const commitDrag = useCallback(() => {
+    const s = stRef.current;
+    const id = s.dragId;
+    const origin = dragOriginRef.current;
+    dragOriginRef.current = null;
+    if (!id) return;
+    const col = s.board.findIndex((c) => c.includes(id));
+    const idx = col < 0 ? -1 : s.board[col].indexOf(id);
+    if (col >= 0 && (!origin || origin.col !== col || origin.idx !== idx)) {
+      persist(db()?.applications.move(id, STAGE_IDS[col], idx));
+      set((s2) => {
+        const app = s2.applications[id];
+        return app
+          ? { applications: { ...s2.applications, [id]: { ...app, stage_id: STAGE_IDS[col] } } }
+          : null;
+      });
+    }
+    set({ dragId: null, overCol: null });
+  }, [persist, set]);
+
   const openCard = useCallback(
     (id: string) => {
       set({
@@ -619,6 +650,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           channel: s.jobChannel || null,
           postingUrl: url || null,
           postingText: text || null,
+          interestReason: s.jobInterestReason.trim() || null,
           language: s.jobLanguage,
         })
         .then((res) => {
@@ -1647,6 +1679,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       peopleForCard,
       companyOfCard,
       moveCard,
+      commitDrag,
       openCard,
       createCard,
       startAgent,
@@ -1686,6 +1719,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       commitProfileOrder,
       cancelEditRef,
       dragPosRef,
+      dragOriginRef,
       swapLockRef,
       ghostRef,
     }),
@@ -1705,6 +1739,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       peopleForCard,
       companyOfCard,
       moveCard,
+      commitDrag,
       openCard,
       createCard,
       startAgent,

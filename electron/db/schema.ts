@@ -484,14 +484,21 @@ export const MIGRATIONS: string[] = [
   CREATE INDEX idx_comment_edits_comment ON comment_edits(comment_id);
   `,
 
-  /* Migration 20: a Blockiert column in front of Interessiert, for cards that
-     wait on an answer from the other side. Every existing stage moves one
-     position to the right — in two passes, because position is UNIQUE and a
-     single +1 collides with the neighbour halfway through. No application
-     is moved. */
+  /* Migration 26 (index 23): a Blockiert column in front of Interessiert, for
+     cards that wait on an answer from the other side. Every existing stage
+     moves one position to the right — in two passes, because position is
+     UNIQUE and a single +1 collides with the neighbour halfway through. No
+     application is moved. */
   `
   UPDATE stages SET position = position + 1000;
   UPDATE stages SET position = position - 999;
   INSERT INTO stages (id, title, position) VALUES ('blockiert', 'Blockiert', 0);
+  `,
+
+  /* Migration 27 (index 24): why the applicant is interested in exactly this
+     position — typed into the create dialog, fed to the letter generation.
+     Nullable; existing cards simply have none. */
+  `
+  ALTER TABLE applications ADD COLUMN interest_reason TEXT;
   `,
 ];

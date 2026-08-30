@@ -58,6 +58,9 @@ export interface ApplicationRow {
      listing text when there was no link. At most one is set. */
   posting_url: string | null;
   posting_text: string | null;
+  /* Why the applicant is interested in exactly this position — typed into the
+     create dialog, read by the letter generation. */
+  interest_reason: string | null;
   assignee: Assignee | null;
   /* Which side of the template slots a run reads and what its files are
      called. Null until Kepler read the posting or the user chose — an
@@ -324,6 +327,7 @@ export type ApplicationPatch = Partial<
     | 'applied_via'
     | 'posting_url'
     | 'posting_text'
+    | 'interest_reason'
     | 'assignee'
     | 'language'
   >
@@ -362,6 +366,7 @@ export interface DbApi {
       channel: string | null;
       postingUrl?: string | null;
       postingText?: string | null;
+      interestReason?: string | null;
       language?: DocumentLanguage | null;
     }): Promise<CreateApplicationResult>;
     update(id: string, patch: ApplicationPatch): Promise<ApplicationRow>;

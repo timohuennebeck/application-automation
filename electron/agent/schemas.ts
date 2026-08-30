@@ -16,14 +16,6 @@ export const VARIANT_COUNT = 3;
 
 /* ── Result types ─────────────────────────────────────────────────────── */
 
-export interface ExtractedPerson {
-  name: string;
-  role: string | null;
-  email: string | null;
-  phone: string | null;
-  linkedin: string | null;
-}
-
 export interface Extraction {
   role: string | null;
   summary: string | null;
@@ -41,7 +33,6 @@ export interface Extraction {
   /* The language the posting is written in — which side of the template
      slots the run reads, unless the card already says. Null when unclear. */
   language: DocumentLanguage | null;
-  people: ExtractedPerson[];
   /* What the text the run was handed turned out to be. A cookie banner or a
      404 clears the scrape's length check and would otherwise be extracted into
      a confident card built out of nothing — and on the pasted-text path the
@@ -78,14 +69,6 @@ const nullableEnum = (values: string[]) => nullable({ type: 'string', enum: valu
 export const TEXT_KINDS = ['posting', 'cookie_notice', 'error_page', 'login_wall', 'other'] as const;
 export type TextKind = (typeof TEXT_KINDS)[number];
 
-const PERSON_PROPS = {
-  name: { type: 'string' },
-  role: nullableString,
-  email: nullableString,
-  phone: nullableString,
-  linkedin: nullableString,
-};
-
 export const EXTRACTION_SCHEMA = {
   type: 'object',
   additionalProperties: false,
@@ -109,42 +92,9 @@ export const EXTRACTION_SCHEMA = {
     gehalt: nullableString,
     erfahrung: nullableEnum(FACT_OPTIONS.Erfahrung),
     language: nullableEnum(Object.values(DocumentLanguage)),
-    people: {
-      type: 'array',
-      items: {
-        type: 'object',
-        additionalProperties: false,
-        properties: PERSON_PROPS,
-        required: ['name'],
-      },
-    },
     textKind: nullableEnum([...TEXT_KINDS]),
   },
-  required: [
-    'role',
-    'summary',
-    'company',
-    'standort',
-    'gehalt',
-    'erfahrung',
-    'language',
-    'people',
-    'textKind',
-  ],
-} as const;
-
-export const CONTACT_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  properties: {
-    person: nullable({
-      type: 'object',
-      additionalProperties: false,
-      properties: PERSON_PROPS,
-      required: ['name'],
-    }),
-  },
-  required: ['person'],
+  required: ['role', 'summary', 'company', 'standort', 'gehalt', 'erfahrung', 'language', 'textKind'],
 } as const;
 
 /* The answered placeholder slots. A list of pairs rather than an object,
@@ -171,11 +121,20 @@ export const FILL_SCHEMA = {
   required: ['fields'],
 } as const;
 
-export const CHECKS_SCHEMA = {
+/* More improvements than this is a rewrite brief, not feedback — and every
+   one of them is quoted back into the regeneration prompt. */
+export const MAX_IMPROVEMENTS = 5;
+
+/* The Opus rating of a finished letter: a mark out of ten and the concrete
+   changes that would raise it. An empty list is the "ship it" answer. */
+export const RATING_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  properties: { issues: { type: 'array', items: { type: 'string' } } },
-  required: ['issues'],
+  properties: {
+    score: { type: 'integer', minimum: 0, maximum: 10 },
+    improvements: { type: 'array', maxItems: MAX_IMPROVEMENTS, items: { type: 'string' } },
+  },
+  required: ['score', 'improvements'],
 } as const;
 
 export const PROOFS_SCHEMA = {
@@ -285,26 +244,9 @@ function oneOf(x: unknown, values: string[]): string | null {
   return t && values.includes(t) ? t : null;
 }
 
-function person(x: unknown): ExtractedPerson | null {
-  if (typeof x !== 'object' || x === null) return null;
-  const r = x as Record<string, unknown>;
-  const name = text(r.name);
-  if (!name) return null;
-  return {
-    name,
-    role: text(r.role),
-    email: text(r.email),
-    phone: text(r.phone),
-    linkedin: text(r.linkedin),
-  };
-}
-
 export function validateExtraction(x: unknown): Extraction {
   const r = asRecord(x, 'Extraktion');
   const c = typeof r.company === 'object' && r.company !== null ? (r.company as Record<string, unknown>) : {};
-  const people = Array.isArray(r.people)
-    ? r.people.map(person).filter((p): p is ExtractedPerson => p !== null)
-    : [];
   return {
     role: text(r.role),
     summary: text(r.summary),
@@ -322,17 +264,11 @@ export function validateExtraction(x: unknown): Extraction {
     gehalt: ((g) => (g ? normalizeSalaryText(g) : null))(text(r.gehalt)),
     erfahrung: oneOf(r.erfahrung, FACT_OPTIONS.Erfahrung),
     language: oneOf(r.language, Object.values(DocumentLanguage)) as DocumentLanguage | null,
-    people,
     /* Fail open: only a kind the model actually named stops the run. Anything
        outside the closed set is nulled like every other enum here, so a
        misspelling costs the user nothing. */
     textKind: oneOf(r.textKind, [...TEXT_KINDS]) as TextKind | null,
   };
-}
-
-export function validateContact(x: unknown): ExtractedPerson | null {
-  const r = asRecord(x, 'Kontaktsuche');
-  return person(r.person);
 }
 
 /* The slots the model answered, as a lookup for fillPlaceholders. An empty
@@ -361,10 +297,22 @@ export function validateFill(x: unknown): Record<string, string> {
   return values;
 }
 
-export function validateChecks(x: unknown): string[] {
-  const r = asRecord(x, 'Prüfung');
-  if (!Array.isArray(r.issues)) return [];
-  return r.issues.map(text).filter((s): s is string => s !== null);
+export interface LetterRating {
+  score: number;
+  improvements: string[];
+}
+
+/* The rating never throws for the structured shape the SDK guarantees: a
+   score outside 0–10 is clamped rather than rejected, because the letter is
+   already on disk and correct — a squabble over the mark must not fail the
+   step. */
+export function validateRating(x: unknown): LetterRating {
+  const r = asRecord(x, 'Bewertung');
+  const raw = typeof r.score === 'number' && Number.isFinite(r.score) ? Math.round(r.score) : 0;
+  const improvements = Array.isArray(r.improvements)
+    ? r.improvements.map(text).filter((s): s is string => s !== null)
+    : [];
+  return { score: Math.max(0, Math.min(10, raw)), improvements: improvements.slice(0, MAX_IMPROVEMENTS) };
 }
 
 /* Never throws for the structured-output shape the SDK guarantees — only a

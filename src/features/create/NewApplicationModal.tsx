@@ -136,6 +136,35 @@ export function NewApplicationModal() {
         />
       )}
 
+      {/* Why this position in particular — Kepler works the motive into the
+          Anschreiben's opening instead of guessing one from the posting. */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 8 }}>
+        <textarea
+          value={st.jobInterestReason}
+          rows={2}
+          placeholder="Warum interessiert dich diese Stelle besonders? (optional)"
+          onChange={(e) => set({ jobInterestReason: e.target.value })}
+          style={{
+            fontSize: 13.5,
+            color: 'var(--c-1b1a17)',
+            lineHeight: 1.55,
+            fontFamily: 'inherit',
+            border: '1px solid var(--c-eae7e0)',
+            borderRadius: 8,
+            outline: 'none',
+            resize: 'vertical',
+            background: 'transparent',
+            padding: '8px 10px',
+            width: '100%',
+            minWidth: 0,
+            boxSizing: 'border-box',
+          }}
+        />
+        <FieldHint>
+          Fließt in das Anschreiben ein — Kepler formuliert daraus den Einstieg, statt ein Motiv zu raten.
+        </FieldHint>
+      </div>
+
       {/* What Kepler will do with the card, and the three optional properties
           it would otherwise fill in itself. The notice states the consequence
           of the Bearbeiter chip right next to it, so picking Kepler needs no

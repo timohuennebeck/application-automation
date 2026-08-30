@@ -40,10 +40,12 @@ const FORMS: Record<AgentStepKey, (ctx: LabelCtx) => Forms> = {
     run: 'Firmendetails werden ergänzt…',
     done: 'Firmendetails ergänzt',
   }),
+  /* Legacy: no longer planned (the contact research was removed), but rows
+     from older runs still carry the key and a resumed run closes them. */
   [AgentStepKey.CONTACTS]: () => ({
     wait: 'Kontaktdetails ergänzen',
     run: 'Kontaktdetails werden ergänzt…',
-    done: 'Kontaktdetails ergänzt',
+    done: 'Kontaktsuche übersprungen — Kontakte werden manuell gepflegt',
   }),
   [AgentStepKey.READ_CV]: () => ({
     wait: 'Hochgeladenen {doc} einlesen',
@@ -65,20 +67,27 @@ const FORMS: Record<AgentStepKey, (ctx: LabelCtx) => Forms> = {
     run: `Anschreiben für ${ctx.company} wird erstellt…`,
     done: `Anschreiben für ${ctx.company} erstellt`,
   }),
+  [AgentStepKey.RATE]: () => ({
+    wait: 'Anschreiben mit Opus 5 bewerten',
+    run: 'Anschreiben wird mit Opus 5 bewertet…',
+    done: 'Anschreiben mit Opus 5 bewertet',
+  }),
   [AgentStepKey.PROOFS]: () => ({
     wait: 'Belege prüfen',
     run: 'Belege werden geprüft…',
     done: 'Belege geprüft',
   }),
+  /* Legacy like CONTACTS: the standalone format check was removed with the
+     findings comment it reported into. */
   [AgentStepKey.VALIDATE]: () => ({
     wait: 'Daten und Formate prüfen',
     run: 'Daten und Formate werden geprüft…',
-    done: 'Daten und Formate geprüft',
+    done: 'Prüfung übersprungen',
   }),
   [AgentStepKey.COMMENT]: () => ({
-    wait: 'Kommentar an {m} mit Bewerbungslink hinterlassen',
+    wait: 'Abschlusskommentar an {m} hinterlassen',
     run: 'Kommentar an {m} wird hinterlassen…',
-    done: 'Kommentar an {m} mit Bewerbungslink hinterlassen',
+    done: 'Abschlusskommentar an {m} hinterlassen',
   }),
 };
 
@@ -87,6 +96,10 @@ const FORMS: Record<AgentStepKey, (ctx: LabelCtx) => Forms> = {
    lying about what the run is doing — and this is the one label the panel
    shows for the two minutes that takes. */
 export const PROOFS_REWRITE_LABEL = 'Anschreiben wird mit belegten Angaben neu geschrieben…';
+
+/* Same honesty for the rating step: while Opus' feedback is being worked into
+   a fresh generation, the label says so instead of still claiming to rate. */
+export const RATE_REWRITE_LABEL = 'Anschreiben wird nach Opus-Feedback überarbeitet…';
 
 export function stepLabel(key: AgentStepKey, status: AgentStepStatus, ctx: LabelCtx): string {
   const forms = FORMS[key](ctx);
@@ -105,13 +118,12 @@ export function stepPlan(hasUrl: boolean, ctx: LabelCtx): StepInput[] {
   return [
     ...(hasUrl ? [step(AgentStepKey.FETCH)] : []),
     step(AgentStepKey.EXTRACT),
-    step(AgentStepKey.CONTACTS),
     step(AgentStepKey.READ_CV, TemplateKind.LEBENSLAUF),
     step(AgentStepKey.READ_LETTER, TemplateKind.ANSCHREIBEN),
     step(AgentStepKey.GEN_CV),
     step(AgentStepKey.GEN_LETTER),
+    step(AgentStepKey.RATE),
     step(AgentStepKey.PROOFS),
-    step(AgentStepKey.VALIDATE),
     step(AgentStepKey.COMMENT),
   ];
 }

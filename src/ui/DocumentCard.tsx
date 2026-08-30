@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { DocFormat, DocGlyph } from './icons';
+import { ELLIPSIS } from './styles';
 
 /* The bordered card a document sits on, in the application's Bewerbungsunterlagen
    and in the profile's template slots. Everything but the control on the right
@@ -33,8 +34,11 @@ export function DocumentCard({
       {leading}
       <DocGlyph format={format} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+        {/* File names have no spaces to wrap at, so a long one ellipsizes
+            instead of pushing past the card. */}
         <div
           style={{
+            ...ELLIPSIS,
             fontSize: 12.5,
             fontWeight: 600,
             color: muted ? 'var(--c-8b8880)' : 'var(--c-1b1a17)',

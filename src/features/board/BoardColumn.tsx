@@ -44,6 +44,9 @@ export function BoardColumn({ col, ci }: { col: ColumnDef; ci: number }) {
         maxWidth: isOpen ? 260 : 40,
         display: 'flex',
         flexDirection: 'column',
+        /* Without this the column takes the height of its cards and the board
+           grows past the window instead of the card list scrolling. */
+        minHeight: 0,
       }}
     >
       {isOpen ? (
@@ -52,6 +55,7 @@ export function BoardColumn({ col, ci }: { col: ColumnDef; ci: number }) {
           style={{
             flex: '1 1 auto',
             minWidth: 0,
+            minHeight: 0,
             display: 'flex',
             flexDirection: 'column',
             gap: 8,
@@ -111,7 +115,19 @@ export function BoardColumn({ col, ci }: { col: ColumnDef; ci: number }) {
               <CollapseGlyph />
             </div>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: '1 1 auto' }}>
+          {/* minHeight 0 lets the list shrink below its content so a column
+              with many cards scrolls instead of growing past the board. */}
+          <div
+            className="no-scrollbar"
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 6,
+              flex: '1 1 auto',
+              minHeight: 0,
+              overflowY: 'auto',
+            }}
+          >
             {cards.map((id) => (
               <ApplicationCard key={id} id={id} col={col} ci={ci} />
             ))}

@@ -25,30 +25,26 @@ import {
 import { INTERRUPTED_HEADLINE } from '../../src/shared/agent.ts';
 import { KeplerError, userMessage } from './errors.ts';
 import { fillPlaceholders, modelPlaceholders, systemValues } from './fill.ts';
-import { PROOFS_REWRITE_LABEL, STOP_ERROR, stepLabel, type LabelCtx } from './labels.ts';
+import { PROOFS_REWRITE_LABEL, RATE_REWRITE_LABEL, STOP_ERROR, stepLabel, type LabelCtx } from './labels.ts';
 import {
-  checksPrompt,
-  contactPrompt,
   cvPrompt,
   extractionPrompt,
   letterPrompt,
   proofsPrompt,
+  ratingPrompt,
   type DocumentInput,
 } from './prompts.ts';
 import type { RunStore } from './run-store.ts';
 import { overBudget, type OverBudget } from './budgets.ts';
 import {
-  CHECKS_SCHEMA,
-  CONTACT_SCHEMA,
   EXTRACTION_SCHEMA,
   FILL_SCHEMA,
   PROOFS_SCHEMA,
-  validateChecks,
-  validateContact,
+  RATING_SCHEMA,
   validateExtraction,
   validateFill,
   validateProofs,
-  type ExtractedPerson,
+  validateRating,
   type Extraction,
   type TextKind,
   type UnsupportedClaim,
@@ -62,6 +58,9 @@ export interface LlmRequest<T> {
   tools?: string[];
   maxTurns?: number;
   timeoutMs?: number;
+  /* Overrides the default model for this call — the rating step asks Opus 5
+     instead of the pipeline's Sonnet. */
+  model?: string;
   /* Fires when the user stops the run — the call is torn down at once. */
   signal?: AbortSignal;
 }
@@ -85,12 +84,21 @@ export interface PipelineDeps {
 }
 
 const SINGLE_CALL_TIMEOUT = 120_000;
-const RESEARCH_TIMEOUT = 300_000;
 /* The document steps answer with a Fassung's placeholder values. Both the
    question and the answer are small now — the Fassung goes in as its text
    rather than its markup — but the values are the most considered writing
    Kepler does: the letter's requirement matrix is worked out here. */
 const DOCUMENT_TIMEOUT = 180_000;
+
+/* The rating runs on Opus 5, not on the pipeline's Sonnet — a second pair of
+   eyes only counts when it is a stronger one. Pinned to the id rather than
+   the "opus" alias so a CLI whose alias moves cannot silently swap the
+   reviewer out. */
+const RATING_MODEL = 'claude-opus-5';
+
+/* What the run closes with. One line, deliberately without the finding
+   bullets and the application link the comment used to carry. */
+const FINAL_COMMENT = 'Fertig — Firmendetails, Kontakte und Unterlagen sind ergänzt.';
 
 /* The application was deleted mid-run: its run rows cascaded away with it, so
    there is nothing left to fail — the pipeline just stops. */
@@ -237,35 +245,13 @@ export async function runPipeline(applicationId: string, runId: number, deps: Pi
        extraction step is already done. */
     const language: DocumentLanguage = app.language ?? DocumentLanguage.DE;
 
-    /* ── Contacts: from the listing, else researched ──────────────────── */
-    /* Only a researched contact is worth reporting: one the posting printed
-       is a fact, one Kepler found is a guess the user has to confirm before
-       the letter goes out addressed to them. On a resumed run this stays
-       null — the research happened in an earlier attempt, and the comment
-       reports what this run did, not what an earlier one found. */
-    let researched: ExtractedPerson | null = null;
+    /* ── Contacts are the user's to add ───────────────────────────────── */
+    /* The research step was removed — contacts are searched and linked by
+       hand now. A run planned before the removal still carries the row, so a
+       resume closes it instead of leaving it waiting forever. */
     if (pending(AgentStepKey.CONTACTS)) {
       start(AgentStepKey.CONTACTS);
-      let people = needExtraction().people;
-      if (!people.length) {
-        const found = await deps.llm({
-          prompt: contactPrompt(company.name, company.homepage, app.role),
-          schema: CONTACT_SCHEMA,
-          validate: validateContact,
-          tools: ['WebSearch'],
-          maxTurns: 8,
-          timeoutMs: RESEARCH_TIMEOUT,
-          signal,
-        });
-        /* Researched, not stated in the listing — say so on the person. */
-        if (found) {
-          people = [{ ...found, role: found.role ? found.role + ' (unbestätigt)' : '(unbestätigt)' }];
-          researched = found;
-        }
-      }
-      alive();
-      linkContacts(repo, applicationId, people);
-      done(AgentStepKey.CONTACTS, true);
+      done(AgentStepKey.CONTACTS);
     }
 
     /* ── The uploaded templates ───────────────────────────────────────── */
@@ -304,21 +290,10 @@ export async function runPipeline(applicationId: string, runId: number, deps: Pi
               : null,
           company: company.name,
           role: app.role,
+          interestReason: app.interest_reason,
         },
       };
     };
-
-    /* Values still over budget after the redo, per document. They do not stop
-       the run — they become a bullet in the closing comment. Keyed so a
-       regenerated document overwrites its own earlier findings instead of
-       reporting the same slot twice.
-
-       Pipeline-scoped, not persisted: a run resumed at COMMENT has GEN_CV and
-       GEN_LETTER already DONE, so this stays empty and the closing comment
-       silently drops whatever the first attempt found. Pre-existing for this
-       and `issues` below; PROOFS's `claims` joins the same pattern — not a
-       bug to fix here, just not one to mistake for new breakage either. */
-    const tooLong = new Map<DocumentKind, OverBudget[]>();
 
     let cvHtml: string | null = null;
     if (pending(AgentStepKey.GEN_CV)) {
@@ -329,7 +304,6 @@ export async function runPipeline(applicationId: string, runId: number, deps: Pi
         ...docInput(TemplateKind.LEBENSLAUF),
       });
       cvHtml = generated.html;
-      tooLong.set(DocumentKind.LEBENSLAUF, generated.overBudget);
       done(AgentStepKey.GEN_CV, true);
     }
 
@@ -342,18 +316,60 @@ export async function runPipeline(applicationId: string, runId: number, deps: Pi
         ...docInput(TemplateKind.ANSCHREIBEN),
       });
       letterHtml = generated.html;
-      tooLong.set(DocumentKind.COVER_LETTER, generated.overBudget);
       done(AgentStepKey.GEN_LETTER, true);
     }
 
+    /* ── A second pair of eyes on the letter ──────────────────────────── */
+    /* Opus 5 marks the finished Anschreiben 0–10 and names what would raise
+       the score; anything named is worked into one regeneration. Advisory
+       like PROOFS below: the letter on disk is correct whatever this call
+       answers, so a broken rating must not sink the run. */
+    if (pending(AgentStepKey.RATE)) {
+      start(AgentStepKey.RATE);
+      try {
+        const rating = await deps.llm({
+          prompt: ratingPrompt({
+            letter: letterHtml ?? readGeneratedHtml(deps, applicationId, DocumentKind.COVER_LETTER),
+            cv: readSelectedTemplate(deps.userDataPath, TemplateKind.LEBENSLAUF, language)?.html ?? null,
+            listing,
+            company: company.name,
+            role: app.role,
+          }),
+          schema: RATING_SCHEMA,
+          validate: validateRating,
+          timeoutMs: DOCUMENT_TIMEOUT,
+          model: RATING_MODEL,
+          signal,
+        });
+        if (rating.improvements.length) {
+          alive();
+          runs.setRunLabel(runId, RATE_REWRITE_LABEL);
+          const rateStep = byKey.get(AgentStepKey.RATE);
+          if (rateStep) {
+            byKey.set(AgentStepKey.RATE, runs.relabelStep(rateStep.id, RATE_REWRITE_LABEL));
+            push(byKey.get(AgentStepKey.RATE));
+          }
+          const generated = await generateDocument(deps, applicationId, {
+            kind: DocumentKind.COVER_LETTER,
+            buildPrompt: letterPrompt,
+            ...docInput(TemplateKind.ANSCHREIBEN),
+            complaint: ratingComplaint(rating.score, rating.improvements),
+            /* The feedback already says what to change; a budget redo on top
+               would make one unlucky letter three generations. */
+            skipBudgetRedo: true,
+          });
+          letterHtml = generated.html;
+        }
+      } catch (err) {
+        /* Deleted and Stopped are the pipeline's own control flow, not a
+           rating failure — they still have to reach the run's outer catch. */
+        if (err instanceof Deleted || err instanceof Stopped || signal?.aborted) throw err;
+        console.error('[agent] Anschreiben-Bewertung fehlgeschlagen', err);
+      }
+      done(AgentStepKey.RATE, true);
+    }
+
     /* ── Are the claims backed by the Lebenslauf? ─────────────────────── */
-    /* Pipeline-scoped like `tooLong` above — empty, not a bug, on a run
-       resumed at COMMENT. */
-    let claims: UnsupportedClaim[] = [];
-    /* Set when the check itself broke. Without it `claims = []` below reads
-       exactly like "every claim is backed", and the run closes with a clean
-       comment over a letter nobody checked. */
-    let proofsError: string | null = null;
     if (pending(AgentStepKey.PROOFS)) {
       start(AgentStepKey.PROOFS);
       try {
@@ -361,29 +377,24 @@ export async function runPipeline(applicationId: string, runId: number, deps: Pi
           readSelectedTemplate(deps.userDataPath, TemplateKind.LEBENSLAUF, language)?.html ?? null;
         const profileFacts = repo.load().profileFacts.map((f) => f.text);
         /* On a resumed run the documents are not in memory — they are read back
-           off disk, the same way the validation step reads them. */
-        const readCv = () => cvHtml ?? readGeneratedHtml(deps, applicationId, DocumentKind.LEBENSLAUF);
-        const readLetter = () =>
-          letterHtml ?? readGeneratedHtml(deps, applicationId, DocumentKind.COVER_LETTER);
-
-        const check = () =>
-          deps.llm({
-            prompt: proofsPrompt({
-              cv: readCv(),
-              letter: readLetter(),
-              cvFassung,
-              profileFacts,
-            }),
-            schema: PROOFS_SCHEMA,
-            validate: validateProofs,
-            timeoutMs: SINGLE_CALL_TIMEOUT,
-            signal,
-          });
-
-        claims = await check();
+           off disk. */
+        const claims = await deps.llm({
+          prompt: proofsPrompt({
+            cv: cvHtml ?? readGeneratedHtml(deps, applicationId, DocumentKind.LEBENSLAUF),
+            letter: letterHtml ?? readGeneratedHtml(deps, applicationId, DocumentKind.COVER_LETTER),
+            cvFassung,
+            profileFacts,
+          }),
+          schema: PROOFS_SCHEMA,
+          validate: validateProofs,
+          timeoutMs: SINGLE_CALL_TIMEOUT,
+          signal,
+        });
         /* Only the Anschreiben is rewritten. The Lebenslauf is copied from the
            Fassung and only its header line is generated, so a claim it makes is
-           the Fassung's to fix, not Kepler's — it is reported instead. */
+           the Fassung's to fix, not Kepler's. One rewrite, no second reading:
+           the closing comment stopped reporting findings, so the rewrite is
+           the whole point of this step now. */
         const inLetter = claims.filter((c) => c.document === DocumentKind.COVER_LETTER);
         if (inLetter.length) {
           alive();
@@ -393,7 +404,6 @@ export async function runPipeline(applicationId: string, runId: number, deps: Pi
             byKey.set(AgentStepKey.PROOFS, runs.relabelStep(rewriteStep.id, PROOFS_REWRITE_LABEL));
             push(byKey.get(AgentStepKey.PROOFS));
           }
-
           const generated = await generateDocument(deps, applicationId, {
             kind: DocumentKind.COVER_LETTER,
             buildPrompt: letterPrompt,
@@ -404,24 +414,6 @@ export async function runPipeline(applicationId: string, runId: number, deps: Pi
             skipBudgetRedo: true,
           });
           letterHtml = generated.html;
-          /* set, not push: this document was just written again, so its earlier
-             findings describe a file that no longer exists. */
-          tooLong.set(DocumentKind.COVER_LETTER, generated.overBudget);
-
-          /* Back to the checking wording before the second check() — the label
-             exists so the step does not lie about what it is doing, and would
-             otherwise still claim to be rewriting while only reading the
-             result back. */
-          const checkingLabel = stepLabel(AgentStepKey.PROOFS, AgentStepStatus.RUN, labelCtx());
-          runs.setRunLabel(runId, checkingLabel);
-          const checkingStep = byKey.get(AgentStepKey.PROOFS);
-          if (checkingStep) {
-            byKey.set(AgentStepKey.PROOFS, runs.relabelStep(checkingStep.id, checkingLabel));
-            push(byKey.get(AgentStepKey.PROOFS));
-          }
-
-          /* One rewrite, then whatever the second reading says. */
-          claims = await check();
         }
       } catch (err) {
         /* PROOFS is advisory, exactly like the budget check the design (§3)
@@ -432,43 +424,21 @@ export async function runPipeline(applicationId: string, runId: number, deps: Pi
            still have to reach the run's outer catch, not be swallowed here. */
         if (err instanceof Deleted || err instanceof Stopped || signal?.aborted) throw err;
         console.error('[agent] Belege-Prüfung fehlgeschlagen', err);
-        /* Whatever the first reading already found stays — it is still true
-           of the document on disk, and the second call throwing is no reason
-           to unsay it. */
-        proofsError = userMessage(err);
       }
       done(AgentStepKey.PROOFS, true);
     }
 
-    /* ── Validate, then report ────────────────────────────────────────── */
-    /* Pipeline-scoped like `tooLong` above — empty, not a bug, on a run
-       resumed at COMMENT. */
-    let issues: string[] = [];
+    /* Legacy like CONTACTS above: the standalone format check went with the
+       findings comment it reported into — only rows from older runs remain. */
     if (pending(AgentStepKey.VALIDATE)) {
       start(AgentStepKey.VALIDATE);
-      issues = await deps.llm({
-        prompt: checksPrompt(
-          needExtraction(),
-          linkedContacts(repo, applicationId),
-          cvHtml ?? readGeneratedHtml(deps, applicationId, DocumentKind.LEBENSLAUF),
-          letterHtml ?? readGeneratedHtml(deps, applicationId, DocumentKind.COVER_LETTER),
-        ),
-        schema: CHECKS_SCHEMA,
-        validate: validateChecks,
-        timeoutMs: SINGLE_CALL_TIMEOUT,
-        signal,
-      });
       done(AgentStepKey.VALIDATE);
     }
 
     if (pending(AgentStepKey.COMMENT)) {
       start(AgentStepKey.COMMENT);
       alive();
-      repo.addComment(
-        applicationId,
-        Author.KEPLER,
-        finalComment(app.posting_url, { researched, claims, tooLong, issues, proofsError }),
-      );
+      repo.addComment(applicationId, Author.KEPLER, FINAL_COMMENT);
       repo.addActivity(applicationId, Author.KEPLER, 'hat Firmendetails, Kontakte und Unterlagen ergänzt');
       done(AgentStepKey.COMMENT, true);
     }
@@ -533,30 +503,8 @@ function applyExtraction(
   if (ex.erfahrung) repo.upsertFact(applicationId, 'Erfahrung', ex.erfahrung, FactKind.SELECT);
 }
 
-function linkContacts(repo: Repo, applicationId: string, people: ExtractedPerson[]): void {
-  if (!people.length) return;
-  /* A re-run extracts the same names again — reuse the rows the first run
-     created instead of piling up duplicates. */
-  const existing = repo.load().people;
-  /* Contacts Kepler finds are filed under the card's company. */
-  const company = repo.getApplicationWithCompany(applicationId)?.company.name ?? null;
-  const ids = people.map((p) => {
-    const match = existing.find((row) => row.name === p.name);
-    if (match) return match.id;
-    return repo.createPerson({
-      name: p.name,
-      role: p.role ?? undefined,
-      email: p.email ?? undefined,
-      phone: p.phone ?? undefined,
-      linkedin: p.linkedin ?? undefined,
-      company,
-    }).person.id;
-  });
-  repo.setApplicationPeople(applicationId, LinkKind.CONTACT, ids);
-}
-
-/* The card's contacts as the letter prompt wants them — the rows written by
-   linkContacts, so a resumed run addresses the same person as a fresh one. */
+/* The card's contacts as the letter prompt wants them — whatever the user
+   linked by hand, so a resumed run addresses the same person as a fresh one. */
 function linkedContacts(repo: Repo, applicationId: string): string[] {
   const { people, applicationPeople } = repo.load();
   return applicationPeople
@@ -567,8 +515,7 @@ function linkedContacts(repo: Repo, applicationId: string): string[] {
 }
 
 /* On resume, everything the extraction wrote is read back from where it
-   landed. People links are live rows rather than extraction output, so the
-   list stays empty here — the contact step researches when it needs one. */
+   landed. */
 function extractionFromDb(repo: Repo, applicationId: string): Extraction {
   const ctx = repo.getApplicationWithCompany(applicationId);
   if (!ctx) throw new Deleted();
@@ -589,7 +536,6 @@ function extractionFromDb(repo: Repo, applicationId: string): Extraction {
     gehalt: fact('Gehalt'),
     erfahrung: fact('Erfahrung'),
     language: ctx.application.language,
-    people: [],
     /* The step that asks this question is already DONE on a resumed run — it
        answered once, and the card exists because of it. */
     textKind: 'posting',
@@ -679,6 +625,18 @@ function budgetComplaint(over: OverBudget[]): string {
     'Diese Werte sind zu lang. Schreibe die ganze Antwort noch einmal, alle Platzhalter, und halte für diese die Wortzahl ein:',
     ...lines,
     'Kürze, indem du weglässt — nicht, indem du Wörter zusammenziehst.',
+  ].join('\n');
+}
+
+/* What the rewrite after the Opus rating is told: the score as the verdict
+   and the improvements verbatim — they were written to be actionable, and
+   paraphrasing them here would only soften them. */
+function ratingComplaint(score: number, improvements: string[]): string {
+  return [
+    '',
+    `Ein zweiter Prüfer hat das bisherige Anschreiben mit ${score}/10 bewertet. Schreibe die ganze Antwort noch einmal, alle Platzhalter, und setze diese Verbesserungen um:`,
+    ...improvements.map((i) => `- ${i}`),
+    'Alle Faktenregeln gelten unverändert — erfinde nichts, was Lebenslauf und Profil nicht hergeben.',
   ].join('\n');
 }
 
@@ -796,68 +754,8 @@ async function generateDocument(
   return { html, overBudget: over };
 }
 
-/* Everything the run has to say about what it produced, in the order it
-   matters. A researched contact is a guess in the salutation — worth more
-   than any of the rest, because getting it wrong costs the application, not
-   just a sentence. A claim the Lebenslauf does not back is next, then a
-   value a few words too long, then the format check as the long tail. */
-interface Findings {
-  /* Null when the listing named someone itself, or on a resumed run — the
-     research happened in an earlier attempt and is not reconstructed here. */
-  researched: ExtractedPerson | null;
-  claims: UnsupportedClaim[];
-  /* Keyed by document, the way the pipeline collects it: the same slot can be
-     over budget in both documents, and a bullet naming only the slot would not
-     say which file to open. */
-  tooLong: Map<DocumentKind, OverBudget[]>;
-  issues: string[];
-  /* Why the proofs check has nothing to say, when the reason is that it
-     broke rather than that the documents are clean. Outranks every other
-     bullet: "not checked" and "nothing found" must never read alike. */
-  proofsError: string | null;
-}
-
-/* Three bullets. The comment is a note under the card, not a report — a
-   fourth line is one nobody reads, and the ranking above already put the
-   thing worth acting on first. */
-const MAX_BULLETS = 3;
-
 const DOCUMENT_LABEL: Record<DocumentKind, string> = {
   [DocumentKind.COVER_LETTER]: 'Anschreiben',
   [DocumentKind.LEBENSLAUF]: 'Lebenslauf',
   [DocumentKind.OTHER]: 'Dokument',
 };
-
-function finalComment(postingUrl: string | null, findings: Findings): string {
-  const lengths = [...findings.tooLong.entries()].flatMap(([kind, over]) =>
-    over.map(
-      (o) => `**${DOCUMENT_LABEL[kind]}**: ${o.slot} ist mit ${o.words} Wörtern zu lang (${o.budget}).`,
-    ),
-  );
-  const contact = findings.researched
-    ? [
-        `**${findings.researched.name}**${findings.researched.role ? ` (${findings.researched.role})` : ''} ` +
-          `im Web gefunden und eingetragen — bitte prüf den Eintrag${findings.researched.linkedin ? `: ${findings.researched.linkedin}` : '.'}`,
-      ]
-    : [];
-  const bullets = [
-    ...(findings.proofsError ? [`**Belege**: nicht geprüft — ${findings.proofsError}`] : []),
-    ...contact,
-    ...findings.claims.map(
-      (c) => `**${DOCUMENT_LABEL[c.document]}**: „${c.quote}“ ist nicht belegt — ${c.why}`,
-    ),
-    ...lengths,
-    ...findings.issues,
-  ];
-  const lines = ['**Fertig** — Firmendetails, Kontakte und Unterlagen sind ergänzt.'];
-  const shown = bullets.slice(0, MAX_BULLETS);
-  if (bullets.length) lines.push('', ...shown.map((b) => '• ' + b));
-  /* Three findings is the cap, and it stays the cap — but three presented as
-     all of them is a different claim from three out of five. The remainder is
-     counted on a line of its own rather than spending a bullet a reader could
-     have acted on. */
-  const rest = bullets.length - shown.length;
-  if (rest > 0) lines.push(`(${rest} weitere${rest === 1 ? 'r Hinweis' : ' Hinweise'} nicht aufgeführt.)`);
-  lines.push('', postingUrl ? `@Timo Hier bewerben: ${postingUrl}` : '@Timo Die Unterlagen sind bereit.');
-  return lines.join('\n');
-}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { documentCaption } from './document-caption';
+import { documentCaption, documentDisplayName } from './document-caption';
 import { useApp } from '../../state/store-context';
 import { agentLocked } from '../../state/selectors';
 import { DocumentCard } from '../../ui/DocumentCard';
@@ -79,7 +79,7 @@ export function DocumentsSection({ cardId }: { cardId: string }) {
               key={d.id}
               /* Red once there is a PDF to hand over, orange for HTML only. */
               format={d.pdf_path ? DocFormat.PDF : DocFormat.HTML}
-              title={d.title}
+              title={documentDisplayName(d)}
               caption={documentCaption(d)}
               hint={editable ? 'Überarbeiten' : 'Öffnen'}
               onClick={() =>

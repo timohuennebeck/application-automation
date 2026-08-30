@@ -2,7 +2,7 @@
    returns to. Split out of store.tsx so the provider reads as wiring rather
    than as one long literal. */
 import { COLUMNS, SortDir, SortKey, STAGE_IDS } from '../data/config';
-import { Assignee, DocumentKind, DocumentLanguage, RoundState } from '../shared/enums';
+import { Assignee, DocumentKind, RoundState } from '../shared/enums';
 import type { RoundView } from './db-view';
 import type { AppState, BoardFilter } from './store-context';
 
@@ -17,16 +17,18 @@ export const EMPTY_FILTER: BoardFilter = {
    reset the whole form after each card without listing the fields twice.
 
    The chips start on the answer nearly every posting gets — Kepler on the
-   card, found on LinkedIn, applied to in English — so the common case is a
-   pasted link and ⌘↵. Each is still one click away from something else, and
-   clearing one hands the decision back to Kepler. */
+   card, found on LinkedIn — so the common case is a pasted link and ⌘↵.
+   The language deliberately starts unchosen: Kepler reads it off the posting,
+   and a preselected English would quietly generate English documents for a
+   German listing. */
 export const EMPTY_DRAFT = {
   jobUrl: '',
   jobChannel: 'LinkedIn',
-  jobLanguage: DocumentLanguage.EN,
+  jobLanguage: null,
   jobAssignee: Assignee.KEPLER,
   jobHasUrl: true,
   jobText: '',
+  jobInterestReason: '',
   /* The channel dropdown lives in AppState.dropdown like every other select. */
   dropdown: null,
 } satisfies Partial<AppState>;

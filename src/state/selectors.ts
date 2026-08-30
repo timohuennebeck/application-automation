@@ -8,7 +8,6 @@ import {
   DocumentKind,
   DocumentLanguage,
   Interest,
-  LinkKind,
   RoundState,
   TemplateKind,
 } from '../shared/enums';
@@ -349,21 +348,22 @@ export function cardSubtitle(st: AppState, id: string): CardSubtitle {
   };
 }
 
-/* Everyone the pickers on a card offer, in picker order: first the people
-   "known" here — linked to the card (pool, contacts, recipients), sitting on
-   one of its interview rounds, or filed under the card's company — then the
-   rest of the directory. Keys whose person has since been deleted are
+/* Everyone the pickers on a card offer: the people who belong to this card —
+   linked to it (pool, contacts, recipients), sitting on one of its interview
+   rounds, or filed under the card's company. The rest of the directory stays
+   out: a picker offering every person ever recorded made it one misclick to
+   attach someone from an unrelated company. Sorted by name, and nothing is
+   hoisted — a selected contact stays in its alphabetical place rather than
+   floating above the others. Keys whose person has since been deleted are
    dropped. */
 export function peopleKeysForCard(st: AppState, id: string): { key: string; known: boolean }[] {
   const companyId = st.applications[id]?.company_id;
   const links = st.linksByApp[id] || [];
-  const pool = links.filter((l) => l.kind === LinkKind.POOL);
-  const rest = links.filter((l) => l.kind !== LinkKind.POOL);
   const onRounds = (st.roundsState[id] || []).flatMap((r) => r.people);
-  const linked = [...pool, ...rest].map((l) => String(l.person_id)).concat(onRounds);
+  const linked = links.map((l) => String(l.person_id)).concat(onRounds);
   const atCompany = Object.keys(st.people).filter((k) => st.people[k].companyId === companyId);
-  const known = [...new Set([...linked, ...atCompany])].filter((k) => st.people[k]);
-  const knownSet = new Set(known);
-  const others = Object.keys(st.people).filter((k) => !knownSet.has(k));
-  return [...known.map((key) => ({ key, known: true })), ...others.map((key) => ({ key, known: false }))];
+  return [...new Set([...linked, ...atCompany])]
+    .filter((k) => st.people[k])
+    .sort((a, b) => st.people[a].name.localeCompare(st.people[b].name, 'de'))
+    .map((key) => ({ key, known: true }));
 }

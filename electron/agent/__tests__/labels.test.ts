@@ -5,34 +5,33 @@ import { AgentStepKey, AgentStepStatus, TemplateKind } from '../../../src/shared
 const CTX = { company: 'Acme GmbH', source: 'LinkedIn' };
 
 describe('stepPlan', () => {
-  it('plans all ten steps when the posting has a URL', () => {
+  it('plans all nine steps when the posting has a URL', () => {
     const plan = stepPlan(true, CTX);
     expect(plan.map((s) => s.key)).toEqual([
       AgentStepKey.FETCH,
       AgentStepKey.EXTRACT,
-      AgentStepKey.CONTACTS,
       AgentStepKey.READ_CV,
       AgentStepKey.READ_LETTER,
       AgentStepKey.GEN_CV,
       AgentStepKey.GEN_LETTER,
+      AgentStepKey.RATE,
       AgentStepKey.PROOFS,
-      AgentStepKey.VALIDATE,
       AgentStepKey.COMMENT,
     ]);
-    expect(plan[3].doc).toBe(TemplateKind.LEBENSLAUF);
-    expect(plan[4].doc).toBe(TemplateKind.ANSCHREIBEN);
+    expect(plan[2].doc).toBe(TemplateKind.LEBENSLAUF);
+    expect(plan[3].doc).toBe(TemplateKind.ANSCHREIBEN);
   });
 
   it('skips the fetch step for pasted text', () => {
     const plan = stepPlan(false, CTX);
     expect(plan[0].key).toBe(AgentStepKey.EXTRACT);
-    expect(plan).toHaveLength(9);
+    expect(plan).toHaveLength(8);
   });
 
   it('starts every step in its waiting form', () => {
     const plan = stepPlan(true, CTX);
     expect(plan[1].label).toBe('Firmendetails ergänzen');
-    expect(plan[9].label).toBe('Kommentar an {m} mit Bewerbungslink hinterlassen');
+    expect(plan[8].label).toBe('Abschlusskommentar an {m} hinterlassen');
   });
 });
 
@@ -74,7 +73,7 @@ describe('stepLabel', () => {
     expect(stepLabel(AgentStepKey.READ_CV, AgentStepStatus.WAIT, CTX)).toBe('Hochgeladenen {doc} einlesen');
     expect(stepLabel(AgentStepKey.READ_CV, AgentStepStatus.DONE, CTX)).toBe('Hochgeladenen {doc} eingelesen');
     expect(stepLabel(AgentStepKey.COMMENT, AgentStepStatus.DONE, CTX)).toBe(
-      'Kommentar an {m} mit Bewerbungslink hinterlassen',
+      'Abschlusskommentar an {m} hinterlassen',
     );
   });
 
@@ -98,13 +97,14 @@ describe('the proofs step', () => {
     expect(stepLabel(AgentStepKey.PROOFS, AgentStepStatus.DONE, ctx)).toBe('Belege geprüft');
   });
 
-  it('sits between the letter and the format check', () => {
-    /* It reads the finished documents, so it cannot run before them; and what
-       it finds has to reach the closing comment, so it cannot run after it. */
+  it('sits after the rating and before the comment', () => {
+    /* It reads the finished documents — the rating's rewrite included — so it
+       runs after the rating and before the run closes. */
     const keys = stepPlan(true, ctx).map((s) => s.key);
 
-    expect(keys.indexOf(AgentStepKey.PROOFS)).toBe(keys.indexOf(AgentStepKey.GEN_LETTER) + 1);
-    expect(keys.indexOf(AgentStepKey.VALIDATE)).toBe(keys.indexOf(AgentStepKey.PROOFS) + 1);
+    expect(keys.indexOf(AgentStepKey.RATE)).toBe(keys.indexOf(AgentStepKey.GEN_LETTER) + 1);
+    expect(keys.indexOf(AgentStepKey.PROOFS)).toBe(keys.indexOf(AgentStepKey.RATE) + 1);
+    expect(keys.indexOf(AgentStepKey.COMMENT)).toBe(keys.indexOf(AgentStepKey.PROOFS) + 1);
   });
 
   it('says so while it is rewriting, rather than hiding it under “prüfen”', () => {

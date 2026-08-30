@@ -12,3 +12,15 @@ export function documentCaption(
   const base = (updated ? 'aktualisiert am ' : 'erstellt am ') + day;
   return d.template_label ? base + ' · Fassung ' + d.template_label : base;
 }
+
+/* What the card is headed with: the name the file actually carries on disk —
+   an English application's letter is a "…_Cover_Letter.html", and calling it
+   "Anschreiben" on the card claims a German document that is not there. The
+   row's stored title is only the fallback for a slot without a file. */
+export function documentDisplayName(d: Pick<DocumentRow, 'title' | 'file_path' | 'pdf_path'>): string {
+  const stored = d.file_path ?? d.pdf_path;
+  if (!stored) return d.title;
+  /* Stored paths are joined by the main process, so the separator is the
+     platform's — split on either. */
+  return stored.slice(Math.max(stored.lastIndexOf('/'), stored.lastIndexOf('\\')) + 1);
+}

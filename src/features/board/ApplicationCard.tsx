@@ -92,6 +92,9 @@ export function ApplicationCard({ id, col, ci }: { id: string; col: ColumnDef; c
         e.dataTransfer.effectAllowed = 'move';
         makeGhost(store, e);
         store.dragPosRef.current = null;
+        /* Where the card started, so a drop back into the same slot is not
+           written as a move. */
+        store.dragOriginRef.current = { col: ci, idx: st.board[ci]?.indexOf(id) ?? -1 };
         // Deferred so the browser snapshots the card before it dims.
         setTimeout(() => set({ dragId: id }), 0);
       }}

@@ -9,6 +9,7 @@ import { DashedPlus } from './AddRow';
 import { MenuItem } from './MenuItem';
 import { Popover } from './Popover';
 import { SearchRow, cycleActive } from './SearchRow';
+import { ELLIPSIS } from './styles';
 
 /* Longer lists (Branche) scroll inside the popover instead of growing past
    the bottom of the window. Matches the salary picker's list height. */
@@ -18,6 +19,10 @@ const LIST_MIN_HEIGHT = 64;
 /* The popover's padding and border around the list. */
 const POPOVER_CHROME = 10;
 const VIEWPORT_MARGIN = 12;
+/* An intrinsically sized popover grows as wide as its longest option, and a
+   long Berufsbezeichnung would push it out of the sidebar (and the window).
+   Capped instead; the rows ellipsize inside it. */
+const MAX_WIDTH = 'min(320px, calc(100vw - 24px))';
 
 interface SelectPopoverProps {
   options: string[];
@@ -125,7 +130,14 @@ export function SelectPopover({
   };
 
   return (
-    <Popover minWidth={minWidth} top={top} up={drop.up} zIndex={zIndex} revealOnMount>
+    <Popover
+      minWidth={minWidth}
+      top={top}
+      up={drop.up}
+      zIndex={zIndex}
+      revealOnMount
+      style={{ maxWidth: MAX_WIDTH }}
+    >
       {searchable && (
         <SearchRow
           containerRef={searchRef}
@@ -154,7 +166,7 @@ export function SelectPopover({
       >
         {matches.map((v, i) => (
           <MenuItem key={v} selected={v === value} active={i === active} onClick={() => onPick(v)}>
-            {renderRow ? renderRow(v) : <span style={{ flex: '1 1 auto', whiteSpace: 'nowrap' }}>{v}</span>}
+            {renderRow ? renderRow(v) : <span style={{ flex: '1 1 auto', ...ELLIPSIS }}>{v}</span>}
           </MenuItem>
         ))}
         {createRow && (

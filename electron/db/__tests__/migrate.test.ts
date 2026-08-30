@@ -564,14 +564,16 @@ describe('migration 24', () => {
 
 describe('migration 25', () => {
   it('creates comment_edits and cascades it with its comment', () => {
-    const db = dbAtVersion(MIGRATIONS.length - 1);
+    /* Pinned to its index (not MIGRATIONS.length - 1): later appends must not
+       silently retarget this test at a different migration. */
+    const db = dbAtVersion(22);
     seedApp(db);
     db.exec(
       'INSERT INTO comments (id, application_id, author, text, created_at) ' +
         "VALUES (9, 'BEW-1', 'KEPLER', 'Text', 't')",
     );
 
-    db.exec(MIGRATIONS[MIGRATIONS.length - 1]);
+    db.exec(MIGRATIONS[22]);
 
     db.exec(
       'INSERT INTO comment_edits (comment_id, document, kind, find_text, replace_text, position) ' +
@@ -584,6 +586,21 @@ describe('migration 25', () => {
     /* The edits describe a comment; without it they are unreachable rows that
        nothing ever cleans. */
     expect(db.prepare('SELECT count(*) c FROM comment_edits').get()).toMatchObject({ c: 0 });
+  });
+});
+
+describe('migration 26', () => {
+  /* Why the applicant wants exactly this position. Null for every existing
+     card — the field only ever arrives through the create dialog. */
+  it('adds a nullable interest_reason column to applications', () => {
+    const db = dbAtVersion(23);
+    seedApp(db);
+    migrate(db);
+    expect(db.prepare('SELECT interest_reason FROM applications').get()).toEqual({ interest_reason: null });
+    db.prepare("UPDATE applications SET interest_reason = 'Produkt und Stack passen'").run();
+    expect(db.prepare('SELECT interest_reason FROM applications').get()).toEqual({
+      interest_reason: 'Produkt und Stack passen',
+    });
   });
 });
 

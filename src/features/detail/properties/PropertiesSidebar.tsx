@@ -89,6 +89,7 @@ export function PropertiesSidebar({ cardId, role, company, columnIndex }: Proper
     /* The listing's URL — the link the application was (or will be) sent
        through, and the source Kepler reads from. */
     Stellenanzeige: { value: app?.posting_url || '', link: true },
+    'Warum interessant': { value: app?.interest_reason || '' },
     'Beworben via': { value: app?.applied_via || '' },
     'Beworben am': { value: app?.applied_at ? isoToDate(app.applied_at) : '' },
     Branche: { value: comp?.sector || '' },

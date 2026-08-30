@@ -53,6 +53,7 @@ const application = (
   applied_via: null,
   posting_url: null,
   posting_text: null,
+  interest_reason: null,
   assignee: null,
   language: null,
   created_at: 't',
@@ -287,41 +288,34 @@ describe('peopleKeysForCard', () => {
     } as unknown as AppState;
   }
 
-  it('lists everyone, the card’s company and its own people first', () => {
+  it('offers only the card’s own people, in alphabetical order', () => {
+    /* A: Ines is at company 1, Jonas sits on a round — the rest of the
+       directory (Loner, Kai) stays out; nothing floats a selected person to
+       the top. */
     expect(peopleKeysForCard(peopleState(), 'A')).toEqual([
+      { key: '7', known: true },
       { key: '8', known: true },
-      { key: '7', known: true },
-      { key: '5', known: false },
-      { key: '9', known: false },
     ]);
-    expect(peopleKeysForCard(peopleState(), 'B')).toEqual([
-      { key: '7', known: true },
-      { key: '5', known: false },
-      { key: '8', known: false },
-      { key: '9', known: false },
-    ]);
-    expect(
-      peopleKeysForCard(peopleState(), 'C')
-        .filter((p) => p.known)
-        .map((p) => p.key),
-    ).toEqual(['9', '8']);
+    expect(peopleKeysForCard(peopleState(), 'B')).toEqual([{ key: '7', known: true }]);
+    expect(peopleKeysForCard(peopleState(), 'C').map((p) => p.key)).toEqual(['8', '9']);
   });
 
-  it('knows nobody on a card at a company without people, but still offers everyone', () => {
+  it('offers nobody on a card at a company without people', () => {
     const st = peopleState();
     st.applications.D = application('D', 'Neu', 3, Interest.NONE, 'LinkedIn');
-    const keys = peopleKeysForCard(st, 'D');
-    expect(keys.some((p) => p.known)).toBe(false);
-    expect(keys.map((p) => p.key)).toEqual(['5', '7', '8', '9']);
+    expect(peopleKeysForCard(st, 'D')).toEqual([]);
   });
 
-  it('puts the card’s own pool first and drops deleted people', () => {
+  it('keeps a linked person from another company and drops deleted people', () => {
     const st = peopleState();
     st.linksByApp.A = [
       { application_id: 'A', person_id: 9, kind: LinkKind.POOL, position: 0 },
       { application_id: 'A', person_id: 42, kind: LinkKind.CONTACT, position: 1 },
     ];
-    expect(peopleKeysForCard(st, 'A').map((p) => p.key)).toEqual(['9', '8', '7', '5']);
+    /* Kai (9) is linked to the card, so he stays offered even though he is
+       filed elsewhere; person 42 no longer exists; the order is by name
+       (Ines, Jonas, Kai). */
+    expect(peopleKeysForCard(st, 'A').map((p) => p.key)).toEqual(['7', '8', '9']);
   });
 });
 

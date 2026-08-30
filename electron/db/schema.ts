@@ -475,4 +475,11 @@ export const MIGRATIONS: string[] = [
   );
   CREATE INDEX idx_comment_edits_comment ON comment_edits(comment_id);
   `,
+
+  /* Migration 26 (index 23): why the applicant is interested in exactly this
+     position — typed into the create dialog, fed to the letter generation.
+     Nullable; existing cards simply have none. */
+  `
+  ALTER TABLE applications ADD COLUMN interest_reason TEXT;
+  `,
 ];

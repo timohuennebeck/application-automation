@@ -68,6 +68,7 @@ const APPLICATION_FIELDS: (keyof ApplicationPatch)[] = [
   'applied_via',
   'posting_url',
   'posting_text',
+  'interest_reason',
   'assignee',
   'language',
 ];
@@ -283,6 +284,9 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
          was no link. At most one is set. */
       postingUrl?: string | null;
       postingText?: string | null;
+      /* Why the applicant wants exactly this position; absent when the field
+         was left empty. */
+      interestReason?: string | null;
       /* The dialog's choice; absent when Kepler is to decide. */
       language?: DocumentLanguage | null;
     }): CreateApplicationResult {
@@ -298,8 +302,8 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
           'interessiert',
         );
         db.prepare(
-          `INSERT INTO applications (id, role, company_id, interest, channel, stage_id, stage_position, posting_url, posting_text, language, created_at, updated_at)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+          `INSERT INTO applications (id, role, company_id, interest, channel, stage_id, stage_position, posting_url, posting_text, interest_reason, language, created_at, updated_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         ).run(
           id,
           input.role,
@@ -310,6 +314,7 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
           0,
           input.postingUrl || null,
           input.postingText || null,
+          input.interestReason || null,
           input.language ?? null,
           t,
           t,

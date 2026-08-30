@@ -2,6 +2,7 @@
    layer maps these 1:1 onto db:* channels; the renderer never sees SQL.
    Fact-label routing (Berufsbezeichnung → role, Unternehmen → company re-link, …)
    lives here so the sidebar's two write paths cannot diverge. */
+import { normalizeRole } from '../../src/lib/text.ts';
 import type { DatabaseSync } from 'node:sqlite';
 import type {
   ActivityRow,
@@ -175,6 +176,14 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
     ).run(UNKNOWN_COMPANY);
   }
 
+  /* Every role is stored without its gender marker, whether it came from the
+     sidebar or from Kepler — otherwise the same title lands twice in the
+     vocabulary, once per posting's spelling. */
+  function cleanRole(role: string | null | undefined): string | null {
+    const cleaned = normalizeRole(role || '');
+    return cleaned || null;
+  }
+
   /* A role a card or person is given joins the Berufsbezeichnung vocabulary. */
   function rememberRole(role: string | null | undefined) {
     const name = (role || '').trim();
@@ -291,6 +300,7 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
       language?: DocumentLanguage | null;
     }): CreateApplicationResult {
       return tx(() => {
+        const role = cleanRole(input.role) ?? '';
         const now = nowFn();
         const t = now.toISOString();
         const num = Number(one<{ value: string }>("SELECT value FROM meta WHERE key = 'next_bew_num'").value);
@@ -306,7 +316,7 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         ).run(
           id,
-          input.role,
+          role,
           company.id,
           Interest.NONE,
           input.channel,
@@ -320,7 +330,7 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
           t,
         );
 
-        rememberRole(input.role);
+        rememberRole(role);
         const children = insertDefaultChildren(id, now);
         return {
           application: mustGetApplication(id),
@@ -337,6 +347,7 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
 
     updateApplication(id: string, patch: ApplicationPatch): ApplicationRow {
       return tx(() => {
+        if (patch.role !== undefined) patch = { ...patch, role: cleanRole(patch.role) ?? '' };
         patchRow('applications', APPLICATION_FIELDS, patch, id);
         rememberRole(patch.role);
         return mustGetApplication(id);
@@ -653,7 +664,7 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
           )
           .run(
             input.name.trim(),
-            input.role || null,
+            cleanRole(input.role),
             initials,
             input.email || null,
             input.phone || null,
@@ -663,14 +674,15 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
             t,
             t,
           );
-        rememberRole(input.role);
+        rememberRole(cleanRole(input.role));
         return { person: getPerson(Number(res.lastInsertRowid)), company };
       });
     },
 
     updatePerson(personId: number, patch: PersonPatch): PersonWithCompany {
       return tx(() => {
-        const { company: companyName, ...fields } = patch;
+        const { company: companyName, ...rest } = patch;
+        const fields = rest.role === undefined ? rest : { ...rest, role: cleanRole(rest.role) };
         patchRow('people', PERSON_FIELDS, fields, personId);
         rememberRole(fields.role);
         if (companyName !== undefined) {

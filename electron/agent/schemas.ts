@@ -6,6 +6,7 @@
 import { FACT_OPTIONS } from '../../src/data/config.ts';
 import { sanitizeInline } from '../../src/lib/inline-html.ts';
 import { normalizeSalaryText } from '../../src/lib/salary.ts';
+import { normalizeRole } from '../../src/lib/text.ts';
 import { isHttpUrl } from '../../src/lib/url.ts';
 import type { DocumentEdit } from '../../src/shared/db-types.ts';
 import { DocumentKind, DocumentLanguage, EditKind } from '../../src/shared/enums.ts';
@@ -248,7 +249,9 @@ export function validateExtraction(x: unknown): Extraction {
   const r = asRecord(x, 'Extraktion');
   const c = typeof r.company === 'object' && r.company !== null ? (r.company as Record<string, unknown>) : {};
   return {
-    role: text(r.role),
+    /* The prompt asks for the title without "(m/w/d)"; the model does not
+       always listen, so the cleanup is enforced here as well. */
+    role: text(r.role) && normalizeRole(text(r.role)!),
     summary: text(r.summary),
     company: {
       name: text(c.name),

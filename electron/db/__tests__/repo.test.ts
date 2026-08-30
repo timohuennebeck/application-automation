@@ -527,6 +527,28 @@ describe('repo', () => {
     expect(names()).toEqual(expect.arrayContaining(['Principal Engineer', 'Recruiterin']));
   });
 
+  it('stores roles without their gender marker so the vocabulary does not fork', () => {
+    const names = () => repo.load().roles.map((r) => r.name);
+    const a = repo.createApplication({
+      role: 'Frontend Engineer (all genders)',
+      company: 'Acme',
+      channel: null,
+    });
+    const b = repo.createApplication({ role: 'Frontend Engineer (m/w/d)', company: 'Acme', channel: null });
+    expect(a.application.role).toBe('Frontend Engineer');
+    expect(b.application.role).toBe('Frontend Engineer');
+    expect(names().filter((n) => n.startsWith('Frontend Engineer'))).toEqual(['Frontend Engineer']);
+
+    const updated = repo.updateApplication(a.application.id, { role: 'Backend Engineer m/w/d' });
+    expect(updated.role).toBe('Backend Engineer');
+
+    const { person } = repo.createPerson({ name: 'Rita', role: 'Recruiter*in (m/w/d)' });
+    expect(person.role).toBe('Recruiter');
+    expect(repo.updatePerson(person.id, { role: 'Talent Partner (gn)' }).person.role).toBe('Talent Partner');
+    expect(names()).toEqual(expect.arrayContaining(['Backend Engineer', 'Recruiter', 'Talent Partner']));
+    expect(names()).not.toContain('Talent Partner (gn)');
+  });
+
   it('nulls a person’s company when the company row goes away', () => {
     const { person, company } = repo.createPerson({ name: 'Otto', company: 'Weg GmbH' });
     db.prepare('DELETE FROM companies WHERE id = ?').run(company!.id);

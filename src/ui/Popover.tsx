@@ -34,6 +34,7 @@ interface PopoverProps {
   padding?: number | string;
   style?: CSSProperties;
   children: ReactNode;
+  ref?: Ref<HTMLDivElement>;
 }
 
 export function Popover({
@@ -50,11 +51,14 @@ export function Popover({
   padding,
   style,
   children,
+  ref: outerRef,
 }: PopoverProps) {
-  const ref = useRef<HTMLDivElement>(null);
+  const ownRef = useRef<HTMLDivElement>(null);
+  const ref = outerRef ?? ownRef;
   useEffect(() => {
-    if (revealOnMount) ref.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-  }, [revealOnMount]);
+    if (typeof ref === 'object' && ref?.current && revealOnMount)
+      ref.current.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [ref, revealOnMount]);
   return (
     <div
       ref={ref}

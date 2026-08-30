@@ -62,7 +62,8 @@ export function SelectPopover({
 }: SelectPopoverProps) {
   const listRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLDivElement>(null);
-  const [drop, setDrop] = useState({ up: !!openUp, maxHeight: LIST_MAX_HEIGHT });
+  const popRef = useRef<HTMLDivElement>(null);
+  const [drop, setDrop] = useState({ up: !!openUp, maxHeight: LIST_MAX_HEIGHT, left: 0 });
 
   const [query, setQuery] = useState('');
   /* Row the arrow keys are on; they start from the current value, like a
@@ -94,7 +95,13 @@ export function SelectPopover({
     const below = window.innerHeight - a.bottom - VIEWPORT_MARGIN - chrome;
     const above = a.top - VIEWPORT_MARGIN - chrome;
     const up = openUp ?? (below < wanted && above > below);
-    setDrop({ up, maxHeight: Math.max(LIST_MIN_HEIGHT, Math.min(wanted, up ? above : below)) });
+    /* The list is wider than its chip and hangs off the chip's left edge, so
+       a chip in the right-hand sidebar would push it past the window. Slide
+       it left by exactly the overhang — never past the window's left edge. */
+    const p = popRef.current?.getBoundingClientRect();
+    const overhang = p ? p.right - (window.innerWidth - VIEWPORT_MARGIN) : 0;
+    const left = p ? -Math.max(0, Math.min(overhang, p.left - VIEWPORT_MARGIN)) : 0;
+    setDrop({ up, maxHeight: Math.max(LIST_MIN_HEIGHT, Math.min(wanted, up ? above : below)), left });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -131,8 +138,10 @@ export function SelectPopover({
 
   return (
     <Popover
+      ref={popRef}
       minWidth={minWidth}
       top={top}
+      left={drop.left}
       up={drop.up}
       zIndex={zIndex}
       revealOnMount

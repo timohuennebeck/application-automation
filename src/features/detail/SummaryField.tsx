@@ -80,6 +80,9 @@ export function SummaryField({
         ...BOX,
         color: summary ? 'var(--c-5f5c56)' : 'var(--c-a8a49b)',
         border: '1px solid transparent',
+        /* The editor keeps blank lines; the reading view must show the same
+           paragraphs, not fold them into one. */
+        whiteSpace: 'pre-wrap',
         textWrap: 'pretty',
         cursor: locked ? 'not-allowed' : 'text',
       }}

@@ -142,6 +142,14 @@ export interface ColumnDef {
 /* Index-aligned with STAGE_IDS and the stages table's position column. */
 export const COLUMNS: ColumnDef[] = [
   {
+    name: 'Blockiert',
+    kind: DotKind.MUTED,
+    tint: 'var(--c-fdf3ec)',
+    colTint: 'var(--colt-0)',
+    accent: 'var(--c-d07a3a)',
+    open: true,
+  },
+  {
     name: 'Interessiert',
     kind: DotKind.DASHED,
     tint: 'var(--c-f4f2ed)',
@@ -232,6 +240,7 @@ export const COLUMNS: ColumnDef[] = [
 
 /* Stable stage ids, index-aligned with COLUMNS (mirrors electron/db/schema.ts). */
 export const STAGE_IDS = [
+  'blockiert',
   'interessiert',
   'in-bearbeitung',
   'eingereicht',
@@ -248,7 +257,14 @@ export const STAGE_IDS = [
    drawn with its stage's accent and progress instead of a neutral ring. The
    last round is always the final conversation; any extra rounds in between
    stay on "2. Interview". */
-const ROUND_STAGES = [3, 4, 5, 6]; // indices into COLUMNS
+const ROUND_STAGES = ['screening', 'interview', 'interview-2', 'finale'].map((id) => STAGE_IDS.indexOf(id));
+
+/* Column index of a stage id — the board, the store and the seed all address
+   columns by position, and a literal number silently rots the moment a
+   column is added in front. */
+export function stageIndex(id: string): number {
+  return STAGE_IDS.indexOf(id);
+}
 export function roundStage(index: number, total: number): ColumnDef {
   const stage =
     index === total - 1

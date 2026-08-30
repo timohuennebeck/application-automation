@@ -3,7 +3,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
 import { openDb } from '../open.ts';
 import { migrate } from '../migrate.ts';
-import { MIGRATIONS, STAGES } from '../schema.ts';
+import { BOARD_STAGES, MIGRATIONS } from '../schema.ts';
 
 /* A database as it stood after `version` migrations — the real thing, not a
    fully migrated one with its version counter wound back. Only the former
@@ -64,10 +64,34 @@ describe('migrations', () => {
       title: string;
       position: number;
     }[];
-    expect(stages).toHaveLength(10);
-    expect(stages[0]).toEqual({ id: 'interessiert', title: 'Interessiert', position: 0 });
-    expect(stages[9].id).toBe('zurueckgezogen');
-    expect(stages.map((s) => s.id)).toEqual(STAGES.map(([id]) => id));
+    expect(stages).toHaveLength(11);
+    expect(stages[0]).toEqual({ id: 'blockiert', title: 'Blockiert', position: 0 });
+    expect(stages[1]).toEqual({ id: 'interessiert', title: 'Interessiert', position: 1 });
+    expect(stages[10].id).toBe('zurueckgezogen');
+    expect(stages.map((s) => s.id)).toEqual(BOARD_STAGES.map(([id]) => id));
+    expect(stages.map((s) => s.position)).toEqual(stages.map((_, i) => i));
+  });
+
+  /* Migration 20 slides a Blockiert column in front of Interessiert. A card
+     already on the board keeps its stage; only the stage rows shift. */
+  it('adds Blockiert in front and keeps cards on their stage', () => {
+    const db = dbAtVersion(19);
+    seedApp(db);
+
+    migrate(db);
+
+    const stages = db.prepare('SELECT id, position FROM stages ORDER BY position').all() as {
+      id: string;
+      position: number;
+    }[];
+    expect(stages[0]).toEqual({ id: 'blockiert', position: 0 });
+    expect(stages[1]).toEqual({ id: 'interessiert', position: 1 });
+    expect(stages.map((s) => s.position)).toEqual(stages.map((_, i) => i));
+    const app = db.prepare('SELECT stage_id, stage_position FROM applications').get() as {
+      stage_id: string;
+      stage_position: number;
+    };
+    expect(app).toEqual({ stage_id: 'interessiert', stage_position: 0 });
   });
 
   it('is idempotent', () => {

@@ -274,6 +274,7 @@ export const CARD_DEFS: Record<string, CardDef> = {
 };
 
 export const INITIAL_BOARD: string[][] = [
+  [],
   ['BEW-41', 'BEW-44'],
   ['BEW-38'],
   ['BEW-33', 'BEW-35'],

@@ -3,7 +3,7 @@
    in-memory view in sync and owns all transient UI state. */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { STAGE_IDS, URL_FIELDS } from '../data/config';
+import { STAGE_IDS, stageIndex, URL_FIELDS } from '../data/config';
 import { isHttpUrl } from '../lib/url';
 import {
   Assignee,
@@ -89,7 +89,9 @@ const COMPANY_FIELD: Record<string, 'sector' | 'headcount' | 'homepage' | 'email
 };
 /* Where Kepler's work shows on the board: taking a card puts it here, whether
    that happens in the create dialog or later at the card itself. */
-const IN_PROGRESS_COL = 1;
+const IN_PROGRESS_COL = stageIndex('in-bearbeitung');
+/* Where a card starts when nobody takes it. */
+const INTERESTED_COL = stageIndex('interessiert');
 
 const DATE_COLUMNS = new Set(['Beworben am']);
 /* Cleared facts that should default to the select kind. */
@@ -606,7 +608,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
        would (setAssignee). Done here rather than through setAssignee because
        stRef still holds the state from before the create resolved. */
     const toKepler = s.jobAssignee === Assignee.KEPLER;
-    const col = toKepler ? IN_PROGRESS_COL : 0;
+    const col = toKepler ? IN_PROGRESS_COL : INTERESTED_COL;
     // Keep the dialog open for the next card, but always start it empty.
     set((s2) => ({ modalOpen: s2.multiple, ...EMPTY_DRAFT }));
     persist(
@@ -1251,7 +1253,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return;
       }
       logAct(id, 'hat Kepler als Bearbeiter eingesetzt');
-      if (s.board.findIndex((c) => c.includes(id)) === 0) moveCard(id, IN_PROGRESS_COL, null);
+      if (s.board.findIndex((c) => c.includes(id)) === INTERESTED_COL) moveCard(id, IN_PROGRESS_COL, null);
       startAgent(id);
     },
     [logAct, moveCard, persist, set, startAgent],

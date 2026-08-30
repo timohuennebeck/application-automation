@@ -16,7 +16,7 @@ import {
 } from '../../src/data/sample-data.ts';
 import { DEFAULT_COMMENT, DEFAULT_FOLLOWUPS } from '../../src/shared/domain.ts';
 import { Author, DocumentKind, FactKind, LinkKind } from '../../src/shared/enums.ts';
-import { STAGES } from './schema.ts';
+import { BOARD_STAGES } from './schema.ts';
 import {
   dayMonthToISO,
   germanDateToISO,
@@ -162,7 +162,7 @@ export function seedIfEmpty(db: DatabaseSync, now = new Date()): boolean {
           companyIds.get(name)!,
           card[2],
           card[3],
-          STAGES[col][0],
+          BOARD_STAGES[col][0],
           pos,
           DETAILS[id]?.summary ?? null,
           germanDateToISO(factValue(id, 'Beworben am') ?? '') || null,

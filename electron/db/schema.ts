@@ -1,8 +1,9 @@
 /* Numbered schema migrations, applied in order by migrate(). Index 0 is
    migration 1. Never edit a shipped migration — append a new one. */
 
-/* The 10 pipeline stages. Index = board column position; ids are the stable
-   keys the theme maps to tint/accent colors. */
+/* The stages migration 1 seeded, in that order. Frozen with the migration —
+   the board's actual order, with the columns later migrations added, is
+   BOARD_STAGES. */
 export const STAGES: [string, string][] = [
   ['interessiert', 'Interessiert'],
   ['in-bearbeitung', 'In Bearbeitung'],
@@ -15,6 +16,13 @@ export const STAGES: [string, string][] = [
   ['korb', 'Korb erhalten'],
   ['zurueckgezogen', 'Bewerbung zurückgezogen'],
 ];
+
+/* Every pipeline stage in board order. Index = board column position; ids are
+   the stable keys config.ts and the theme map to tint/accent colours. Blocked
+   sits in front of Interessiert: a card parked there waits on someone else
+   (an open question to the recruiter, a missing document), not on the
+   applicant. */
+export const BOARD_STAGES: [string, string][] = [['blockiert', 'Blockiert'], ...STAGES];
 
 const stageInserts = STAGES.map(
   ([id, title], i) => `INSERT INTO stages (id, title, position) VALUES ('${id}', '${title}', ${i});`,
@@ -474,5 +482,16 @@ export const MIGRATIONS: string[] = [
     undone_at     TEXT
   );
   CREATE INDEX idx_comment_edits_comment ON comment_edits(comment_id);
+  `,
+
+  /* Migration 20: a Blockiert column in front of Interessiert, for cards that
+     wait on an answer from the other side. Every existing stage moves one
+     position to the right — in two passes, because position is UNIQUE and a
+     single +1 collides with the neighbour halfway through. No application
+     is moved. */
+  `
+  UPDATE stages SET position = position + 1000;
+  UPDATE stages SET position = position - 999;
+  INSERT INTO stages (id, title, position) VALUES ('blockiert', 'Blockiert', 0);
   `,
 ];

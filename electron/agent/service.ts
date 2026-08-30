@@ -1,6 +1,8 @@
-/* Validates and queues Kepler runs. One FIFO chain, concurrency 1: every run
-   spawns a CLI subprocess plus hidden windows, and node:sqlite writes on the
-   main thread — serial keeps both cheap and the UI legible. The pipeline
+/* Validates and queues Kepler runs. One FIFO chain per application: runs on
+   different cards proceed in parallel (each spawns its own CLI subprocess),
+   while a retry on the same card still waits for whatever that card already
+   has queued. node:sqlite stays safe under this — every repo call is
+   synchronous, so writes never interleave mid-transaction. The pipeline
    itself is injected; this file owns only the lifecycle around it. */
 import type { Repo } from '../db/repo.ts';
 import type { RunStore } from './run-store.ts';
@@ -19,11 +21,12 @@ interface AgentServiceDeps {
 export type AgentService = ReturnType<typeof createAgentService>;
 
 export function createAgentService({ repo, runs, emit, pipeline }: AgentServiceDeps) {
-  let chain: Promise<void> = Promise.resolve();
+  /* One chain per card, so cards never wait on each other. */
+  const chains = new Map<string, Promise<void>>();
   /* One controller per queued attempt, keyed by run — stop() pulls it. A
      retry after a stop enqueues afresh under a new controller; the aborted
-     link still reaches the front of the chain, sees its own signal, and
-     bows out without touching the run. */
+     link still reaches the front of its card's chain, sees its own signal,
+     and bows out without touching the run. */
   const controllers = new Map<number, AbortController>();
   /* Which run each card currently has queued or running — what abandon()
      needs once the card's rows are gone. */
@@ -33,7 +36,8 @@ export function createAgentService({ repo, runs, emit, pipeline }: AgentServiceD
     const controller = new AbortController();
     controllers.set(runId, controller);
     runByApp.set(applicationId, runId);
-    chain = chain.then(async () => {
+    const previous = chains.get(applicationId) ?? Promise.resolve();
+    const next = previous.then(async () => {
       try {
         await pipeline(applicationId, runId, controller.signal);
       } catch (err) {
@@ -50,7 +54,7 @@ export function createAgentService({ repo, runs, emit, pipeline }: AgentServiceD
           }
         } catch (backstopErr) {
           /* Nothing may poison the chain — a rejected link would leave every
-             later run QUEUED (and its card locked) forever. */
+             later run on this card QUEUED (and the card locked) forever. */
           console.error('[agent] backstop failed', backstopErr);
         }
       } finally {
@@ -64,6 +68,11 @@ export function createAgentService({ repo, runs, emit, pipeline }: AgentServiceD
           if (runByApp.get(applicationId) === runId) runByApp.delete(applicationId);
         }
       }
+    });
+    chains.set(applicationId, next);
+    /* Drop a drained chain so the map cannot grow with every card ever run. */
+    next.finally(() => {
+      if (chains.get(applicationId) === next) chains.delete(applicationId);
     });
   };
 
@@ -143,9 +152,10 @@ export function createAgentService({ repo, runs, emit, pipeline }: AgentServiceD
       controller?.abort();
     },
 
-    /* Settles once every queued pipeline has finished — for tests and shutdown. */
-    whenIdle(): Promise<void> {
-      return chain;
+    /* Settles once every queued pipeline has finished — for tests and shutdown.
+       Loops because a link can enqueue while another is being awaited. */
+    async whenIdle(): Promise<void> {
+      while (chains.size) await Promise.all(chains.values());
     },
   };
 }

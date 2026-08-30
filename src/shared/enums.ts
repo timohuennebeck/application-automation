@@ -122,7 +122,10 @@ export const AgentStepStatus = {
 export type AgentStepStatus = (typeof AgentStepStatus)[keyof typeof AgentStepStatus];
 
 /* What a step does, independent of its German label. FETCH only exists on
-   runs that have a posting URL — pasted text skips straight to EXTRACT. */
+   runs that have a posting URL — pasted text skips straight to EXTRACT.
+   CONTACTS (the removed contact research) and VALIDATE (the removed format
+   check) are no longer planned, but their rows survive in runs from before
+   the removal — the members stay so a resumed old run can still name them. */
 export const AgentStepKey = {
   FETCH: 'FETCH',
   EXTRACT: 'EXTRACT',
@@ -131,6 +134,7 @@ export const AgentStepKey = {
   READ_LETTER: 'READ_LETTER',
   GEN_CV: 'GEN_CV',
   GEN_LETTER: 'GEN_LETTER',
+  RATE: 'RATE',
   PROOFS: 'PROOFS',
   VALIDATE: 'VALIDATE',
   COMMENT: 'COMMENT',

@@ -58,16 +58,29 @@ const DOCUMENT_MENTION: Record<DocumentKind, string> = {
   [DocumentKind.OTHER]: '',
 };
 
-/* Which documents this comment named. Read from the comment's own text rather
-   than passed in by the renderer: the row is the record of what was asked, so
-   a mention that never reached the text cannot cause a change. */
+/* How each document may be referred to in plain words, beside the @-mention:
+   its German name, its English name, and the common short forms. The user
+   writes "ändere bitte das Anschreiben" or "update the cover letter" without
+   picking the mention chip — a request Kepler used to answer in prose while
+   never seeing the document, so nothing was ever applied. */
+const DOCUMENT_WORDS: Record<DocumentKind, string[]> = {
+  [DocumentKind.COVER_LETTER]: ['Anschreiben', 'Cover[ -]?Letter'],
+  [DocumentKind.LEBENSLAUF]: ['Lebenslauf', 'CV', 'Resume', 'Résumé'],
+  [DocumentKind.OTHER]: [],
+};
+
+/* Which documents this comment named — as "@Anschreiben" or as a plain word.
+   Read from the comment's own text rather than passed in by the renderer: the
+   row is the record of what was asked, so a mention that never reached the
+   text cannot cause a change. The optional @ keeps the picker's chips working
+   exactly as before; the trailing (e)?s lets German case forms ("des
+   Anschreibens") count as the same word. */
 function mentionedDocuments(text: string): DocumentKind[] {
   const found: DocumentKind[] = [];
-  for (const [kind, title] of Object.entries(DOCUMENT_MENTION) as [DocumentKind, string][]) {
-    /* An empty title (OTHER has no mention word) would degenerate the regex
-       into a bare "@" match — nothing is ever mentioned that way. */
-    if (!title) continue;
-    if (new RegExp('(?<![\\p{L}\\d@])@' + title + '(?![\\p{L}\\d])', 'u').test(text)) found.push(kind);
+  for (const [kind, words] of Object.entries(DOCUMENT_WORDS) as [DocumentKind, string[]][]) {
+    if (!words.length) continue;
+    const re = new RegExp('(?<![\\p{L}\\d@])@?(?:' + words.join('|') + ')(?:e?s)?(?![\\p{L}\\d])', 'iu');
+    if (re.test(text)) found.push(kind);
   }
   return found;
 }
@@ -139,6 +152,7 @@ function buildInput(
   const card = [
     stage ? `Phase: ${stage.title}` : null,
     app.summary ? `Zusammenfassung: ${app.summary}` : null,
+    app.interest_reason ? `Warum interessant: ${app.interest_reason}` : null,
     app.channel ? `Kanal: ${app.channel}` : null,
     app.applied_at ? `Beworben am: ${day(app.applied_at)}` : null,
     app.applied_via ? `Beworben über: ${app.applied_via}` : null,

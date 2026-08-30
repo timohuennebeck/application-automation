@@ -78,10 +78,10 @@ describe('agent service', () => {
     expect(calledAppId).toBe(appId);
     const steps = runs.stepsFor(runId);
     expect(steps[0].key).toBe(AgentStepKey.FETCH);
-    expect(steps).toHaveLength(10);
+    expect(steps).toHaveLength(9);
     /* The panel appears the moment the run is queued. */
     expect(events[0].run.status).toBe(AgentRunStatus.QUEUED);
-    expect(events[0].steps).toHaveLength(10);
+    expect(events[0].steps).toHaveLength(9);
   });
 
   it('skips the fetch step when only pasted text exists', async () => {
@@ -201,7 +201,7 @@ describe('agent service', () => {
       expect(steps[0]).toMatchObject({ status: AgentStepStatus.ERROR, error: STOP_ERROR });
       expect(steps.slice(1).every((s) => s.status === AgentStepStatus.WAIT)).toBe(true);
       expect(events.at(-1)!.run.id).toBe(run.id);
-      expect(events.at(-1)!.steps).toHaveLength(10);
+      expect(events.at(-1)!.steps).toHaveLength(9);
 
       /* The stale queue link reaches the pipeline with an aborted signal; the
          retry's fresh link does not. */
@@ -220,7 +220,7 @@ describe('agent service', () => {
     });
   });
 
-  it('runs queued pipelines one after another', async () => {
+  it('runs pipelines for different cards in parallel', async () => {
     const a = createApp({ postingUrl: 'https://acme.de/jobs/1' });
     const b = createApp({ postingUrl: 'https://acme.de/jobs/2' });
     const order: string[] = [];
@@ -234,7 +234,8 @@ describe('agent service', () => {
     await service.start(b);
     await service.whenIdle();
 
-    expect(order).toEqual(['start ' + a, 'end ' + a, 'start ' + b, 'end ' + b]);
+    /* Card b no longer waits for card a: both start before either ends. */
+    expect(order).toEqual(['start ' + a, 'start ' + b, 'end ' + a, 'end ' + b]);
   });
 
   /* The queue chain must survive anything — a backstop that itself throws

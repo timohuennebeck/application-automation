@@ -288,6 +288,37 @@ describe('a comment that mentions a document', () => {
     expect(llm.mock.calls[0][0].prompt).toContain('Engineering Hiring Team');
   });
 
+  /* The user rarely picks the mention chip — "ändere das Anschreiben" and
+     "update the cover letter" have to reach the document too, or the request
+     is answered in prose over a file Kepler never saw and nothing is ever
+     applied. */
+  it('recognises a document named in plain words, German or English', async () => {
+    for (const text of [
+      '@Kepler ändere bitte das Anschreiben',
+      '@Kepler bitte den Schluss des Anschreibens kürzen',
+      '@Kepler please update the cover letter',
+      '@Kepler shorten the intro of my Cover Letter',
+    ]) {
+      const { service, appId, llm } = fixture();
+      writeLetter(appId, '<p>Sehr geehrtes Engineering Hiring Team,</p>');
+      const comment = addComment(appId, text);
+
+      await service.ask({ applicationId: appId, commentId: comment.id, openDocument: null });
+
+      expect(llm.mock.calls[0][0].prompt, text).toContain('Engineering Hiring Team');
+    }
+  });
+
+  it('recognises the CV by its short English name', async () => {
+    const { service, appId, llm } = fixture();
+    writeCv(appId, '<p>Frontend seit 2019</p>');
+    const comment = addComment(appId, '@Kepler bitte den CV aktualisieren');
+
+    await service.ask({ applicationId: appId, commentId: comment.id, openDocument: null });
+
+    expect(llm.mock.calls[0][0].prompt).toContain('Frontend seit 2019');
+  });
+
   it('applies the edits, re-renders the PDF and stores the set', async () => {
     const { service, repo, appId, renderPdf } = fixture({
       answer: {

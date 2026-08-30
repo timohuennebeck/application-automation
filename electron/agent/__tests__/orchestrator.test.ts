@@ -8,7 +8,7 @@ import { seedIfEmpty } from '../../db/seed.ts';
 import { createRepo, type Repo } from '../../db/repo.ts';
 import { createRunStore, type RunStore } from '../run-store.ts';
 import { runPipeline, type LlmRequest, type PipelineDeps } from '../orchestrator.ts';
-import { PROOFS_REWRITE_LABEL, STOP_ERROR, stepPlan } from '../labels.ts';
+import { PROOFS_REWRITE_LABEL, RATE_REWRITE_LABEL, STOP_ERROR, stepLabel, stepPlan } from '../labels.ts';
 import { KeplerError } from '../errors.ts';
 import {
   AgentRunStatus,
@@ -18,9 +18,8 @@ import {
   DocumentKind,
   DocumentLanguage,
   FactKind,
-  LinkKind,
 } from '../../../src/shared/enums.ts';
-import { CONTACT_SCHEMA, FILL_SCHEMA, EXTRACTION_SCHEMA, CHECKS_SCHEMA, PROOFS_SCHEMA } from '../schemas.ts';
+import { FILL_SCHEMA, EXTRACTION_SCHEMA, PROOFS_SCHEMA, RATING_SCHEMA } from '../schemas.ts';
 import type { AgentEvent } from '../../../src/shared/agent.ts';
 import { VALUE_BUDGET } from '../budgets.ts';
 
@@ -45,7 +44,6 @@ const EXTRACTION = {
   gehalt: '70–85k €',
   erfahrung: '5–8',
   language: 'de',
-  people: [{ name: 'Lena Vogt', role: 'Recruiterin', email: null, phone: null, linkedin: null }],
 };
 
 let root: string;
@@ -101,17 +99,16 @@ function createRun(appId: string) {
   return runs.createRun(appId, 'Kepler wartet in der Warteschlange…', plan).run.id;
 }
 
-/* An llm fake keyed by the request's schema — extraction, contact research,
-   the two documents, and the validation pass. */
+/* An llm fake keyed by the request's schema — extraction, the two documents,
+   the Opus rating, and the proofs pass. */
 function fakeLlm(overrides: Partial<Record<string, (req: LlmRequest<unknown>) => unknown>> = {}) {
   const fn = vi.fn(async (req: LlmRequest<unknown>): Promise<unknown> => {
     const pick = () => {
       if (req.schema === EXTRACTION_SCHEMA) return overrides.extraction?.(req) ?? EXTRACTION;
-      if (req.schema === CONTACT_SCHEMA) return overrides.contact?.(req) ?? { person: null };
       if (req.schema === FILL_SCHEMA) {
         return overrides.document?.(req) ?? FILLED;
       }
-      if (req.schema === CHECKS_SCHEMA) return overrides.checks?.(req) ?? { issues: [] };
+      if (req.schema === RATING_SCHEMA) return overrides.rating?.(req) ?? { score: 9, improvements: [] };
       if (req.schema === PROOFS_SCHEMA) return overrides.proofs?.(req) ?? { unsupported: [] };
       throw new Error('unbekanntes Schema');
     };
@@ -282,44 +279,43 @@ describe('runPipeline', () => {
 
     /* The card can be switched between attempts — the Sprache chip is not
        locked while a run is failed. The documents on disk still carry the
-       names the finished steps wrote, so the validation has to find them by
+       names the finished steps wrote, so the proofs pass has to find them by
        the row rather than by recomputing the name, or it would check two
        empty strings and report a card with German documents as sound. */
-    it('validates the documents that were written, not the ones the new language would be called', async () => {
+    it('checks the documents that were written, not the ones the new language would be called', async () => {
       uploadBoth();
       const appId = createApp({ postingUrl: 'https://linkedin.com/jobs/1' });
       const runId = createRun(appId);
-      const llm = fakeLlm({ checks: () => ({ issues: [] }) });
-      /* Fails at the validation step, after both documents were written. */
-      let failed = false;
+      /* Fails at GEN_LETTER, after the CV was written under its German name. */
+      let calls = 0;
       await runPipeline(
         appId,
         runId,
         deps({
           llm: fakeLlm({
-            checks: () => {
-              failed = true;
+            document: () => {
+              if (calls++ === 0) return FILLED;
               throw new Error('Modell nicht erreichbar');
             },
           }),
         }),
       );
-      expect(failed).toBe(true);
+      expect(runs.getRun(runId).status).toBe(AgentRunStatus.FAILED);
       expect(existsSync(path.join(root, 'documents', appId, 'Timo_Huennebeck_Lebenslauf.html'))).toBe(true);
 
       repo.updateApplication(appId, { language: DocumentLanguage.EN });
       const step = runs.stepsFor(runId).find((s) => s.status === AgentStepStatus.ERROR)!;
       runs.resetStep(step.id, step.label);
       runs.requeueRun(runId, 'Kepler wartet in der Warteschlange…');
+      const llm = fakeLlm();
       await runPipeline(appId, runId, deps({ llm }));
 
-      const checks = (llm as ReturnType<typeof fakeLlm>).mock.calls
+      /* The proofs pass read the German CV file the finished step wrote — not
+         an empty string under the name the new language would use. */
+      const proofs = (llm as ReturnType<typeof fakeLlm>).mock.calls
         .map(([req]) => req)
-        .find((req) => req.schema === CHECKS_SCHEMA)!;
-      expect(checks.prompt).toContain('Helios Energie');
-      expect(checks.prompt).not.toContain('(kein Lebenslauf');
-      /* Both documents reached the prompt — the German files that exist. */
-      expect(checks.prompt.split('lebenslauf-Vorlage').length - 1).toBeGreaterThan(0);
+        .find((req) => req.schema === PROOFS_SCHEMA)!;
+      expect(proofs.prompt).toContain('lebenslauf-Vorlage für Helios Energie');
     });
 
     /* A resumed run must not re-decide: the documents already written carry
@@ -379,13 +375,9 @@ describe('runPipeline', () => {
     });
     expect(facts.find((f) => f.label === 'Erfahrung')).toMatchObject({ value: '5–8', kind: FactKind.SELECT });
 
-    const lena = snap.people.find((p) => p.name === 'Lena Vogt');
-    expect(lena?.role).toBe('Recruiterin');
-    expect(
-      snap.applicationPeople.some(
-        (l) => l.application_id === appId && l.person_id === lena!.id && l.kind === LinkKind.CONTACT,
-      ),
-    ).toBe(true);
+    /* The contact lookup is gone — the run links nobody; contacts are the
+       user's to add by hand. */
+    expect(snap.applicationPeople.filter((l) => l.application_id === appId)).toEqual([]);
 
     const docs = snap.documents.filter((doc) => doc.application_id === appId);
     const cv = docs.find((doc) => doc.kind === DocumentKind.LEBENSLAUF)!;
@@ -403,8 +395,8 @@ describe('runPipeline', () => {
 
     const comment = snap.comments.filter((c) => c.application_id === appId).at(-1)!;
     expect(comment.author).toBe(Author.KEPLER);
-    expect(comment.text).toContain('@Timo');
-    expect(comment.text).toContain('https://linkedin.com/jobs/1');
+    /* One line, nothing else — no finding bullets, no application link. */
+    expect(comment.text).toBe('Fertig — Firmendetails, Kontakte und Unterlagen sind ergänzt.');
     expect(snap.activities.some((a) => a.application_id === appId && a.author === Author.KEPLER)).toBe(true);
 
     /* The document steps carry the extracted company name once it is known. */
@@ -748,82 +740,108 @@ describe('runPipeline', () => {
     });
   });
 
-  it('researches a contact when the listing names nobody, marking it unverified', async () => {
+  it('creates no people and links nobody — contacts are added by hand', async () => {
     uploadTemplates();
     const appId = createApp({ postingUrl: 'https://linkedin.com/jobs/1' });
     const runId = createRun(appId);
-    const llm = fakeLlm({
-      extraction: () => ({ ...EXTRACTION, people: [] }),
-      contact: () => ({
-        person: { name: 'Mia Falk', role: 'Talent Lead', email: null, phone: null, linkedin: null },
-      }),
-    });
-    await runPipeline(appId, runId, deps({ llm }));
-
-    const contactCall = llm.mock.calls.find((c) => c[0].schema === CONTACT_SCHEMA)!;
-    expect(contactCall[0].tools).toContain('WebSearch');
-    const snap = repo.load();
-    const mia = snap.people.find((p) => p.name === 'Mia Falk')!;
-    expect(mia.role).toBe('Talent Lead (unbestätigt)');
-    expect(snap.applicationPeople.some((l) => l.application_id === appId && l.person_id === mia.id)).toBe(
-      true,
-    );
-  });
-
-  it('finishes the contact step empty-handed when the research finds nobody', async () => {
-    uploadTemplates();
-    const appId = createApp({ postingUrl: 'https://linkedin.com/jobs/1' });
-    const runId = createRun(appId);
-    const llm = fakeLlm({ extraction: () => ({ ...EXTRACTION, people: [] }) });
+    const llm = fakeLlm();
+    const peopleBefore = repo.load().people.length;
     await runPipeline(appId, runId, deps({ llm }));
 
     expect(runs.getRun(runId).status).toBe(AgentRunStatus.DONE);
+    expect(repo.load().people.length).toBe(peopleBefore);
     expect(repo.load().applicationPeople.filter((l) => l.application_id === appId)).toEqual([]);
+    /* And no call went looking for one — WebSearch left the pipeline. */
+    expect(llm.mock.calls.some(([req]: [LlmRequest<unknown>]) => req.tools?.length)).toBe(false);
   });
 
-  it('names a researched contact in the closing comment, with the profile link', async () => {
-    /* The posting names nobody, so the step goes looking. Linking the person
-       silently means the user never learns that the name in their letter is a
-       guess someone should check. */
+  /* Runs planned before the removals still carry the rows; a resume closes
+     them instead of leaving the panel with steps that wait forever. */
+  it('closes legacy CONTACTS and VALIDATE steps without doing any work', async () => {
     uploadTemplates();
     const appId = createApp({ postingText: 'Wir suchen einen Senior Designer …' });
-    const llm = fakeLlm({
-      extraction: () => ({ ...EXTRACTION, people: [] }),
-      contact: () => ({
-        person: {
-          name: 'Maria Haushofer',
-          role: 'Talent Acquisition',
-          email: null,
-          phone: null,
-          linkedin: 'https://linkedin.com/in/mariahaushofer',
+    const app = repo.getApplicationWithCompany(appId)!;
+    const ctx = { company: app.company.name, source: '' };
+    const plan = stepPlan(false, ctx);
+    plan.splice(1, 0, {
+      key: AgentStepKey.CONTACTS,
+      label: stepLabel(AgentStepKey.CONTACTS, AgentStepStatus.WAIT, ctx),
+    });
+    plan.splice(plan.length - 1, 0, {
+      key: AgentStepKey.VALIDATE,
+      label: stepLabel(AgentStepKey.VALIDATE, AgentStepStatus.WAIT, ctx),
+    });
+    const runId = runs.createRun(appId, 'wartet', plan).run.id;
+
+    await runPipeline(appId, runId, deps());
+
+    expect(runs.getRun(runId).status).toBe(AgentRunStatus.DONE);
+    expect(runs.stepsFor(runId).every((s) => s.status === AgentStepStatus.DONE)).toBe(true);
+  });
+
+  describe('rating', () => {
+    it('asks Opus 5 for the rating and leaves the letter alone when nothing is named', async () => {
+      uploadTemplates();
+      const appId = createApp({ postingText: 'Wir suchen einen Senior Designer …' });
+      let letters = 0;
+      const llm = fakeLlm({
+        document: (req) => {
+          if (req.prompt.includes('anschreiben-Vorlage')) letters++;
+          return FILLED;
         },
-      }),
+      });
+      await runPipeline(appId, createRun(appId), deps({ llm }));
+
+      const rating = llm.mock.calls.find(([req]: [LlmRequest<unknown>]) => req.schema === RATING_SCHEMA)!;
+      expect(rating[0].model).toBe('claude-opus-5');
+      expect(rating[0].prompt).toContain('anschreiben-Vorlage für Helios Energie');
+      expect(letters).toBe(1);
     });
 
-    await runPipeline(appId, createRun(appId), deps({ llm }));
+    it('regenerates the letter once with the named improvements', async () => {
+      uploadTemplates();
+      const appId = createApp({ postingText: 'Wir suchen einen Senior Designer …' });
+      const prompts: string[] = [];
+      let letters = 0;
+      const llm = fakeLlm({
+        document: (req) => {
+          if (req.prompt.includes('anschreiben-Vorlage')) {
+            letters++;
+            prompts.push(req.prompt);
+          }
+          return FILLED;
+        },
+        rating: () => ({ score: 6, improvements: ['Hook konkreter auf das Produkt beziehen.'] }),
+      });
+      const runId = createRun(appId);
+      await runPipeline(appId, runId, deps({ llm }));
 
-    const text = repo
-      .load()
-      .comments.filter((c) => c.application_id === appId)
-      .at(-1)!.text;
-    expect(text).toContain('Maria Haushofer');
-    expect(text).toContain('https://linkedin.com/in/mariahaushofer');
-    expect(text).toContain('prüf');
-  });
+      expect(runs.getRun(runId).status).toBe(AgentRunStatus.DONE);
+      expect(letters).toBe(2);
+      expect(prompts.at(-1)).toContain('6/10');
+      expect(prompts.at(-1)).toContain('Hook konkreter auf das Produkt beziehen.');
+      /* The panel saw the honest label while the feedback was worked in. */
+      expect(
+        events.some((e) => e.step?.key === AgentStepKey.RATE && e.step.label === RATE_REWRITE_LABEL),
+      ).toBe(true);
+    });
 
-  it('says nothing about a contact the posting named itself', async () => {
-    /* Only a researched name is a guess. One the posting printed is a fact,
-       and reporting it would spend a bullet on nothing. */
-    uploadTemplates();
-    const appId = createApp({ postingText: 'Wir suchen einen Senior Designer …' });
+    it('does not fail the run when the rating call itself rejects', async () => {
+      uploadTemplates();
+      const appId = createApp({ postingText: 'Wir suchen einen Senior Designer …' });
+      const llm = fakeLlm({
+        rating: () => {
+          throw new Error('Opus nicht erreichbar');
+        },
+      });
+      const runId = createRun(appId);
+      await runPipeline(appId, runId, deps({ llm }));
 
-    await runPipeline(appId, createRun(appId), deps());
-
-    const text = repo
-      .load()
-      .comments.filter((c) => c.application_id === appId)
-      .at(-1)!.text;
-    expect(text).not.toContain('Lena Vogt');
+      expect(runs.getRun(runId).status).toBe(AgentRunStatus.DONE);
+      expect(runs.stepsFor(runId).find((s) => s.key === AgentStepKey.RATE)!.status).toBe(
+        AgentStepStatus.DONE,
+      );
+    });
   });
 
   it('fails the template step in German when no CV template was uploaded', async () => {
@@ -863,20 +881,6 @@ describe('runPipeline', () => {
     expect(existsSync(path.join(root, 'documents', appId, 'Timo_Huennebeck_Lebenslauf.pdf'))).toBe(false);
   });
 
-  it('appends validation issues to the final comment', async () => {
-    uploadTemplates();
-    const appId = createApp({ postingUrl: 'https://linkedin.com/jobs/1' });
-    const runId = createRun(appId);
-    const llm = fakeLlm({ checks: () => ({ issues: ['Gehalt ohne Währung'] }) });
-    await runPipeline(appId, runId, deps({ llm }));
-
-    const comment = repo
-      .load()
-      .comments.filter((c) => c.application_id === appId)
-      .at(-1)!;
-    expect(comment.text).toContain('Gehalt ohne Währung');
-  });
-
   it('stops quietly when the application is deleted during the fetch', async () => {
     uploadTemplates();
     const appId = createApp({ postingUrl: 'https://linkedin.com/jobs/1' });
@@ -910,19 +914,6 @@ describe('runPipeline', () => {
     expect(events.every((e) => !!e.run)).toBe(true);
   });
 
-  /* Re-running must not fill the people list with duplicates — the extracted
-     contact already exists after the first run. */
-  it('reuses the existing person on a re-run instead of duplicating them', async () => {
-    uploadTemplates();
-    const appId = createApp({ postingUrl: 'https://linkedin.com/jobs/1' });
-    await runPipeline(appId, createRun(appId), deps());
-    await runPipeline(appId, createRun(appId), deps());
-
-    const snap = repo.load();
-    expect(snap.people.filter((p) => p.name === 'Lena Vogt')).toHaveLength(1);
-    expect(snap.applicationPeople.filter((l) => l.application_id === appId)).toHaveLength(1);
-  });
-
   /* A step retry resumes the SAME run: everything already done stays done and
      is not paid for again — no second scrape, no second extraction. */
   it('resumes a failed run from the failed step without redoing earlier work', async () => {
@@ -948,12 +939,11 @@ describe('runPipeline', () => {
     expect(second.scrape).not.toHaveBeenCalled();
     const llmCalls = (second.llm as unknown as { mock: { calls: [LlmRequest<unknown>][] } }).mock.calls;
     expect(llmCalls.some((c) => c[0].schema === EXTRACTION_SCHEMA)).toBe(false);
-    /* Both documents exist afterwards, and the contact was not duplicated. */
+    /* Both documents exist afterwards, and the run closed with its comment. */
     const snap = repo.load();
     const docs = snap.documents.filter((doc) => doc.application_id === appId);
     expect(docs.every((doc) => doc.file_path !== null)).toBe(true);
-    expect(snap.people.filter((p) => p.name === 'Lena Vogt')).toHaveLength(1);
-    expect(snap.comments.filter((c) => c.application_id === appId).at(-1)!.text).toContain('@Timo');
+    expect(snap.comments.filter((c) => c.application_id === appId).at(-1)!.text).toContain('Fertig');
   });
 
   /* The paste-text recovery retries the SAME run: the fetch step completes
@@ -1017,34 +1007,30 @@ describe('runPipeline', () => {
       },
       proofs: () => {
         checks++;
-        return checks === 1
-          ? { unsupported: [{ document: 'COVER_LETTER', quote: 'zwei Bereiche', why: 'nicht im CV' }] }
-          : { unsupported: [] };
+        return { unsupported: [{ document: 'COVER_LETTER', quote: 'zwei Bereiche', why: 'nicht im CV' }] };
       },
     });
 
     await runPipeline(appId, createRun(appId), deps({ llm }));
 
+    /* One reading, one rewrite — the comment stopped reporting findings, so
+       there is no second reading to feed it. */
     expect(letters).toBe(2);
-    expect(checks).toBe(2);
+    expect(checks).toBe(1);
   });
 
   it('quotes the unsupported claim back when it rewrites', async () => {
     uploadTemplates();
     const appId = createApp({ postingText: 'Wir suchen einen Senior Designer …' });
     const prompts: string[] = [];
-    let checks = 0;
     const llm = fakeLlm({
       document: (req) => {
         prompts.push(req.prompt);
         return FILLED;
       },
-      proofs: () => {
-        checks++;
-        return checks === 1
-          ? { unsupported: [{ document: 'COVER_LETTER', quote: 'zwei Bereiche', why: 'nicht im CV' }] }
-          : { unsupported: [] };
-      },
+      proofs: () => ({
+        unsupported: [{ document: 'COVER_LETTER', quote: 'zwei Bereiche', why: 'nicht im CV' }],
+      }),
     });
 
     await runPipeline(appId, createRun(appId), deps({ llm }));
@@ -1053,7 +1039,7 @@ describe('runPipeline', () => {
     expect(prompts.at(-1)).toContain('nicht im CV');
   });
 
-  it('reports a finding in the Lebenslauf without regenerating anything', async () => {
+  it('leaves the Lebenslauf alone when the claim sits there', async () => {
     /* The CV is copied from the Fassung; only its header line is generated.
        Rewriting it would not fix a claim the Fassung itself makes. */
     uploadTemplates();
@@ -1069,34 +1055,11 @@ describe('runPipeline', () => {
       }),
     });
 
-    await runPipeline(appId, createRun(appId), deps({ llm }));
-
-    expect(documents).toBe(2);
-    const comment = repo
-      .load()
-      .comments.filter((c) => c.application_id === appId)
-      .at(-1)!;
-    expect(comment.text).toContain('1 Mio. Nutzer');
-  });
-
-  it('gives up after one rewrite and reports what is left', async () => {
-    uploadTemplates();
-    const appId = createApp({ postingText: 'Wir suchen einen Senior Designer …' });
-    const llm = fakeLlm({
-      proofs: () => ({
-        unsupported: [{ document: 'COVER_LETTER', quote: 'zwei Bereiche', why: 'nicht im CV' }],
-      }),
-    });
-
     const runId = createRun(appId);
     await runPipeline(appId, runId, deps({ llm }));
 
+    expect(documents).toBe(2);
     expect(runs.getRun(runId).status).toBe(AgentRunStatus.DONE);
-    const comment = repo
-      .load()
-      .comments.filter((c) => c.application_id === appId)
-      .at(-1)!;
-    expect(comment.text).toContain('zwei Bereiche');
   });
 
   it('does not fail the run when the proofs call itself rejects', async () => {
@@ -1162,29 +1125,18 @@ describe('runPipeline', () => {
     expect(letters).toBe(3);
   });
 
-  it('puts unsupported claims before length before format, and stops at three', async () => {
-    uploadTemplates(['lebenslauf']);
-    uploadTemplates(
-      ['anschreiben'],
-      'Standard',
-      '<!doctype html><html><body><p>{{COMPANY_HOOK_SENTENCE}}</p></body></html>',
-    );
+  it('closes with the one-line comment whatever the checks found', async () => {
+    /* The comment is the fixed sentence — findings change the documents, not
+       the note under the card. */
+    uploadTemplates();
     const appId = createApp({ postingText: 'Wir suchen einen Senior Designer …' });
-    const long = Array.from({ length: 40 }, (_, i) => 'wort' + i).join(' ');
     const llm = fakeLlm({
-      document: () => ({
-        fields: [
-          { key: 'COMPANY_NAME', value: 'Helios Energie' },
-          { key: 'COMPANY_HOOK_SENTENCE', value: long },
-        ],
-      }),
       proofs: () => ({
         unsupported: [
           { document: 'COVER_LETTER', quote: 'zwei Bereiche', why: 'nicht im CV' },
           { document: 'LEBENSLAUF', quote: '1 Mio. Nutzer', why: 'Fassung sagt 12.000' },
         ],
       }),
-      checks: () => ({ issues: ['**Gehaltsangabe** widerspricht der Anzeige.'] }),
     });
 
     await runPipeline(appId, createRun(appId), deps({ llm }));
@@ -1193,27 +1145,7 @@ describe('runPipeline', () => {
       .load()
       .comments.filter((c) => c.application_id === appId)
       .at(-1)!.text;
-    const bullets = text.split('\n').filter((l) => l.startsWith('•'));
-    expect(bullets).toHaveLength(3);
-    expect(bullets[0]).toContain('zwei Bereiche');
-    expect(bullets[1]).toContain('1 Mio. Nutzer');
-    expect(bullets[2]).toContain('COMPANY_HOOK_SENTENCE');
-    /* The format issue was crowded out — three bullets is the cap, and an
-       unbacked claim outranks a salary format. */
-    expect(text).not.toContain('Gehaltsangabe');
-  });
-
-  it('says nothing extra when both documents hold up', async () => {
-    uploadTemplates();
-    const appId = createApp({ postingText: 'Wir suchen einen Senior Designer …' });
-
-    await runPipeline(appId, createRun(appId), deps());
-
-    const text = repo
-      .load()
-      .comments.filter((c) => c.application_id === appId)
-      .at(-1)!.text;
-    expect(text.split('\n').filter((l) => l.startsWith('•'))).toHaveLength(0);
+    expect(text).toBe('Fertig — Firmendetails, Kontakte und Unterlagen sind ergänzt.');
   });
 
   it('completes a run whose plan predates the step', async () => {

@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import { CHANNEL_BG, CHANNEL_OPTIONS } from '../../data/config';
 import { Assignee, DocumentLanguage, LANGUAGE_TITLES } from '../../shared/enums';
 import { CLOSED_MODAL } from '../../state/initial-state';
@@ -12,6 +13,23 @@ import { Switch } from '../../ui/Switch';
 import { Avatar, KeplerAvatar } from '../../ui/icons';
 import { isHttpUrl } from '../../lib/url';
 import { DIALOG_INPUT } from '../../ui/styles';
+
+/* The bare text boxes of the dialog: no border, no padding — the placeholder
+   is the whole instruction, the box only the space to type in. */
+const PLAIN_TEXTAREA: CSSProperties = {
+  fontSize: 13.5,
+  color: 'var(--c-1b1a17)',
+  lineHeight: 1.55,
+  fontFamily: 'inherit',
+  border: 'none',
+  outline: 'none',
+  resize: 'vertical',
+  background: 'transparent',
+  padding: 0,
+  width: '100%',
+  minWidth: 0,
+  boxSizing: 'border-box',
+};
 
 /* The dialog's dropdowns share AppState.dropdown with every other select, so
    the global outside-click handler closes them like the rest. */
@@ -119,51 +137,20 @@ export function NewApplicationModal() {
           rows={6}
           placeholder="Stellenanzeige hier einfügen…"
           onChange={(e) => set({ jobText: e.target.value })}
-          style={{
-            fontSize: 13.5,
-            color: 'var(--c-1b1a17)',
-            lineHeight: 1.55,
-            fontFamily: 'inherit',
-            border: 'none',
-            outline: 'none',
-            resize: 'vertical',
-            background: 'transparent',
-            padding: 0,
-            width: '100%',
-            minWidth: 0,
-            boxSizing: 'border-box',
-          }}
+          style={PLAIN_TEXTAREA}
         />
       )}
 
       {/* Why this position in particular — Kepler works the motive into the
-          Anschreiben's opening instead of guessing one from the posting. */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 8 }}>
-        <textarea
-          value={st.jobInterestReason}
-          rows={2}
-          placeholder="Warum interessiert dich diese Stelle besonders? (optional)"
-          onChange={(e) => set({ jobInterestReason: e.target.value })}
-          style={{
-            fontSize: 13.5,
-            color: 'var(--c-1b1a17)',
-            lineHeight: 1.55,
-            fontFamily: 'inherit',
-            border: '1px solid var(--c-eae7e0)',
-            borderRadius: 8,
-            outline: 'none',
-            resize: 'vertical',
-            background: 'transparent',
-            padding: '8px 10px',
-            width: '100%',
-            minWidth: 0,
-            boxSizing: 'border-box',
-          }}
-        />
-        <FieldHint>
-          Fließt in das Anschreiben ein — Kepler formuliert daraus den Einstieg, statt ein Motiv zu raten.
-        </FieldHint>
-      </div>
+          Anschreiben's opening instead of guessing one from the posting. The
+          placeholder is the whole instruction, like the posting box above. */}
+      <textarea
+        value={st.jobInterestReason}
+        rows={2}
+        placeholder="Warum interessiert dich diese Stelle besonders? (optional)"
+        onChange={(e) => set({ jobInterestReason: e.target.value })}
+        style={{ ...PLAIN_TEXTAREA, marginTop: 8 }}
+      />
 
       {/* What Kepler will do with the card, and the three optional properties
           it would otherwise fill in itself. The notice states the consequence

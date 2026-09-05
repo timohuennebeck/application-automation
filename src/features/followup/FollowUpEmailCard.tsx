@@ -57,10 +57,12 @@ export function FollowUpEmailCard({
   const dueOpen = st.dropdown === dueKey;
   const today = todayISO();
 
-  // A follow-up may not overtake its neighbours in the sequence.
+  // A follow-up may not move earlier than the one before it. It may move past
+  // the ones after it, though — setFollowupDue then carries them forward by
+  // the same number of days, so the whole cadence stays in order instead of
+  // being blocked at the next slot's date.
   const min = sel > 0 ? shiftISO(slots[sel - 1].iso, 1) : today;
-  const max = sel < slots.length - 1 ? shiftISO(slots[sel + 1].iso, -1) : null;
-  const outOfRange = (iso: string) => !(iso >= min && (!max || iso <= max));
+  const outOfRange = (iso: string) => iso < min;
 
   // The calendar spans a year from the due date (or today, whichever is
   // earlier) and always stretches far enough to show the due date itself.

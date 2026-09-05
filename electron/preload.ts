@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import { DB_CHANNELS } from './db/channels.ts';
 import type {
   AgentEvent,
@@ -43,6 +43,10 @@ const api = {
     /* Native picker; null when the dialog was cancelled. */
     pick: (title: string, type: 'docx' | 'html'): Promise<string | null> =>
       ipcRenderer.invoke('documents:pick', title, type),
+    /* The real filesystem path of a file dropped onto the window — Electron
+       only hands that out through webUtils, not as a `File.path` any more.
+       Synchronous, so a drop handler can pass the result straight to copy(). */
+    pathForFile: (file: File): string => webUtils.getPathForFile(file),
     /* Copies the picked HTML into userData and renders the PDF beside it,
        resolving to both stored paths. */
     copy: (

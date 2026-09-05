@@ -4,7 +4,14 @@ import type { DocumentLanguage, TemplateKind } from './enums.ts';
 
 /* The preset titles the create-interview dialog offers, mirroring the
    interview stages of the kanban board. */
-export const CANONICAL_ROUNDS: string[] = ['Screening', 'Interview', '2. Interview', 'Finales Gespräch'];
+export const CANONICAL_ROUNDS: string[] = [
+  'Screening',
+  'Interview',
+  '2. Interview',
+  '3. Interview',
+  '4. Interview',
+  'Finales Gespräch',
+];
 
 /* The company a card gets when none is known — created without one, or
    emptied in the sidebar. A card always points at some company row. */

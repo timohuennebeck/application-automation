@@ -78,10 +78,10 @@ describe('agent service', () => {
     expect(calledAppId).toBe(appId);
     const steps = runs.stepsFor(runId);
     expect(steps[0].key).toBe(AgentStepKey.FETCH);
-    expect(steps).toHaveLength(9);
+    expect(steps).toHaveLength(3);
     /* The panel appears the moment the run is queued. */
     expect(events[0].run.status).toBe(AgentRunStatus.QUEUED);
-    expect(events[0].steps).toHaveLength(9);
+    expect(events[0].steps).toHaveLength(3);
   });
 
   it('skips the fetch step when only pasted text exists', async () => {
@@ -201,7 +201,7 @@ describe('agent service', () => {
       expect(steps[0]).toMatchObject({ status: AgentStepStatus.ERROR, error: STOP_ERROR });
       expect(steps.slice(1).every((s) => s.status === AgentStepStatus.WAIT)).toBe(true);
       expect(events.at(-1)!.run.id).toBe(run.id);
-      expect(events.at(-1)!.steps).toHaveLength(9);
+      expect(events.at(-1)!.steps).toHaveLength(3);
 
       /* The stale queue link reaches the pipeline with an aborted signal; the
          retry's fresh link does not. */

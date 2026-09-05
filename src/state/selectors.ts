@@ -1,7 +1,7 @@
 /* Derived views over the domain state. The board card's subtitle, interview
    chip and salary line were pre-rendered strings in the sample data; now they
    are computed from rounds, follow-ups and facts at render time. */
-import { INTEREST, roundColumn, SortDir, SortKey, Urgency } from '../data/config';
+import { INTEREST, isClosedStage, roundColumn, SortDir, SortKey, Urgency } from '../data/config';
 import {
   AgentRunStatus,
   Assignee,
@@ -320,8 +320,13 @@ export function cardSubtitle(st: AppState, id: string): CardSubtitle {
 
   // The next actionable follow-up: the soonest upcoming one if it is within a
   // week, else the most recently missed one — never the oldest overdue slot.
-  // Sent ones are out of the running; nothing about them is still due.
-  const diffs = (st.followupsByApp[id] || []).filter((f) => !f.completed_at).map((f) => dayDiff(f.due_at));
+  // Sent ones are out of the running; nothing about them is still due. A
+  // closed application (rejected, withdrawn) is not waiting on a reply from
+  // anyone, so its follow-ups stop being something to chase.
+  const closed = isClosedStage(st.applications[id]?.stage_id);
+  const diffs = closed
+    ? []
+    : (st.followupsByApp[id] || []).filter((f) => !f.completed_at).map((f) => dayDiff(f.due_at));
   const upcoming = diffs.filter((d) => d >= 0).sort((a, b) => a - b)[0];
   const overdue = diffs.filter((d) => d < 0).sort((a, b) => b - a)[0];
   const due = upcoming !== undefined && upcoming <= 7 ? upcoming : overdue;

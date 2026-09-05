@@ -21,8 +21,17 @@ export const STAGES: [string, string][] = [
    the stable keys config.ts and the theme map to tint/accent colours. Blocked
    sits in front of Interessiert: a card parked there waits on someone else
    (an open question to the recruiter, a missing document), not on the
-   applicant. */
-export const BOARD_STAGES: [string, string][] = [['blockiert', 'Blockiert'], ...STAGES];
+   applicant. 3. Interview and 4. Interview sit after 2. Interview and before
+   Finales Gespräch: extra interview rounds now spread across up to four named
+   stages instead of stacking onto "2. Interview" alone. */
+const FINALE_INDEX = STAGES.findIndex(([id]) => id === 'finale');
+export const BOARD_STAGES: [string, string][] = [
+  ['blockiert', 'Blockiert'],
+  ...STAGES.slice(0, FINALE_INDEX),
+  ['interview-3', '3. Interview'],
+  ['interview-4', '4. Interview'],
+  ...STAGES.slice(FINALE_INDEX),
+];
 
 const stageInserts = STAGES.map(
   ([id, title], i) => `INSERT INTO stages (id, title, position) VALUES ('${id}', '${title}', ${i});`,
@@ -500,5 +509,18 @@ export const MIGRATIONS: string[] = [
      Nullable; existing cards simply have none. */
   `
   ALTER TABLE applications ADD COLUMN interest_reason TEXT;
+  `,
+
+  /* Migration 28 (index 25): 3. Interview and 4. Interview, between 2.
+     Interview and Finales Gespräch — a fifth or sixth round no longer has to
+     share "2. Interview" with the second. Finales Gespräch and everything
+     after it moves two positions to the right, in two passes for the same
+     UNIQUE-collision reason migration 26 shifted Blockiert in. No application
+     or round is moved; a round already on "Finales Gespräch" stays there. */
+  `
+  UPDATE stages SET position = position + 1000 WHERE position >= 7;
+  UPDATE stages SET position = position - 998 WHERE position >= 1000;
+  INSERT INTO stages (id, title, position) VALUES ('interview-3', '3. Interview', 7);
+  INSERT INTO stages (id, title, position) VALUES ('interview-4', '4. Interview', 8);
   `,
 ];

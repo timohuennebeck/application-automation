@@ -358,6 +358,12 @@
   border-color: var(--c-d5d1c7);
   box-shadow: 0 3px 10px var(--s-9);
 }
+/* A file dragged over the card, whether it is empty or about to be replaced. */
+.doc-card-dragover {
+  border-color: var(--c-9078b8);
+  border-style: dashed;
+  background: var(--c-f6f3fa);
+}
 .doc-dl {
   flex-shrink: 0;
   width: 28px;

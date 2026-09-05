@@ -167,6 +167,18 @@ describe('cardSubtitle', () => {
   it('stops calling it overdue once it has been sent', () => {
     expect(cardSubtitle(cardWithFollowup(-4, true), 'A').tone).toBe(Urgency.MUTED);
   });
+
+  it('stops chasing a follow-up once the application is closed', () => {
+    /* Moved into "Korb erhalten" without ever ticking off the follow-up —
+       nobody is waiting on a reply from a rejection any more. */
+    const st = cardWithFollowup(3, false);
+    st.applications.A.stage_id = 'korb';
+    expect(cardSubtitle(st, 'A').tone).not.toBe(Urgency.DUE);
+    expect(cardSubtitle(st, 'A').tone).not.toBe(Urgency.SOON);
+
+    st.applications.A.stage_id = 'zurueckgezogen';
+    expect(cardSubtitle(st, 'A').tone).toBe(Urgency.MUTED);
+  });
 });
 
 describe('kepler assignment guards', () => {

@@ -33,7 +33,7 @@ import {
 } from './selectors';
 import type { AgentStartResult } from '../shared/agent';
 import { UNKNOWN_COMPANY, UNKNOWN_ROLE } from '../shared/domain';
-import { dateToISO } from '../lib/date';
+import { dateToISO, dayDiff, shiftISO } from '../lib/date';
 import { isInFocusedField } from '../lib/dom';
 import { mentionsKepler } from '../lib/mentions';
 import { initials } from '../lib/text';
@@ -1019,15 +1019,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [set],
   );
 
+  /* Moving a follow-up's date carries every later, still-unsent one along with
+     it by the same number of days — nudging the first reminder out a week no
+     longer leaves the ones after it stranded behind it, out of order. Sent
+     follow-ups are history and keep the date they actually went out on. */
   const setFollowupDue = useCallback(
     (id: string, followupId: number, dueISO: string) => {
+      const rows = (stRef.current.followupsByApp[id] || []).slice().sort((a, b) => a.position - b.position);
+      const idx = rows.findIndex((f) => f.id === followupId);
+      if (idx < 0) return;
+      const deltaDays = dayDiff(dueISO) - dayDiff(rows[idx].due_at);
+      const updates = rows.slice(idx).map((f, i) => ({
+        id: f.id,
+        due_at: i === 0 ? dueISO : f.completed_at ? f.due_at : shiftISO(f.due_at, deltaDays),
+      }));
+      const changed = updates.filter((u, i) => u.due_at !== rows[idx + i].due_at);
       set((s) => ({
         followupsByApp: {
           ...s.followupsByApp,
-          [id]: (s.followupsByApp[id] || []).map((f) => (f.id === followupId ? { ...f, due_at: dueISO } : f)),
+          [id]: (s.followupsByApp[id] || []).map((f) => {
+            const u = changed.find((c) => c.id === f.id);
+            return u ? { ...f, due_at: u.due_at } : f;
+          }),
         },
       }));
-      persist(db()?.followups.setDue(followupId, dueISO));
+      persist(Promise.all(changed.map((u) => db()?.followups.setDue(u.id, u.due_at))));
     },
     [set],
   );
@@ -1174,17 +1190,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [set],
   );
 
-  /* Replaces a document with a file the user picks. Deliberately not
-     optimistic: the row may only claim a file once the bytes are actually in
-     userData, or the card would offer a download that cannot open. Returns the
-     reason it failed, or null. */
-  const replaceDocument = useCallback(
-    async (id: string, documentId: number, kind: DocumentKind, title: string): Promise<string | null> => {
+  /* Copies a file already sitting on disk into a document slot — the shared
+     landing point for the native picker (replaceDocument) and for a file
+     dropped straight onto the section. Deliberately not optimistic: the row
+     may only claim a file once the bytes are actually in userData, or the
+     card would offer a download that cannot open. Returns the reason it
+     failed, or null. */
+  const uploadDocumentFile = useCallback(
+    async (
+      id: string,
+      documentId: number,
+      kind: DocumentKind,
+      title: string,
+      source: string,
+    ): Promise<string | null> => {
       const api = window.desktop;
       if (!api) return 'Ohne Desktop-Umgebung nicht möglich.';
       try {
-        const source = await api.documents.pick('Dokument ersetzen', 'html');
-        if (!source) return null; // cancelled
+        const hadFile = !!documentFor(stRef.current, id, kind)?.file_path;
         const { filePath, pdfPath, pdfError } = await api.documents.copy(
           id,
           kind,
@@ -1194,7 +1217,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         /* A hand-picked file did not come from a Fassung. */
         const row = await api.db.documents.setFile(documentId, filePath, pdfPath, null);
         putDocumentRow(id, row);
-        logAct(id, 'hat „' + title + '“ ersetzt');
+        logAct(id, 'hat „' + title + '“ ' + (hadFile ? 'ersetzt' : 'hochgeladen'));
         /* The upload counts as done — the row and the history already say so.
            A failed export is reported on top of that, not instead of it. */
         return pdfError ? 'Die Datei wurde übernommen, das PDF ließ sich nicht erzeugen: ' + pdfError : null;
@@ -1203,7 +1226,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return String(err);
       }
     },
-    [logAct, set],
+    [logAct],
+  );
+
+  /* Replaces a document with a file the user picks through the native dialog. */
+  const replaceDocument = useCallback(
+    async (id: string, documentId: number, kind: DocumentKind, title: string): Promise<string | null> => {
+      const api = window.desktop;
+      if (!api) return 'Ohne Desktop-Umgebung nicht möglich.';
+      try {
+        const source = await api.documents.pick('Dokument ersetzen', 'html');
+        if (!source) return null; // cancelled
+        return await uploadDocumentFile(id, documentId, kind, title, source);
+      } catch (err) {
+        console.error('[documents]', err);
+        return String(err);
+      }
+    },
+    [uploadDocumentFile],
   );
 
   /* Saves the document the editor has been working on. Same trade as an upload:
@@ -1697,6 +1737,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       saveRound,
       writeField,
       replaceDocument,
+      uploadDocumentFile,
       saveDocument,
       setInterest,
       setLanguage,
@@ -1768,6 +1809,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       openStagedAttachment,
       openAttachment,
       replaceDocument,
+      uploadDocumentFile,
       saveDocument,
       setFollowupDue,
       setFollowupCompleted,

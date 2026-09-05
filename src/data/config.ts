@@ -203,6 +203,24 @@ export const COLUMNS: ColumnDef[] = [
     open: true,
   },
   {
+    name: '3. Interview',
+    kind: DotKind.PIE,
+    frac: 0.75,
+    tint: 'var(--c-eff7f6)',
+    colTint: 'var(--colt-11)',
+    accent: 'var(--c-4a8f8f)',
+    open: true,
+  },
+  {
+    name: '4. Interview',
+    kind: DotKind.PIE,
+    frac: 0.8,
+    tint: 'var(--c-eff4fa)',
+    colTint: 'var(--colt-12)',
+    accent: 'var(--c-4a7fae)',
+    open: true,
+  },
+  {
     name: 'Finales Gespräch',
     kind: DotKind.PIE,
     frac: 0.85,
@@ -247,6 +265,8 @@ export const STAGE_IDS = [
   'screening',
   'interview',
   'interview-2',
+  'interview-3',
+  'interview-4',
   'finale',
   'gehaltsverhandlung',
   'korb',
@@ -256,14 +276,24 @@ export const STAGE_IDS = [
 /* Interview rounds mirror the interview stages of the pipeline, so a round is
    drawn with its stage's accent and progress instead of a neutral ring. The
    last round is always the final conversation; any extra rounds in between
-   stay on "2. Interview". */
-const ROUND_STAGES = ['screening', 'interview', 'interview-2', 'finale'].map((id) => STAGE_IDS.indexOf(id));
+   spread across 2., 3. and 4. Interview before stacking onto "4. Interview". */
+const ROUND_STAGES = ['screening', 'interview', 'interview-2', 'interview-3', 'interview-4', 'finale'].map(
+  (id) => STAGE_IDS.indexOf(id),
+);
 
 /* Column index of a stage id — the board, the store and the seed all address
    columns by position, and a literal number silently rots the moment a
    column is added in front. */
 export function stageIndex(id: string): number {
   return STAGE_IDS.indexOf(id);
+}
+
+/* The two stages a card does not come back from. Nothing about a rejected or
+   withdrawn application is still pending — its follow-up due dates in
+   particular stop meaning anything once nobody is waiting on a reply. */
+const CLOSED_STAGE_IDS: string[] = ['korb', 'zurueckgezogen'];
+export function isClosedStage(id: string | undefined | null): boolean {
+  return !!id && CLOSED_STAGE_IDS.includes(id);
 }
 export function roundStage(index: number, total: number): ColumnDef {
   const stage =

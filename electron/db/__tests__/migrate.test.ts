@@ -64,10 +64,10 @@ describe('migrations', () => {
       title: string;
       position: number;
     }[];
-    expect(stages).toHaveLength(11);
+    expect(stages).toHaveLength(13);
     expect(stages[0]).toEqual({ id: 'blockiert', title: 'Blockiert', position: 0 });
     expect(stages[1]).toEqual({ id: 'interessiert', title: 'Interessiert', position: 1 });
-    expect(stages[10].id).toBe('zurueckgezogen');
+    expect(stages[12].id).toBe('zurueckgezogen');
     expect(stages.map((s) => s.id)).toEqual(BOARD_STAGES.map(([id]) => id));
     expect(stages.map((s) => s.position)).toEqual(stages.map((_, i) => i));
   });
@@ -92,6 +92,26 @@ describe('migrations', () => {
       stage_position: number;
     };
     expect(app).toEqual({ stage_id: 'interessiert', stage_position: 0 });
+  });
+
+  /* Migration 28 slides 3. and 4. Interview in after 2. Interview. A card
+     already on Finales Gespräch keeps that stage; only the stage rows shift. */
+  it('adds 3. and 4. Interview before Finales Gespräch and keeps cards on their stage', () => {
+    const db = dbAtVersion(25);
+    seedApp(db);
+    db.exec("UPDATE applications SET stage_id = 'finale'");
+
+    migrate(db);
+
+    const stages = db.prepare('SELECT id, position FROM stages ORDER BY position').all() as {
+      id: string;
+      position: number;
+    }[];
+    expect(stages.map((s) => s.id).slice(6, 9)).toEqual(['interview-2', 'interview-3', 'interview-4']);
+    expect(stages.find((s) => s.id === 'finale')!.position).toBe(9);
+    expect(stages.map((s) => s.position)).toEqual(stages.map((_, i) => i));
+    const app = db.prepare('SELECT stage_id FROM applications').get() as { stage_id: string };
+    expect(app.stage_id).toBe('finale');
   });
 
   it('is idempotent', () => {

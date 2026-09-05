@@ -79,6 +79,10 @@
   --c-f7e9b8: #f7e9b8;
   --c-5b9083: #5b9083;
   --c-3d6b60: #3d6b60;
+  --c-4a8f8f: #4a8f8f;
+  --c-4a7fae: #4a7fae;
+  --c-eff7f6: #eff7f6;
+  --c-eff4fa: #eff4fa;
   --c-5f5aa8: #5f5aa8;
   --c-3f7f9e: #3f7f9e;
   --c-a8497a: #a8497a;
@@ -106,6 +110,8 @@
   --colt-8: #eef7f0;
   --colt-9: #fbf1f0;
   --colt-10: #f3f2f0;
+  --colt-11: #eff7f6;
+  --colt-12: #eff4fa;
   --run: #e0186c;
   /* Hover/open darkening laid over a chip that carries its own tint. */
   --chip-shade: rgba(0, 0, 0, 0.045);
@@ -191,6 +197,10 @@
   --c-f7e9b8: #3a3018;
   --c-5b9083: #3fb8a8;
   --c-3d6b60: #35a294;
+  --c-4a8f8f: #45b3b3;
+  --c-4a7fae: #6f9fe0;
+  --c-eff7f6: #141d1d;
+  --c-eff4fa: #131b20;
   --c-5f5aa8: #8b86e8;
   --c-3f7f9e: #55b0d4;
   --c-a8497a: #e484b4;
@@ -218,6 +228,8 @@
   --colt-8: #1a1b1e;
   --colt-9: #1a1b1e;
   --colt-10: #1a1b1e;
+  --colt-11: #1a1b1e;
+  --colt-12: #1a1b1e;
   --run: #a9f0c8;
   color-scheme: dark;
 }

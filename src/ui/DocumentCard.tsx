@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { DragEvent, ReactNode } from 'react';
 import { DocFormat, DocGlyph } from './icons';
 import { ELLIPSIS } from './styles';
 
@@ -15,6 +15,10 @@ export function DocumentCard({
   leading,
   onClick,
   children,
+  dragOver,
+  onDragOver,
+  onDragLeave,
+  onDrop,
 }: {
   format: DocFormat;
   /* Usually the file's name; the profile swaps in an input while renaming. */
@@ -28,9 +32,21 @@ export function DocumentCard({
   muted?: boolean;
   onClick: () => void;
   children?: ReactNode;
+  /* A file dragged over the card, from the section's own drop handling. */
+  dragOver?: boolean;
+  onDragOver?: (e: DragEvent) => void;
+  onDragLeave?: (e: DragEvent) => void;
+  onDrop?: (e: DragEvent) => void;
 }) {
   return (
-    <div className="doc-card" title={hint} onClick={onClick}>
+    <div
+      className={'doc-card' + (dragOver ? ' doc-card-dragover' : '')}
+      title={hint}
+      onClick={onClick}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+    >
       {leading}
       <DocGlyph format={format} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>

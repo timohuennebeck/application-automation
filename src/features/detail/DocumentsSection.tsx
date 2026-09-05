@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import type { DragEvent } from 'react';
 import { documentCaption, documentDisplayName } from './document-caption';
 import { useApp } from '../../state/store-context';
 import { agentLocked } from '../../state/selectors';
@@ -6,11 +7,12 @@ import { DocumentCard } from '../../ui/DocumentCard';
 import { DotsMenu, DownloadItem } from '../../ui/DotsMenu';
 import { MenuItem } from '../../ui/MenuItem';
 import { Section } from '../../ui/Section';
+import type { DocumentKind } from '../../shared/enums';
 import { DocFormat } from '../../ui/icons';
 import { ERROR_TEXT } from '../../ui/styles';
 
 export function DocumentsSection({ cardId }: { cardId: string }) {
-  const { st, set, replaceDocument } = useApp();
+  const { st, set, replaceDocument, uploadDocumentFile } = useApp();
   /* PROOFS can still rewrite the Anschreiben while the run is in flight — the
      editor opening it would race that rewrite's write-back and the two PDF
      renders. Gate on the same lock the card's own fields already respect
@@ -25,14 +27,17 @@ export function DocumentsSection({ cardId }: { cardId: string }) {
      as long as the answer is owed. */
   const locked = agentLocked(st, cardId) || !!st.keplerAsk[cardId]?.pending;
   const [error, setError] = useState<string | null>(null);
+  /* Which slot a dragged file is currently hovering over, for the highlight —
+     purely local, redrawn on every dragenter/dragleave. */
+  const [dragOverId, setDragOverId] = useState<number | null>(null);
   /* Sizes by stored path, read from disk rather than stored — a row that lost
      its file would otherwise keep quoting a size that is no longer true. */
   const [sizes, setSizes] = useState<Record<string, number | null>>({});
   /* Every application carries an empty slot per document kind from the moment
-     it is created; the section only lists the ones that have a file behind
-     them, so a fresh card shows no documents until Kepler (or the user) has
-     actually put one there. */
-  const docs = (st.documentsByApp[cardId] || []).filter((d) => d.file_path || d.pdf_path);
+     it is created — the CV and the cover letter are written and uploaded by
+     hand now, so the section shows both slots from the start rather than
+     waiting for a file to exist before it has anything to say. */
+  const docs = st.documentsByApp[cardId] || [];
 
   const paths = docs.flatMap((d) => [d.file_path, d.pdf_path].filter((p): p is string => !!p));
   const key = paths.join(',') + '|' + docs.map((d) => d.updated_at).join(',');
@@ -63,17 +68,61 @@ export function DocumentsSection({ cardId }: { cardId: string }) {
       .catch((err) => setError(String(err)));
   };
 
+  /* One file dropped onto a slot goes straight into it — no native dialog, no
+     picking a kind: the card it landed on says which document it is. Only the
+     first file counts; a multi-file drop is not something a single slot can
+     hold. */
+  const drop = (documentId: number, kind: DocumentKind, title: string) => (e: DragEvent) => {
+    e.preventDefault();
+    setDragOverId(null);
+    set({ dropdown: null });
+    const file = e.dataTransfer.files[0];
+    if (!file || !window.desktop) return;
+    const sourcePath = window.desktop.documents.pathForFile(file);
+    if (!sourcePath) return;
+    uploadDocumentFile(cardId, documentId, kind, title, sourcePath).then(setError);
+  };
+
   return (
     <Section sectionKey="docs" title="Bewerbungsunterlagen" count={docs.length} gap={10}>
       {error && <div style={ERROR_TEXT}>{error}</div>}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
         {docs.map((d) => {
+          const hasFile = !!(d.file_path || d.pdf_path);
           /* Both generated documents open in the app and can be typed in — but
              only if the HTML the editor works on is actually there. A document
              replaced by a PDF of the user's own has none, so it lands in the
              browser the way a template does in the profile; the PDF stays one
              menu entry away, where Vorschau gets it instead. */
           const editable = !!d.file_path && !locked;
+          const onDragOver = (e: DragEvent) => {
+            e.preventDefault();
+            setDragOverId(d.id);
+          };
+          const onDragLeave = () => setDragOverId((id) => (id === d.id ? null : id));
+          const onDrop = drop(d.id, d.kind, d.title);
+
+          if (!hasFile) {
+            return (
+              <DocumentCard
+                key={d.id}
+                format={DocFormat.EMPTY}
+                title={d.title}
+                caption="Datei hierher ziehen oder auswählen"
+                hint="Datei hierher ziehen oder auswählen"
+                muted
+                dragOver={dragOverId === d.id}
+                onDragOver={onDragOver}
+                onDragLeave={onDragLeave}
+                onDrop={onDrop}
+                onClick={() => {
+                  set({ dropdown: null });
+                  replaceDocument(cardId, d.id, d.kind, d.title).then(setError);
+                }}
+              />
+            );
+          }
+
           return (
             <DocumentCard
               key={d.id}
@@ -82,6 +131,10 @@ export function DocumentsSection({ cardId }: { cardId: string }) {
               title={documentDisplayName(d)}
               caption={documentCaption(d)}
               hint={editable ? 'Überarbeiten' : 'Öffnen'}
+              dragOver={dragOverId === d.id}
+              onDragOver={onDragOver}
+              onDragLeave={onDragLeave}
+              onDrop={onDrop}
               onClick={() =>
                 editable ? set({ editorCardId: cardId, editorKind: d.kind }) : open(d.file_path ?? d.pdf_path)
               }

@@ -281,6 +281,16 @@ export interface AppStore {
     kind: DocumentKind,
     title: string,
   ) => Promise<string | null>;
+  /* Same landing point as replaceDocument, for a file dropped straight onto
+     the section instead of picked through the native dialog — the caller
+     already has the path (see desktop.documents.pathForFile). */
+  uploadDocumentFile: (
+    id: string,
+    documentId: number,
+    kind: DocumentKind,
+    title: string,
+    sourcePath: string,
+  ) => Promise<string | null>;
   /* Writes an edited document back over its own file, re-renders the PDF and
      updates the row. Resolves to what went wrong, or null when it went
      through — the editor has nowhere to catch a rejection. */

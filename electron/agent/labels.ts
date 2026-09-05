@@ -47,35 +47,48 @@ const FORMS: Record<AgentStepKey, (ctx: LabelCtx) => Forms> = {
     run: 'Kontaktdetails werden ergänzt…',
     done: 'Kontaktsuche übersprungen — Kontakte werden manuell gepflegt',
   }),
+  /* Legacy like CONTACTS below: the CV and cover letter are no longer
+     generated automatically — the user writes and uploads them by hand — so
+     reading the uploaded Fassung is nothing to do either. Only rows from
+     older runs still carry the key, and a resumed run closes them. */
   [AgentStepKey.READ_CV]: () => ({
     wait: 'Hochgeladenen {doc} einlesen',
     run: 'Hochgeladener {doc} wird eingelesen…',
-    done: 'Hochgeladenen {doc} eingelesen',
+    done: 'Einlesen übersprungen — Dokumente werden manuell erstellt',
   }),
   [AgentStepKey.READ_LETTER]: () => ({
     wait: 'Hochgeladenen {doc} einlesen',
     run: 'Hochgeladener {doc} wird eingelesen…',
-    done: 'Hochgeladenen {doc} eingelesen',
+    done: 'Einlesen übersprungen — Dokumente werden manuell erstellt',
   }),
+  /* Legacy: automatic generation was removed, the user writes the Lebenslauf
+     by hand now. Only rows from older runs still carry the key. */
   [AgentStepKey.GEN_CV]: (ctx) => ({
     wait: `Lebenslauf für ${ctx.company} erstellen`,
     run: `Lebenslauf für ${ctx.company} wird erstellt…`,
-    done: `Lebenslauf für ${ctx.company} erstellt`,
+    done: 'Erstellung übersprungen — Lebenslauf wird manuell erstellt',
   }),
+  /* Legacy: automatic generation was removed, the user writes the Anschreiben
+     by hand now. Only rows from older runs still carry the key. */
   [AgentStepKey.GEN_LETTER]: (ctx) => ({
     wait: `Anschreiben für ${ctx.company} erstellen`,
     run: `Anschreiben für ${ctx.company} wird erstellt…`,
-    done: `Anschreiben für ${ctx.company} erstellt`,
+    done: 'Erstellung übersprungen — Anschreiben wird manuell erstellt',
   }),
+  /* Legacy: rated the Anschreiben Kepler generated itself — nothing to rate
+     once that generation was removed. Only rows from older runs remain. */
   [AgentStepKey.RATE]: () => ({
     wait: 'Anschreiben mit Opus 5 bewerten',
     run: 'Anschreiben wird mit Opus 5 bewertet…',
-    done: 'Anschreiben mit Opus 5 bewertet',
+    done: 'Bewertung übersprungen — kein automatisch erstelltes Anschreiben',
   }),
+  /* Legacy: checked claims in the Anschreiben Kepler generated itself —
+     nothing to check once that generation was removed. Only rows from older
+     runs remain. */
   [AgentStepKey.PROOFS]: () => ({
     wait: 'Belege prüfen',
     run: 'Belege werden geprüft…',
-    done: 'Belege geprüft',
+    done: 'Prüfung übersprungen — kein automatisch erstelltes Anschreiben',
   }),
   /* Legacy like CONTACTS: the standalone format check was removed with the
      findings comment it reported into. */
@@ -90,16 +103,6 @@ const FORMS: Record<AgentStepKey, (ctx: LabelCtx) => Forms> = {
     done: 'Abschlusskommentar an {m} hinterlassen',
   }),
 };
-
-/* The running label while the step is not checking but rewriting. A step
-   called "Belege prüfen" that quietly generates a second Anschreiben would be
-   lying about what the run is doing — and this is the one label the panel
-   shows for the two minutes that takes. */
-export const PROOFS_REWRITE_LABEL = 'Anschreiben wird mit belegten Angaben neu geschrieben…';
-
-/* Same honesty for the rating step: while Opus' feedback is being worked into
-   a fresh generation, the label says so instead of still claiming to rate. */
-export const RATE_REWRITE_LABEL = 'Anschreiben wird nach Opus-Feedback überarbeitet…';
 
 export function stepLabel(key: AgentStepKey, status: AgentStepStatus, ctx: LabelCtx): string {
   const forms = FORMS[key](ctx);
@@ -118,12 +121,6 @@ export function stepPlan(hasUrl: boolean, ctx: LabelCtx): StepInput[] {
   return [
     ...(hasUrl ? [step(AgentStepKey.FETCH)] : []),
     step(AgentStepKey.EXTRACT),
-    step(AgentStepKey.READ_CV, TemplateKind.LEBENSLAUF),
-    step(AgentStepKey.READ_LETTER, TemplateKind.ANSCHREIBEN),
-    step(AgentStepKey.GEN_CV),
-    step(AgentStepKey.GEN_LETTER),
-    step(AgentStepKey.RATE),
-    step(AgentStepKey.PROOFS),
     step(AgentStepKey.COMMENT),
   ];
 }

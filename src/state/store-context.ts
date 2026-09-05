@@ -273,24 +273,15 @@ export interface AppStore {
   saveRound: () => void;
   /* Sidebar field write, routed to the owning table (see fact-label routing). */
   writeField: (id: string, label: string, value: string) => void;
-  /* Picks an HTML file and points the document row at it. Resolves to the
-     reason it failed, or null on success and on cancel. */
-  replaceDocument: (
-    id: string,
-    documentId: number,
-    kind: DocumentKind,
-    title: string,
-  ) => Promise<string | null>;
-  /* Same landing point as replaceDocument, for a file dropped straight onto
-     the section instead of picked through the native dialog — the caller
-     already has the path (see desktop.documents.pathForFile). */
-  uploadDocumentFile: (
-    id: string,
-    documentId: number,
-    kind: DocumentKind,
-    title: string,
-    sourcePath: string,
-  ) => Promise<string | null>;
+  /* Files the given OS paths with the application, one document each — the
+     landing point for files dropped onto the section (the caller already has
+     the paths, see desktop.documents.pathForFile). Resolves to the reason it
+     failed, or null. */
+  addDocumentFiles: (id: string, sourcePaths: string[]) => Promise<string | null>;
+  /* Same, for files chosen through the native dialog; null on cancel too. */
+  pickDocuments: (id: string) => Promise<string | null>;
+  /* Removes the row and, through the main process, its files. */
+  deleteDocument: (id: string, documentId: number) => void;
   /* Writes an edited document back over its own file, re-renders the PDF and
      updates the row. Resolves to what went wrong, or null when it went
      through — the editor has nowhere to catch a rejection. */

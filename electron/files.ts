@@ -18,6 +18,7 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 import { toISO } from '../src/lib/date.ts';
+import type { DocumentFileInput } from '../src/shared/db-types.ts';
 import type {
   ProfileDocumentInfo,
   TemplateInfo,
@@ -27,9 +28,9 @@ import type {
 import { DOCUMENT_STEMS } from '../src/shared/applicant.ts';
 import { DocumentKind, DocumentLanguage, TemplateKind } from '../src/shared/enums.ts';
 
-/* The one format the whole pipeline starts from: the agent edits the markup and
-   exports the PDF from it, so what gets uploaded is always the source, never
-   the finished page. */
+/* The format profile templates come in: the agent edits the markup and exports
+   the PDF from it, so a template is always the source, never the finished page.
+   An application's own documents are any file — see addDocumentFiles. */
 export function isHtml(filePath: string): boolean {
   const ext = path.extname(filePath).toLowerCase();
   return ext === '.html' || ext === '.htm';
@@ -119,22 +120,22 @@ export function documentPaths(
   };
 }
 
-/* Copies a picked file into place, replacing any earlier version, and returns
-   the path to store in documents.file_path — relative to userData, so moving
-   the directory does not invalidate every row. What gets stored is the HTML
-   source; the PDF beside it is rendered from this copy afterwards. */
-export function copyDocument(
+/* Copies the picked or dropped files into the application's folder and reports
+   what db:documents.add stores per file: the path relative to userData — so
+   moving the directory does not invalidate every row — and the name the copy
+   landed under, which is what the card is headed with. Any file type; nothing
+   is rendered or overwritten, two uploads of the same name coexist as x.pdf
+   and x-2.pdf the way comment attachments do. */
+export function addDocumentFiles(
   userDataPath: string,
   applicationId: string,
-  kind: DocumentKind,
-  language: DocumentLanguage,
-  sourcePath: string,
-): string {
-  if (!isHtml(sourcePath)) throw new Error(`not an HTML file: ${sourcePath}`);
-  const { htmlAbs, htmlRel } = documentPaths(userDataPath, applicationId, kind, language);
-  mkdirSync(path.dirname(htmlAbs), { recursive: true });
-  copyFileSync(sourcePath, htmlAbs);
-  return htmlRel;
+  sourcePaths: string[],
+): DocumentFileInput[] {
+  const dir = applicationDir(userDataPath, applicationId);
+  return sourcePaths.map((sourcePath) => {
+    const name = copyUnderFreeName(dir, sourcePath);
+    return { filePath: path.join('documents', applicationId, name), title: name };
+  });
 }
 
 /* Drops everything belonging to a deleted application. The database cascades

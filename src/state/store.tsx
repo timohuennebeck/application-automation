@@ -38,6 +38,7 @@ import { isInFocusedField } from '../lib/dom';
 import { mentionsKepler } from '../lib/mentions';
 import { initials } from '../lib/text';
 import { parsePosting } from '../features/create/parse-posting';
+import { documentDisplayName } from '../features/detail/document-caption';
 import { CLOSED_PROFILE, Ctx, StateCtx } from './store-context';
 import {
   CLOSED_EDITORS,
@@ -1190,60 +1191,65 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [set],
   );
 
-  /* Copies a file already sitting on disk into a document slot — the shared
-     landing point for the native picker (replaceDocument) and for a file
-     dropped straight onto the section. Deliberately not optimistic: the row
-     may only claim a file once the bytes are actually in userData, or the
-     card would offer a download that cannot open. Returns the reason it
-     failed, or null. */
-  const uploadDocumentFile = useCallback(
-    async (
-      id: string,
-      documentId: number,
-      kind: DocumentKind,
-      title: string,
-      source: string,
-    ): Promise<string | null> => {
+  /* Files the given sources — picked or dropped — with the application, one
+     document row each. Deliberately not optimistic: a row may only claim a
+     file once the bytes are actually in userData, or the card would offer a
+     download that cannot open. Returns the reason it failed, or null. */
+  const addDocumentFiles = useCallback(
+    async (id: string, sourcePaths: string[]): Promise<string | null> => {
       const api = window.desktop;
       if (!api) return 'Ohne Desktop-Umgebung nicht möglich.';
+      if (!sourcePaths.length) return null;
       try {
-        const hadFile = !!documentFor(stRef.current, id, kind)?.file_path;
-        const { filePath, pdfPath, pdfError } = await api.documents.copy(
-          id,
-          kind,
-          documentLanguageOf(stRef.current, id, kind),
-          source,
-        );
-        /* A hand-picked file did not come from a Fassung. */
-        const row = await api.db.documents.setFile(documentId, filePath, pdfPath, null);
-        putDocumentRow(id, row);
-        logAct(id, 'hat „' + title + '“ ' + (hadFile ? 'ersetzt' : 'hochgeladen'));
-        /* The upload counts as done — the row and the history already say so.
-           A failed export is reported on top of that, not instead of it. */
-        return pdfError ? 'Die Datei wurde übernommen, das PDF ließ sich nicht erzeugen: ' + pdfError : null;
+        const files = await api.documents.add(id, sourcePaths);
+        const rows = await api.db.documents.add(id, files);
+        set((s) => ({
+          documentsByApp: { ...s.documentsByApp, [id]: [...(s.documentsByApp[id] || []), ...rows] },
+        }));
+        rows.forEach((row) => logAct(id, 'hat „' + row.title + '“ hinzugefügt'));
+        return null;
       } catch (err) {
         console.error('[documents]', err);
         return String(err);
       }
     },
-    [logAct],
+    [logAct, set],
   );
 
-  /* Replaces a document with a file the user picks through the native dialog. */
-  const replaceDocument = useCallback(
-    async (id: string, documentId: number, kind: DocumentKind, title: string): Promise<string | null> => {
+  /* Same landing point, for files chosen through the native dialog. */
+  const pickDocuments = useCallback(
+    async (id: string): Promise<string | null> => {
       const api = window.desktop;
       if (!api) return 'Ohne Desktop-Umgebung nicht möglich.';
       try {
-        const source = await api.documents.pick('Dokument ersetzen', 'html');
-        if (!source) return null; // cancelled
-        return await uploadDocumentFile(id, documentId, kind, title, source);
+        const sources = await api.documents.pickFiles('Unterlagen auswählen');
+        if (!sources) return null; // cancelled
+        return await addDocumentFiles(id, sources);
       } catch (err) {
         console.error('[documents]', err);
         return String(err);
       }
     },
-    [uploadDocumentFile],
+    [addDocumentFiles],
+  );
+
+  /* Removes the row; the main process clears its files once the row is gone.
+     The editor is shut if it had this document open — it would otherwise save
+     into a row that no longer exists. */
+  const deleteDocument = useCallback(
+    (id: string, documentId: number) => {
+      const doc = (stRef.current.documentsByApp[id] || []).find((d) => d.id === documentId);
+      set((s) => ({
+        documentsByApp: {
+          ...s.documentsByApp,
+          [id]: (s.documentsByApp[id] || []).filter((d) => d.id !== documentId),
+        },
+        editorCardId: s.editorCardId === id && s.editorKind === doc?.kind ? null : s.editorCardId,
+      }));
+      persist(db()?.documents.delete(documentId));
+      if (doc) logAct(id, 'hat „' + documentDisplayName(doc) + '“ gelöscht');
+    },
+    [logAct, set],
   );
 
   /* Saves the document the editor has been working on. Same trade as an upload:
@@ -1736,8 +1742,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       createPersonForRound,
       saveRound,
       writeField,
-      replaceDocument,
-      uploadDocumentFile,
+      addDocumentFiles,
+      pickDocuments,
+      deleteDocument,
       saveDocument,
       setInterest,
       setLanguage,
@@ -1808,8 +1815,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       removeCommentAttachment,
       openStagedAttachment,
       openAttachment,
-      replaceDocument,
-      uploadDocumentFile,
+      addDocumentFiles,
+      pickDocuments,
+      deleteDocument,
       saveDocument,
       setFollowupDue,
       setFollowupCompleted,

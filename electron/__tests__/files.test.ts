@@ -14,8 +14,8 @@ import { DocumentKind, DocumentLanguage, TemplateKind } from '../../src/shared/e
 import { toISO } from '../../src/lib/date.ts';
 import {
   addProfileDocuments,
+  addDocumentFiles,
   copyCommentAttachment,
-  copyDocument,
   addTemplateVersion,
   documentFileName,
   documentPaths,
@@ -131,59 +131,47 @@ describe('documentPaths', () => {
   });
 });
 
-describe('copyDocument', () => {
-  it('files the copy under the application and returns a relative path', () => {
-    const rel = copyDocument(
-      root,
-      'BEW-33',
-      DocumentKind.LEBENSLAUF,
-      DocumentLanguage.DE,
-      source('Mein CV.html'),
-    );
+describe('addDocumentFiles', () => {
+  it('copies each file under the application, in order, and reports path and title', () => {
+    const rows = addDocumentFiles(root, 'BEW-33', [source('Zeugnis.pdf', 'z'), source('Mein CV.docx', 'cv')]);
 
-    expect(rel).toBe(path.join('documents', 'BEW-33', 'Timo_Huennebeck_Lebenslauf.html'));
-    expect(readFileSync(path.join(root, rel), 'utf8')).toBe('original');
+    expect(rows).toEqual([
+      { filePath: path.join('documents', 'BEW-33', 'Zeugnis.pdf'), title: 'Zeugnis.pdf' },
+      { filePath: path.join('documents', 'BEW-33', 'Mein CV.docx'), title: 'Mein CV.docx' },
+    ]);
+    expect(readFileSync(path.join(root, rows[0].filePath), 'utf8')).toBe('z');
+    expect(readFileSync(path.join(root, rows[1].filePath), 'utf8')).toBe('cv');
   });
 
-  it('overwrites the previous version in place', () => {
-    copyDocument(root, 'BEW-33', DocumentKind.LEBENSLAUF, DocumentLanguage.DE, source('a.html', 'first'));
-    const rel = copyDocument(
-      root,
-      'BEW-33',
-      DocumentKind.LEBENSLAUF,
-      DocumentLanguage.DE,
-      source('b.html', 'second'),
-    );
+  it('keeps two files of the same name apart instead of overwriting', () => {
+    const [a] = addDocumentFiles(root, 'BEW-33', [source('x.pdf', 'first')]);
+    mkdirSync(path.join(root, 'other'));
+    const again = path.join(root, 'other', 'x.pdf');
+    writeFileSync(again, 'second');
+    const [b] = addDocumentFiles(root, 'BEW-33', [again]);
 
-    expect(readFileSync(path.join(root, rel), 'utf8')).toBe('second');
+    expect(a.filePath).toBe(path.join('documents', 'BEW-33', 'x.pdf'));
+    expect(b.filePath).toBe(path.join('documents', 'BEW-33', 'x-2.pdf'));
+    /* The card is headed by the stored name, so a renamed copy says so. */
+    expect(b.title).toBe('x-2.pdf');
+    expect(readFileSync(path.join(root, a.filePath), 'utf8')).toBe('first');
   });
 
-  it('keeps the two kinds apart', () => {
-    copyDocument(root, 'BEW-33', DocumentKind.LEBENSLAUF, DocumentLanguage.DE, source('a.html', 'cv'));
-    copyDocument(root, 'BEW-33', DocumentKind.COVER_LETTER, DocumentLanguage.DE, source('b.html', 'letter'));
-
-    const dir = path.join(root, 'documents', 'BEW-33');
-    expect(readFileSync(path.join(dir, 'Timo_Huennebeck_Lebenslauf.html'), 'utf8')).toBe('cv');
-    expect(readFileSync(path.join(dir, 'Timo_Huennebeck_Anschreiben.html'), 'utf8')).toBe('letter');
+  it('stores a hostile name flattened, never escaping the folder', () => {
+    const [row] = addDocumentFiles(root, 'BEW-33', [source('..evil.pdf')]);
+    expect(row.title).toBe('evil.pdf');
+    expect(readdirSync(path.join(root, 'documents', 'BEW-33'))).toEqual(['evil.pdf']);
   });
 
-  it('refuses anything that is not HTML, leaving nothing behind', () => {
-    for (const name of ['cv.pdf', 'cv.docx']) {
-      expect(
-        () => copyDocument(root, 'BEW-33', DocumentKind.LEBENSLAUF, DocumentLanguage.DE, source(name)),
-        name,
-      ).toThrow(/html/i);
-    }
-    expect(existsSync(path.join(root, 'documents', 'BEW-33'))).toBe(false);
+  it('refuses an id that would climb out of the documents folder', () => {
+    expect(() => addDocumentFiles(root, '../x', [source('a.pdf')])).toThrow(/unsafe/);
   });
 });
 
 describe('resolveDocumentPath', () => {
   it('resolves a stored path under the documents folder', () => {
-    const rel = copyDocument(root, 'BEW-33', DocumentKind.LEBENSLAUF, DocumentLanguage.DE, source('a.html'));
-    expect(resolveDocumentPath(root, rel)).toBe(
-      path.join(root, 'documents', 'BEW-33', 'Timo_Huennebeck_Lebenslauf.html'),
-    );
+    const [row] = addDocumentFiles(root, 'BEW-33', [source('a.html')]);
+    expect(resolveDocumentPath(root, row.filePath)).toBe(path.join(root, 'documents', 'BEW-33', 'a.html'));
   });
 
   it('refuses a path that climbs out of the documents folder', () => {
@@ -261,8 +249,8 @@ describe('removeStoredFile', () => {
 
 describe('purgeApplicationFiles', () => {
   it('takes the application folder with it', () => {
-    copyDocument(root, 'BEW-33', DocumentKind.LEBENSLAUF, DocumentLanguage.DE, source('a.html'));
-    copyDocument(root, 'BEW-29', DocumentKind.LEBENSLAUF, DocumentLanguage.DE, source('b.html'));
+    addDocumentFiles(root, 'BEW-33', [source('a.html')]);
+    addDocumentFiles(root, 'BEW-29', [source('b.html')]);
 
     purgeApplicationFiles(root, 'BEW-33');
 

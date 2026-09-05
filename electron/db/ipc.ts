@@ -13,6 +13,8 @@ export interface DbIpcHooks {
   /* Receives what deleteComment returns: the attachment paths whose rows just
      cascaded away. */
   afterDeleteComment?: (removedPaths: string[]) => void;
+  /* Receives what deleteDocument returns: the renditions of the row that is gone. */
+  afterDeleteDocument?: (removedPaths: string[]) => void;
 }
 
 export function registerDbIpc(repo: Repo, hooks: DbIpcHooks = {}): void {
@@ -22,6 +24,7 @@ export function registerDbIpc(repo: Repo, hooks: DbIpcHooks = {}): void {
       const out = fn(...args);
       if (method === 'deleteApplication') hooks.afterDeleteApplication?.(args[0] as string);
       if (method === 'deleteComment') hooks.afterDeleteComment?.(out as string[]);
+      if (method === 'deleteDocument') hooks.afterDeleteDocument?.(out as string[]);
       return out;
     });
   }

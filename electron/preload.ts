@@ -8,7 +8,7 @@ import type {
   VariantsRequest,
   VariantsResult,
 } from '../src/shared/agent.ts';
-import type { AttachmentInput, DbApi } from '../src/shared/db-types.ts';
+import type { AttachmentInput, DbApi, DocumentFileInput } from '../src/shared/db-types.ts';
 import type {
   DocumentUpload,
   ProfileDocumentInfo,
@@ -43,19 +43,22 @@ const api = {
     /* Native picker; null when the dialog was cancelled. */
     pick: (title: string, type: 'docx' | 'html'): Promise<string | null> =>
       ipcRenderer.invoke('documents:pick', title, type),
+    /* Any file type, several at once; null when the dialog was cancelled. */
+    pickFiles: (title: string): Promise<string[] | null> => ipcRenderer.invoke('documents:pickFiles', title),
     /* The real filesystem path of a file dropped onto the window — Electron
        only hands that out through webUtils, not as a `File.path` any more.
-       Synchronous, so a drop handler can pass the result straight to copy(). */
-    pathForFile: (file: File): string => webUtils.getPathForFile(file),
-    /* Copies the picked HTML into userData and renders the PDF beside it,
-       resolving to both stored paths. */
-    copy: (
-      applicationId: string,
-      kind: DocumentKind,
-      language: DocumentLanguage,
-      sourcePath: string,
-    ): Promise<DocumentUpload> =>
-      ipcRenderer.invoke('documents:copy', applicationId, kind, language, sourcePath),
+       Synchronous, so a drop handler can pass the result straight to add().
+       The main process is told about the path first: it only copies sources it
+       has seen, and a drop is the one way a source arrives without a dialog. */
+    pathForFile: (file: File): string => {
+      const sourcePath = webUtils.getPathForFile(file);
+      if (sourcePath) ipcRenderer.send('documents:dropped', sourcePath);
+      return sourcePath;
+    },
+    /* Copies picked or dropped files into userData and resolves to what
+       db.documents.add stores. */
+    add: (applicationId: string, sourcePaths: string[]): Promise<DocumentFileInput[]> =>
+      ipcRenderer.invoke('documents:add', applicationId, sourcePaths),
     /* Sizes in bytes, index-aligned with the paths; null where the file is gone. */
     sizes: (filePaths: string[]): Promise<(number | null)[]> =>
       ipcRenderer.invoke('documents:sizes', filePaths),

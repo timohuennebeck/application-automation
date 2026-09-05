@@ -54,13 +54,24 @@ beforeEach(() => {
   runs = createRunStore(db, () => NOW);
 });
 
-const createApp = () =>
-  repo.createApplication({
+/* An application with the two generated-document rows Kepler edits. Nothing
+   creates such rows any more — uploads are plain files — but databases from
+   before still hold them, and ask() still writes into them. */
+const createApp = () => {
+  const id = repo.createApplication({
     role: 'Senior Frontend Developer',
     company: 'Personio SE',
     channel: 'LinkedIn',
     postingText: 'Wir suchen jemanden für React und Expo.',
   }).application.id;
+  const ins = db.prepare(
+    'INSERT INTO documents (application_id, kind, title, created_at, updated_at) VALUES (?,?,?,?,?)',
+  );
+  const t = NOW.toISOString();
+  ins.run(id, DocumentKind.COVER_LETTER, 'Anschreiben', t, t);
+  ins.run(id, DocumentKind.LEBENSLAUF, 'Lebenslauf', t, t);
+  return id;
+};
 
 const ask = (id: string, text: string) => repo.addComment(id, Author.DU, text).comment.id;
 

@@ -10,7 +10,7 @@ import { registerAgentIpc } from './agent/index.ts';
 import {
   addProfileDocuments,
   copyCommentAttachment,
-  copyDocument,
+  addDocumentFiles,
   addTemplateVersion,
   documentPaths,
   documentSize,
@@ -124,9 +124,7 @@ ipcMain.handle('shell:openExternal', (_e, url: string) => openExternal(url));
 const root = () => app.getPath('userData');
 
 /* Document files. The picker runs here because the renderer, with context
-   isolation on, never sees a real path — and because the dialog's file-type
-   filter is a suggestion on macOS, the extension is checked again in
-   copyDocument before anything is written. */
+   isolation on, never sees a real path. */
 /* The renderer names a file type rather than handing over dialog options, so
    what the picker offers stays decided here. */
 const FILE_TYPES: Record<string, { name: string; extensions: string[] }> = {
@@ -134,14 +132,39 @@ const FILE_TYPES: Record<string, { name: string; extensions: string[] }> = {
   html: { name: 'HTML-Datei', extensions: ['html', 'htm'] },
 };
 
-/* Every source picked this session. The copy channels refuse anything else,
-   so the renderer can only ingest OS paths the user chose in the dialog —
-   the same stance attachments:openSource takes. */
+/* Every source picked or dropped this session. The copy channels refuse
+   anything else, so the renderer can only ingest OS paths the user chose in
+   the dialog or dropped onto the window — the same stance
+   attachments:openSource takes. */
 const pickedDocumentSources = new Set<string>();
 
 function requirePicked(sourcePath: string): void {
   if (!pickedDocumentSources.has(sourcePath)) throw new Error('Unbekannte Datei.');
 }
+
+/* A drop never passes through a dialog, so the preload reports the path it
+   resolved for the dropped File here before the renderer asks to copy it.
+   webUtils only yields a path for a real File object, which is what keeps
+   this from being a register-any-path channel. */
+ipcMain.on('documents:dropped', (_e, sourcePath: string) => {
+  if (sourcePath) pickedDocumentSources.add(sourcePath);
+});
+
+/* Any file type, several at once — an application's documents are whatever
+   was sent along: PDFs, scans, a Word file. */
+ipcMain.handle('documents:pickFiles', async (_e, title: string) => {
+  const res = await dialog.showOpenDialog(win!, { title, properties: ['openFile', 'multiSelections'] });
+  if (res.canceled || res.filePaths.length === 0) return null;
+  res.filePaths.forEach((p) => pickedDocumentSources.add(p));
+  return res.filePaths;
+});
+
+/* Copies the sources into userData; the rows are written by the renderer from
+   what this returns, so a row never points at missing bytes. */
+ipcMain.handle('documents:add', (_e, applicationId: string, sourcePaths: string[]) => {
+  sourcePaths.forEach(requirePicked);
+  return addDocumentFiles(root(), applicationId, sourcePaths);
+});
 
 ipcMain.handle('documents:pick', async (_e, title: string, type: string) => {
   const res = await dialog.showOpenDialog(win!, {
@@ -156,10 +179,10 @@ ipcMain.handle('documents:pick', async (_e, title: string, type: string) => {
 
 /* Renders the PDF beside a document's HTML and reports rather than throws: the
    HTML is already stored, and losing it because Chromium could not print would
-   be the wrong trade. Both write routes come through here, so neither can
-   render a document without the other waiting its turn — the letter editor
-   saves after every accepted replacement, so a second save landing mid-render
-   is ordinary use rather than a double-click. */
+   be the wrong trade. Renders are queued per file, so two saves can never
+   render the same document at once — the letter editor saves after every
+   accepted replacement, so a second save landing mid-render is ordinary use
+   rather than a double-click. */
 async function exportDocumentPdf(
   applicationId: string,
   kind: DocumentKind,
@@ -185,23 +208,6 @@ async function exportDocumentPdf(
   }
 }
 
-/* Takes in the HTML and renders the PDF beside it in one step, so a row never
-   claims a source without the export that belongs to it. */
-ipcMain.handle(
-  'documents:copy',
-  async (
-    _e,
-    applicationId: string,
-    kind: DocumentKind,
-    language: DocumentLanguage,
-    sourcePath: string,
-  ): Promise<DocumentUpload> => {
-    requirePicked(sourcePath);
-    const filePath = copyDocument(root(), applicationId, kind, language, sourcePath);
-    return exportDocumentPdf(applicationId, kind, language, filePath);
-  },
-);
-
 /* Sizes for the document menu, in one round trip. */
 ipcMain.handle('documents:sizes', (_e, filePaths: string[]) => filePaths.map((p) => documentSize(root(), p)));
 
@@ -219,10 +225,11 @@ ipcMain.handle('documents:read', (_e, filePath: string) =>
   readFileSync(resolveDocumentPath(root(), filePath), 'utf8'),
 );
 
-/* Writes an edited document back over its own file and re-renders the PDF, the
-   same trade as documents:copy: a failed export keeps the HTML and reports the
-   reason rather than losing the edit. The database row is updated by the
-   renderer through db.documents.setFile, so both write routes stay one route. */
+/* Writes an edited legacy document back over its own file and re-renders the
+   PDF: a failed export keeps the HTML and reports the reason rather than losing
+   the edit. The database row is updated by the renderer through
+   db.documents.setFile. Only documents generated before uploads became plain
+   files have HTML to edit; nothing creates new ones. */
 ipcMain.handle(
   'documents:save',
   async (
@@ -383,6 +390,7 @@ function initDb(): boolean {
         purgeApplicationFiles(root(), id);
       },
       afterDeleteComment: (paths) => paths.forEach((p) => removeStoredFile(root(), p)),
+      afterDeleteDocument: (paths) => paths.forEach((p) => removeStoredFile(root(), p)),
     });
     return true;
   } catch (err) {

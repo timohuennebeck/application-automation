@@ -20,6 +20,7 @@ import type {
   CreateApplicationResult,
   DbSnapshot,
   DocumentEdit,
+  DocumentFileInput,
   DocumentRow,
   FactRow,
   FollowupRow,
@@ -226,13 +227,6 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
       'INSERT INTO followups (application_id, label, due_at, position) VALUES (?,?,?,?)',
     );
     DEFAULT_FOLLOWUPS.forEach(([days, label], pos) => insFollowup.run(appId, label, due(days), pos));
-
-    const t = now.toISOString();
-    const insDoc = db.prepare(
-      'INSERT INTO documents (application_id, kind, title, created_at, updated_at) VALUES (?,?,?,?,?)',
-    );
-    insDoc.run(appId, DocumentKind.COVER_LETTER, 'Anschreiben', t, t);
-    insDoc.run(appId, DocumentKind.LEBENSLAUF, 'Lebenslauf', t, t);
 
     return {
       /* Nothing pre-seeds rounds since migration 9, and this function inserts
@@ -753,6 +747,36 @@ export function createRepo(db: DatabaseSync, nowFn: () => Date = () => new Date(
        created_at moves with it; only a later replacement bumps updated_at
        alone, which is what makes the card read "aktualisiert am" instead of
        "erstellt am". */
+    /* One plain-file row per upload. The main process has already copied the
+       bytes in, so a row never points at a file that is not there. Every
+       upload is OTHER: what a file is for is in its name, not a slot. */
+    addDocuments(applicationId: string, files: DocumentFileInput[]): DocumentRow[] {
+      return tx(() => {
+        const t = nowISO();
+        const ins = db.prepare(
+          'INSERT INTO documents (application_id, kind, title, file_path, created_at, updated_at) VALUES (?,?,?,?,?,?)',
+        );
+        const ids = files.map(
+          (f) => ins.run(applicationId, DocumentKind.OTHER, f.title, f.filePath, t, t).lastInsertRowid,
+        );
+        touchApplication(applicationId);
+        return ids.map((id) => one<DocumentRow>('SELECT * FROM documents WHERE id = ?', id));
+      });
+    },
+
+    /* Returns the stored paths of the row's renditions — a plain file has one,
+       a legacy generated document its HTML and PDF — so the IPC layer can clear
+       them. Empty when the row was already gone. */
+    deleteDocument(documentId: number): string[] {
+      return tx(() => {
+        const row = one<DocumentRow | undefined>('SELECT * FROM documents WHERE id = ?', documentId);
+        if (!row) return [];
+        db.prepare('DELETE FROM documents WHERE id = ?').run(documentId);
+        touchApplication(row.application_id);
+        return [row.file_path, row.pdf_path].filter((p): p is string => !!p);
+      });
+    },
+
     setDocumentFile(
       documentId: number,
       filePath: string,

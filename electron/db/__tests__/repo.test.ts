@@ -39,7 +39,8 @@ describe('repo', () => {
     expect(res.followups).toHaveLength(3);
     /* Nothing is due on the day the card is made: the first nudge waits a week. */
     expect(res.followups.map((f) => f.due_at)).toEqual(['2026-08-19', '2026-08-26', '2026-09-11']);
-    expect(res.documents).toHaveLength(2);
+    /* Nothing pre-seeded: a document exists once a file is added. */
+    expect(res.documents).toEqual([]);
     expect(res.comments).toHaveLength(1);
     expect(res.comments[0].author).toBe(Author.KEPLER);
 
@@ -48,15 +49,22 @@ describe('repo', () => {
     expect(again.application.id).toBe('BEW-46'); // counter, not MAX+1
   });
 
-  it('starts a document with neither file and points it at both when one is uploaded', () => {
-    const doc = repo.createApplication({ role: 'Designer', company: 'Acme GmbH', channel: null })
-      .documents[0];
-    expect(doc).toMatchObject({ file_path: null, pdf_path: null });
+  /* A row without a file is the shape the letter editor's save still writes
+     into: a legacy slot from before uploads were plain files. */
+  const placeholder = (): number => {
+    repo.createApplication({ role: 'Designer', company: 'Acme GmbH', channel: null });
+    db.prepare(
+      'INSERT INTO documents (application_id, kind, title, created_at, updated_at) VALUES (?,?,?,?,?)',
+    ).run('BEW-45', DocumentKind.COVER_LETTER, 'Anschreiben', NOW.toISOString(), NOW.toISOString());
+    return Number((db.prepare('SELECT MAX(id) AS n FROM documents').get() as { n: number }).n);
+  };
 
+  it('points a legacy slot at both files when one is written, and dates it by that write', () => {
+    const id = placeholder();
     const html = 'documents/BEW-45/cover-letter.html';
     const pdf = 'documents/BEW-45/cover-letter.pdf';
     const later = new Date('2026-08-13T09:00:00.000Z');
-    const row = createRepo(db, () => later).setDocumentFile(doc.id, html, pdf, null);
+    const row = createRepo(db, () => later).setDocumentFile(id, html, pdf, null);
 
     expect(row).toMatchObject({ file_path: html, pdf_path: pdf });
     /* The first file IS the document's creation: the placeholder row's own
@@ -65,13 +73,12 @@ describe('repo', () => {
     expect(row.updated_at).toBe(later.toISOString());
   });
 
-  it('keeps created_at when a document that already has a file is replaced', () => {
-    const doc = repo.createApplication({ role: 'Designer', company: 'Acme GmbH', channel: null })
-      .documents[0];
-    const first = repo.setDocumentFile(doc.id, 'documents/BEW-45/cover-letter.html', null, null);
+  it('keeps created_at when a document that already has a file is saved again', () => {
+    const id = placeholder();
+    const first = repo.setDocumentFile(id, 'documents/BEW-45/cover-letter.html', null, null);
     const later = new Date('2026-08-13T09:00:00.000Z');
     const second = createRepo(db, () => later).setDocumentFile(
-      doc.id,
+      id,
       'documents/BEW-45/cover-letter.html',
       null,
       null,
@@ -80,30 +87,36 @@ describe('repo', () => {
     expect(second.updated_at).toBe(later.toISOString());
   });
 
-  /* A failed export leaves the source without its rendition; the row has to be
-     able to say so rather than keep pointing at a PDF that is not there. */
-  it('records an upload whose PDF export failed', () => {
-    const doc = repo.createApplication({ role: 'Designer', company: 'Acme GmbH', channel: null })
-      .documents[0];
+  it('adds one plain-file row per upload, titled by the stored name', () => {
+    repo.createApplication({ role: 'Designer', company: 'Acme GmbH', channel: null });
+    const rows = repo.addDocuments('BEW-45', [
+      { filePath: 'documents/BEW-45/Zeugnis.pdf', title: 'Zeugnis.pdf' },
+      { filePath: 'documents/BEW-45/CV.docx', title: 'CV.docx' },
+    ]);
 
-    const row = repo.setDocumentFile(doc.id, 'documents/BEW-45/cover-letter.html', null, null);
-
-    expect(row.pdf_path).toBeNull();
-    expect(row.file_path).toBe('documents/BEW-45/cover-letter.html');
+    expect(rows.map((r) => [r.kind, r.title, r.file_path, r.pdf_path, r.template_label])).toEqual([
+      [DocumentKind.OTHER, 'Zeugnis.pdf', 'documents/BEW-45/Zeugnis.pdf', null, null],
+      [DocumentKind.OTHER, 'CV.docx', 'documents/BEW-45/CV.docx', null, null],
+    ]);
+    expect(rows[0].created_at).toBe(NOW.toISOString());
+    expect(repo.load().documents.filter((d) => d.application_id === 'BEW-45')).toHaveLength(2);
   });
 
-  it('stores which Fassung a generated document came from, and clears it for a hand-uploaded file', () => {
-    const doc = repo.createApplication({ role: 'Designer', company: 'Acme GmbH', channel: null })
-      .documents[0];
-    const generated = repo.setDocumentFile(doc.id, 'documents/BEW-45/x.html', null, 'Kurz');
-    expect(generated.template_label).toBe('Kurz');
-    const uploaded = repo.setDocumentFile(doc.id, 'documents/BEW-45/x.html', null, null);
-    expect(uploaded.template_label).toBeNull();
+  it('deletes a document and hands back every stored path for the disk cleanup', () => {
+    repo.createApplication({ role: 'Designer', company: 'Acme GmbH', channel: null });
+    const [row] = repo.addDocuments('BEW-45', [
+      { filePath: 'documents/BEW-45/Zeugnis.pdf', title: 'Zeugnis.pdf' },
+    ]);
+    const legacy = placeholder();
+    repo.setDocumentFile(legacy, 'documents/BEW-45/a.html', 'documents/BEW-45/a.pdf', null);
+
+    expect(repo.deleteDocument(row.id)).toEqual(['documents/BEW-45/Zeugnis.pdf']);
+    expect(repo.deleteDocument(legacy).sort()).toEqual(['documents/BEW-45/a.html', 'documents/BEW-45/a.pdf']);
+    expect(count('SELECT COUNT(*) AS n FROM documents WHERE application_id = ?', 'BEW-45')).toBe(0);
   });
 
-  it('creates the letter placeholder as "Anschreiben"', () => {
-    const docs = repo.createApplication({ role: 'Designer', company: 'Acme GmbH', channel: null }).documents;
-    expect(docs.map((d) => d.title)).toEqual(['Anschreiben', 'Lebenslauf']);
+  it('says nothing when deleting a document that is already gone', () => {
+    expect(repo.deleteDocument(99999)).toEqual([]);
   });
 
   it('starts without summary, posting source or links when the dialog gave none', () => {

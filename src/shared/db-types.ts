@@ -142,6 +142,13 @@ export interface AttachmentInput {
   size: number;
 }
 
+/* What db:documents.add receives per file — produced by
+   window.desktop.documents.add, which put the bytes on disk first. */
+export interface DocumentFileInput {
+  filePath: string;
+  title: string;
+}
+
 /* One change Kepler made to a document, kept beside the comment that reported
    it. find_text/replace_text rather than find/replace: `replace` is a SQLite
    function name, and a column of that name would need quoting at every use.
@@ -426,6 +433,11 @@ export interface DbApi {
     saveEmail(followupId: number, subject: string, text: string): Promise<FollowupRow>;
   };
   documents: {
+    /* One row per file the main process just copied in, in that order. */
+    add(applicationId: string, files: DocumentFileInput[]): Promise<DocumentRow[]>;
+    /* Resolves to the stored paths of the row's renditions, which the main
+       process removes from disk after the row is gone. */
+    delete(documentId: number): Promise<string[]>;
     setFile(
       documentId: number,
       filePath: string,

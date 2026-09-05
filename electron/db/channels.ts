@@ -29,6 +29,8 @@ export const DB_CHANNELS = {
   'db:followups.setDue': 'setFollowupDue',
   'db:followups.setCompleted': 'setFollowupCompleted',
   'db:followups.saveEmail': 'saveFollowupEmail',
+  'db:documents.add': 'addDocuments',
+  'db:documents.delete': 'deleteDocument',
   'db:documents.setFile': 'setDocumentFile',
   'db:activities.add': 'addActivity',
   'db:profileFacts.add': 'addProfileFact',
